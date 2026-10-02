@@ -69,12 +69,76 @@ export type ImportHtmlWorkflowStatus = {
 /** Rule an toàn mép ảnh — luôn tự động thêm vào MỌI prompt sinh ảnh (không cần chia beat lại). */
 const IMAGE_SAFE_AREA_SUFFIX = WHITEBOARD_CENTRAL_SAFE_AREA_RULE;
 
+/**
+ * Chèn mục STYLE SNAPSHOT / NEGATIVE STYLE SNAPSHOT vào prompt text gửi chatbot.
+ * - STYLE SNAPSHOT: mục riêng, chèn ngay SAU image prompt (trước NEGATIVE PROMPT).
+ * - NEGATIVE STYLE SNAPSHOT: mục riêng, chèn ngay SAU khối NEGATIVE PROMPT.
+ * Mirror backend marketing_short_video_agent_apply_style_snapshot. Idempotent.
+ */
+function applyStyleSnapshotToText(
+    prompt: string,
+    styleSnapshot?: string,
+    negativeStyleSnapshot?: string,
+): string {
+    const styleSnap = String(styleSnapshot || '').trim();
+    const negStyleSnap = String(negativeStyleSnapshot || '').trim();
+    if (!prompt || (!styleSnap && !negStyleSnap)) {
+        return prompt;
+    }
+    let text = prompt;
+    // Bỏ mục cũ (nếu có) để tránh chèn trùng.
+    text = text.replace(
+        /\n{0,2}NEGATIVE\s+STYLE\s+SNAPSHOT\s*:[\s\S]*?(?=\n\s*\n[A-Z][A-Z0-9 ]{2,}\s*:|$)/giu,
+        '',
+    );
+    text = text.replace(
+        /\n{0,2}STYLE\s+SNAPSHOT\s*:[\s\S]*?(?=\n\s*\n(?:NEGATIVE\s+PROMPT|NEGATIVE\s+STYLE\s+SNAPSHOT|ASPECT\s+RATIO|[A-Z][A-Z0-9 ]{2,})\s*:|$)/giu,
+        '',
+    );
+    text = text.trim();
+
+    // 1) NEGATIVE STYLE SNAPSHOT ngay sau khối NEGATIVE PROMPT.
+    if (negStyleSnap) {
+        const section = `NEGATIVE STYLE SNAPSHOT:\n${negStyleSnap}`;
+        const negMatch = /NEGATIVE\s+PROMPT\s*:/i.exec(text);
+        if (negMatch && negMatch.index >= 0) {
+            const afterNeg = text.slice(negMatch.index);
+            const endMatch = /\n\s*\n(?=[A-Z][A-Z0-9 ]{2,}\s*:)/u.exec(afterNeg);
+            if (endMatch && typeof endMatch.index === 'number') {
+                const insertAt = negMatch.index + endMatch.index;
+                text = `${text.slice(0, insertAt)}\n\n${section}${text.slice(insertAt)}`;
+            } else {
+                text = `${text.replace(/\n+$/u, '')}\n\n${section}`;
+            }
+        } else {
+            text = `${text.replace(/\n+$/u, '')}\n\n${section}`;
+        }
+    }
+
+    // 2) STYLE SNAPSHOT ngay trước NEGATIVE PROMPT.
+    if (styleSnap) {
+        const section = `STYLE SNAPSHOT:\n${styleSnap}`;
+        const negMatch = /^\s*NEGATIVE\s+PROMPT\s*:/im.exec(text);
+        if (negMatch && negMatch.index >= 0) {
+            const head = text.slice(0, negMatch.index).replace(/[ \t\n]+$/u, '');
+            const tail = text.slice(negMatch.index).replace(/^[ \t\n]+/u, '');
+            text = `${head}\n\n${section}\n\n${tail}`;
+        } else {
+            text = `${text.replace(/\n+$/u, '')}\n\n${section}`;
+        }
+    }
+
+    return text.trim();
+}
+
 function withImageStyleSuffix(
     prompt: string,
     suffix?: string,
     aspectSuffix?: string,
     textLangRule?: string,
     voiceContent?: string,
+    styleSnapshot?: string,
+    negativeStyleSnapshot?: string,
 ): string {
     if (!prompt) {
         return prompt;
@@ -95,6 +159,12 @@ function withImageStyleSuffix(
             // và safe-area nói đúng IMAGE 1…N; beat 1 ảnh giữ rule 2 ảnh.
             next.safe_area = whiteboardSafeAreaRuleForPrompt(next);
             next.output_images = whiteboardOutputRuleForPrompt(next);
+            if (String(styleSnapshot || '').trim()) {
+                next.style_snapshot = String(styleSnapshot).trim();
+            }
+            if (String(negativeStyleSnapshot || '').trim()) {
+                next.negative_style_snapshot = String(negativeStyleSnapshot).trim();
+            }
             return JSON.stringify(next, null, 2);
         }
     } catch {
@@ -105,7 +175,11 @@ function withImageStyleSuffix(
     if (voiceContent) {
         out += `, the voiceover for this beat says: "${voiceContent}"`;
     }
-    return `${out}\n\n${WHITEBOARD_DUAL_LAYER_OUTPUT_RULE}`;
+    return applyStyleSnapshotToText(
+        `${out}\n\n${WHITEBOARD_DUAL_LAYER_OUTPUT_RULE}`,
+        styleSnapshot,
+        negativeStyleSnapshot,
+    );
 }
 
 function apiHost(): string {
@@ -635,6 +709,8 @@ export async function openImportHtmlBeatDuckAiFillOnly(options: {
     imageAspectSuffix?: string;
     imageTextLangRule?: string;
     imageVoiceContent?: string;
+    imageStyleSnapshot?: string;
+    imageNegativeStyleSnapshot?: string;
 }): Promise<void> {
     const shortVideoId = Number(options.shortVideoId || 0);
     const beatId = String(options.beatId || '').trim();
@@ -644,6 +720,8 @@ export async function openImportHtmlBeatDuckAiFillOnly(options: {
         options.imageAspectSuffix,
         options.imageTextLangRule,
         options.imageVoiceContent,
+        options.imageStyleSnapshot,
+        options.imageNegativeStyleSnapshot,
     );
     if (!shortVideoId) {
         throw new Error('Thiếu short_video_id');
@@ -758,6 +836,8 @@ export async function openImportHtmlBeatDuckAiForMissingBeats(options: {
     imageStyleSuffix?: string;
     imageAspectSuffix?: string;
     imageTextLangRule?: string;
+    imageStyleSnapshot?: string;
+    imageNegativeStyleSnapshot?: string;
 }): Promise<{ opened: number; failed: string[] }> {
     const shortVideoId = Number(options.shortVideoId || 0);
     const beats = Array.isArray(options.beats)
@@ -810,6 +890,8 @@ export async function openImportHtmlBeatDuckAiForMissingBeats(options: {
                 imageAspectSuffix: options.imageAspectSuffix,
                 imageTextLangRule: options.imageTextLangRule,
                 imageVoiceContent: beat.imageVoiceContent,
+                imageStyleSnapshot: options.imageStyleSnapshot,
+                imageNegativeStyleSnapshot: options.imageNegativeStyleSnapshot,
             });
             opened += 1;
         } catch (e) {
@@ -843,6 +925,10 @@ export async function openImportHtmlBeatMetaAiFillOnly(options: {
     imageAspectSuffix?: string;
     imageTextLangRule?: string;
     imageVoiceContent?: string;
+    /** STYLE SNAPSHOT (style của clip) — chèn sau image prompt khi gửi chatbot. */
+    imageStyleSnapshot?: string;
+    /** NEGATIVE STYLE SNAPSHOT (style của clip) — chèn sau negative prompt. */
+    imageNegativeStyleSnapshot?: string;
     /**
      * Video 2s: 1 ảnh/beat — prompt string nguyên văn từ bước "Ảnh beat",
      * KHÔNG nối style suffix / dual-layer, panel không đòi background.
@@ -867,14 +953,22 @@ export async function openImportHtmlBeatMetaAiFillOnly(options: {
     const shortVideoId = Number(options.shortVideoId || 0);
     const beatId = String(options.beatId || '').trim();
     const video2s = options.video2s === true;
+    // Video 2s: panel Meta.ai tự chèn ASPECT RATIO (theo clipAspect) khi điền composer —
+    // ở đây CHỈ chèn STYLE SNAPSHOT / NEGATIVE STYLE SNAPSHOT để không trùng aspect.
     const imagePrompt = video2s
-        ? String(options.imagePrompt || '').trim()
+        ? applyStyleSnapshotToText(
+            String(options.imagePrompt || '').trim(),
+            options.imageStyleSnapshot,
+            options.imageNegativeStyleSnapshot,
+        )
         : withImageStyleSuffix(
             String(options.imagePrompt || '').trim(),
             options.imageStyleSuffix,
             options.imageAspectSuffix,
             options.imageTextLangRule,
             options.imageVoiceContent,
+            options.imageStyleSnapshot,
+            options.imageNegativeStyleSnapshot,
         );
     if (!shortVideoId) {
         throw new Error('Thiếu short_video_id');
@@ -1030,6 +1124,10 @@ export async function openImportHtmlBeatMetaAiForMissingBeats(options: {
     imageStyleSuffix?: string;
     imageAspectSuffix?: string;
     imageTextLangRule?: string;
+    /** STYLE SNAPSHOT (style của clip) — chèn sau image prompt khi gửi chatbot. */
+    imageStyleSnapshot?: string;
+    /** NEGATIVE STYLE SNAPSHOT (style của clip) — chèn sau negative prompt. */
+    imageNegativeStyleSnapshot?: string;
     /** Video 2s: 1 ảnh/beat, prompt string nguyên văn — không style suffix / background. */
     video2s?: boolean;
     /** Tỉ lệ khung hình clip (9:16 | 16:9) — video 2s thêm aspect khi sinh ảnh (không lưu). */
@@ -1092,6 +1190,8 @@ export async function openImportHtmlBeatMetaAiForMissingBeats(options: {
                 imageAspectSuffix: options.imageAspectSuffix,
                 imageTextLangRule: options.imageTextLangRule,
                 imageVoiceContent: beat.imageVoiceContent,
+                imageStyleSnapshot: options.imageStyleSnapshot,
+                imageNegativeStyleSnapshot: options.imageNegativeStyleSnapshot,
                 video2s,
                 clipAspect: options.clipAspect,
                 beatCookieId: beat.cookieId,

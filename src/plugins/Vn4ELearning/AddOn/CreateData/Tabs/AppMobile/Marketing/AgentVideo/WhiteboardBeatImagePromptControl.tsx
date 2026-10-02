@@ -58,7 +58,12 @@ export default function WhiteboardBeatImagePromptControl({ state, beatId, headli
     const promptEmpty = sections.length === 0;
 
     const [copied, setCopied] = React.useState(false);
-    const chatbotPrompt = buildVideo2sChatbotPrompt(joined, state.agentClipAspect);
+    const chatbotPrompt = buildVideo2sChatbotPrompt(
+        joined,
+        state.agentClipAspect,
+        state.imageStyleSnapshot,
+        state.imageStyleSnapshotNegative,
+    );
 
     const handleCopy = async () => {
         if (!chatbotPrompt) {

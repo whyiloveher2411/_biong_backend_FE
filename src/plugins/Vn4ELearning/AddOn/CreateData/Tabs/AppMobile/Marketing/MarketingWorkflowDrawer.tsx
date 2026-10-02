@@ -20,6 +20,7 @@ import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import TipsAndUpdatesOutlinedIcon from '@mui/icons-material/TipsAndUpdatesOutlined';
 import CloudUploadOutlinedIcon from '@mui/icons-material/CloudUploadOutlined';
 import DownloadOutlinedIcon from '@mui/icons-material/DownloadOutlined';
+import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 import PersonAddAltOutlinedIcon from '@mui/icons-material/PersonAddAltOutlined';
 import LandscapeOutlinedIcon from '@mui/icons-material/LandscapeOutlined';
 import ImageOutlinedIcon from '@mui/icons-material/ImageOutlined';
@@ -33,6 +34,7 @@ import {
     buildWorkflowBreakdownPlan,
     copyWorkflowPromptToClipboard,
     fetchWorkflowOutputs,
+    fetchWorkflowPromptText,
     getWorkflowContrastTextColor,
     MANUAL_BEAT_PROMPTS_SAVED_EVENT,
     saveWorkflowOutput,
@@ -42,6 +44,10 @@ import {
     type WorkflowOutputsMap,
     type WorkflowPromptContext,
 } from 'helpers/marketingWorkflowPrompts';
+import {
+    fetchDeepseekVideoImageStatus,
+    startDeepseekVideoImage,
+} from 'helpers/marketingDeepseekVideoImage';
 import MarketingWorkflowBreakdown from './MarketingWorkflowBreakdown';
 import {
     parseWorkflowAssetRegister,
@@ -90,6 +96,9 @@ export default function MarketingWorkflowDrawer({
     const [importingAsset, setImportingAsset] = React.useState(false);
     const [importingBeatPrompts, setImportingBeatPrompts] = React.useState(false);
     const [beatPromptErrors, setBeatPromptErrors] = React.useState<string[]>([]);
+    const [deepseekRunning, setDeepseekRunning] = React.useState(false);
+    const [deepseekMessage, setDeepseekMessage] = React.useState('');
+    const deepseekPollRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
     /** buttonUpdate = imagePromptBeatUpdate → update image prompt cho các beat. */
     const isBeatPromptUpdate = Boolean(
@@ -124,6 +133,9 @@ export default function MarketingWorkflowDrawer({
         return () => {
             if (copiedTimerRef.current) {
                 clearTimeout(copiedTimerRef.current);
+            }
+            if (deepseekPollRef.current) {
+                clearTimeout(deepseekPollRef.current);
             }
         };
     }, []);
@@ -163,6 +175,87 @@ export default function MarketingWorkflowDrawer({
         }
         api.showMessage(result.message, result.ok ? 'success' : 'error');
     }, [workflow, copyingStep, mergedPromptContext, api]);
+
+    /**
+     * Bước 1 workflow "video-image": chạy DeepSeek 3 bước trong CÙNG 1 luồng chat
+     * (viết nội dung → chia beat lưu audio script + beat map → dịch lưu bản dịch).
+     */
+    const handleRunDeepseekPipeline = React.useCallback(async (files: string[]) => {
+        if (!workflow || deepseekRunning) {
+            return;
+        }
+        const sid = Number(shortVideoId || 0);
+        if (!sid) {
+            api.showMessage('Thiếu short video — không chạy được DeepSeek', 'warning');
+            return;
+        }
+        const [fGenerate, fBeat, fTranslate] = files;
+        if (!fGenerate || !fBeat || !fTranslate) {
+            api.showMessage('Thiếu file prompt cho Bước 1 (generate / chia beat / dịch)', 'error');
+            return;
+        }
+
+        setDeepseekRunning(true);
+        setDeepseekMessage('Đang tải prompt…');
+        try {
+            const [g, b, t] = await Promise.all([
+                fetchWorkflowPromptText(workflow.key, fGenerate, mergedPromptContext),
+                fetchWorkflowPromptText(workflow.key, fBeat, mergedPromptContext),
+                fetchWorkflowPromptText(workflow.key, fTranslate, mergedPromptContext),
+            ]);
+            if (!g.ok || !b.ok || !t.ok) {
+                api.showMessage(g.message || b.message || t.message || 'Không tải được prompt', 'error');
+                setDeepseekRunning(false);
+                setDeepseekMessage('');
+                return;
+            }
+
+            const enq = await startDeepseekVideoImage({
+                shortVideoId: sid,
+                promptGenerate: g.text,
+                promptBeat: b.text,
+                promptTranslate: t.text,
+            });
+            if (!enq?.success) {
+                api.showMessage(parseShortVideoResourceApiMessage(enq, 'Không chạy được DeepSeek'), 'error');
+                setDeepseekRunning(false);
+                setDeepseekMessage('');
+                return;
+            }
+            api.showMessage(parseShortVideoResourceApiMessage(enq, 'DeepSeek đang chạy 3 bước…'), 'success');
+            setDeepseekMessage('DeepSeek đang viết nội dung…');
+
+            const startedAt = Date.now();
+            const poll = async (): Promise<void> => {
+                if (Date.now() - startedAt > 45 * 60 * 1000) {
+                    setDeepseekMessage('Quá lâu — kiểm tra lại sau');
+                    setDeepseekRunning(false);
+                    return;
+                }
+                const st = await fetchDeepseekVideoImageStatus(sid).catch(() => null);
+                if (st?.status === 'done') {
+                    api.showMessage(parseShortVideoResourceApiMessage(st, 'DeepSeek hoàn tất'), 'success');
+                    setDeepseekMessage(parseShortVideoResourceApiMessage(st, 'Hoàn tất'));
+                    setDeepseekRunning(false);
+                    setTimeout(() => window.location.reload(), 1200);
+                    return;
+                }
+                if (st?.status === 'error') {
+                    api.showMessage(parseShortVideoResourceApiMessage(st, 'DeepSeek lỗi'), 'error');
+                    setDeepseekMessage(parseShortVideoResourceApiMessage(st, 'Lỗi'));
+                    setDeepseekRunning(false);
+                    return;
+                }
+                setDeepseekMessage(parseShortVideoResourceApiMessage(st, 'DeepSeek đang xử lý…'));
+                deepseekPollRef.current = setTimeout(() => { void poll(); }, 5000);
+            };
+            void poll();
+        } catch (err) {
+            api.showMessage(err instanceof Error ? err.message : 'Không chạy được DeepSeek', 'error');
+            setDeepseekRunning(false);
+            setDeepseekMessage('');
+        }
+    }, [workflow, deepseekRunning, shortVideoId, mergedPromptContext, api]);
 
     const handleDownloadAudioScript = React.useCallback(() => {
         const text = String(audioScript || '');
@@ -411,6 +504,8 @@ export default function MarketingWorkflowDrawer({
                             const stepKey = String(index);
                             const isCopying = copyingStep === stepKey;
                             const isCopied = copiedStep === stepKey;
+                            const isVideoImageStep1 = workflow.key === 'video-image'
+                                && /vi\u1ebft n\u1ed9i dung/i.test(label || step.title);
 
                             return (
                                 <Box
@@ -672,6 +767,41 @@ export default function MarketingWorkflowDrawer({
                                             </Box>
                                         )}
 
+
+                                        {isVideoImageStep1 ? (
+                                            <Box sx={{ mt: 1.25 }}>
+                                                <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+                                                    <Button
+                                                        size="small"
+                                                        variant="contained"
+                                                        color="primary"
+                                                        disabled={deepseekRunning}
+                                                        startIcon={
+                                                            deepseekRunning
+                                                                ? <CircularProgress size={12} color="inherit" />
+                                                                : <SmartToyOutlinedIcon fontSize="small" />
+                                                        }
+                                                        onClick={() => {
+                                                            void handleRunDeepseekPipeline(
+                                                                step.prompts.map((p) => p.file).filter(Boolean),
+                                                            );
+                                                        }}
+                                                        sx={{ textTransform: 'none' }}
+                                                    >
+                                                        {deepseekRunning ? 'DeepSeek đang chạy…' : 'Chạy DeepSeek (3 bước)'}
+                                                    </Button>
+                                                    {deepseekMessage ? (
+                                                        <Typography variant="caption" color="text.secondary">
+                                                            {deepseekMessage}
+                                                        </Typography>
+                                                    ) : null}
+                                                </Stack>
+                                                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                                                    Tự động trong cùng 1 luồng chat DeepSeek: viết nội dung → chia beat (lưu
+                                                    audio script + beat map) → dịch (lưu bản dịch).
+                                                </Typography>
+                                            </Box>
+                                        ) : null}
 
 {step.note && (
                                             <Box

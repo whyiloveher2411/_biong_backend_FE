@@ -522,7 +522,70 @@ export function resolveVideo2sPlainImagePrompt(marks: ManualBeatMark[], beatId: 
     return String(byOrder?.imagePrompt || '').trim();
 }
 
-export function buildVideo2sChatbotPrompt(plain: string, aspect: string): string {
+/**
+ * Chèn mục STYLE SNAPSHOT / NEGATIVE STYLE SNAPSHOT (mirror backend
+ * marketing_short_video_agent_apply_style_snapshot). Dùng cho bản copy prompt
+ * video 2s gửi chatbot. Idempotent.
+ */
+export function applyVideo2sStyleSnapshot(
+    prompt: string,
+    styleSnapshot?: string,
+    negativeStyleSnapshot?: string,
+): string {
+    const styleSnap = String(styleSnapshot || '').trim();
+    const negStyleSnap = String(negativeStyleSnapshot || '').trim();
+    if (!prompt || (!styleSnap && !negStyleSnap)) {
+        return prompt;
+    }
+    let text = prompt;
+    text = text.replace(
+        /\n{0,2}NEGATIVE\s+STYLE\s+SNAPSHOT\s*:[\s\S]*?(?=\n\s*\n[A-Z][A-Z0-9 ]{2,}\s*:|$)/giu,
+        '',
+    );
+    text = text.replace(
+        /\n{0,2}STYLE\s+SNAPSHOT\s*:[\s\S]*?(?=\n\s*\n(?:NEGATIVE\s+PROMPT|NEGATIVE\s+STYLE\s+SNAPSHOT|ASPECT\s+RATIO|[A-Z][A-Z0-9 ]{2,})\s*:|$)/giu,
+        '',
+    );
+    text = text.trim();
+
+    if (negStyleSnap) {
+        const section = `NEGATIVE STYLE SNAPSHOT:\n${negStyleSnap}`;
+        const negMatch = /NEGATIVE\s+PROMPT\s*:/i.exec(text);
+        if (negMatch && negMatch.index >= 0) {
+            const afterNeg = text.slice(negMatch.index);
+            const endMatch = /\n\s*\n(?=[A-Z][A-Z0-9 ]{2,}\s*:)/u.exec(afterNeg);
+            if (endMatch && typeof endMatch.index === 'number') {
+                const insertAt = negMatch.index + endMatch.index;
+                text = `${text.slice(0, insertAt)}\n\n${section}${text.slice(insertAt)}`;
+            } else {
+                text = `${text.replace(/\n+$/u, '')}\n\n${section}`;
+            }
+        } else {
+            text = `${text.replace(/\n+$/u, '')}\n\n${section}`;
+        }
+    }
+
+    if (styleSnap) {
+        const section = `STYLE SNAPSHOT:\n${styleSnap}`;
+        const negMatch = /^\s*NEGATIVE\s+PROMPT\s*:/im.exec(text);
+        if (negMatch && negMatch.index >= 0) {
+            const head = text.slice(0, negMatch.index).replace(/[ \t\n]+$/u, '');
+            const tail = text.slice(negMatch.index).replace(/^[ \t\n]+/u, '');
+            text = `${head}\n\n${section}\n\n${tail}`;
+        } else {
+            text = `${text.replace(/\n+$/u, '')}\n\n${section}`;
+        }
+    }
+
+    return text.trim();
+}
+
+export function buildVideo2sChatbotPrompt(
+    plain: string,
+    aspect: string,
+    styleSnapshot?: string,
+    negativeStyleSnapshot?: string,
+): string {
     const text = String(plain || '').trim();
     if (!text) {
         return '';
@@ -533,12 +596,15 @@ export function buildVideo2sChatbotPrompt(plain: string, aspect: string): string
         : 'vertical 9:16 portrait composition filling the entire frame, 1080x1920 aspect ratio, no borders no margins';
     const aspectSection = `ASPECT RATIO:\n${aspectPhrase}`;
     const negativeMatch = /^\s*NEGATIVE\s+PROMPT\s*:/im.exec(text);
+    let out: string;
     if (negativeMatch && negativeMatch.index >= 0) {
         const head = text.slice(0, negativeMatch.index).replace(/[ \t\n]+$/, '');
         const tail = text.slice(negativeMatch.index).replace(/^[ \t\n]+/, '');
-        return `${head}\n\n${aspectSection}\n\n${tail}`;
+        out = `${head}\n\n${aspectSection}\n\n${tail}`;
+    } else {
+        out = `${text}\n\n${aspectSection}`;
     }
-    return `${text}\n\n${aspectSection}`;
+    return applyVideo2sStyleSnapshot(out, styleSnapshot, negativeStyleSnapshot);
 }
 
 /** Meta.ai video 2s trả prompt plain text — bọc thành JSON object đủ 7 key cho beat_map. */

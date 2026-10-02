@@ -253,6 +253,7 @@ import {
 } from './agentVideoBeatTranslation';
 import { isAgentVideo2sMode, isAgentWhiteboardMode, normalizeAgentVisualMode } from './agentVideoVisualMode';
 import type { ShortVideoPrevBeatReference } from 'helpers/marketingShortVideoResourceApi';
+import { fetchShortVideoAgentImageStyle } from 'helpers/marketingShortVideoImageStyleApi';
 import { buildCaptionAlignResult } from './agentVideoCaptionScriptAlign';
 import {
     buildManualBeatMark,
@@ -672,6 +673,35 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [agentImageTextLang, setAgentImageTextLang] = React.useState<AgentImageTextLang>('vi');
     const [savingImageTextLang, setSavingImageTextLang] = React.useState(false);
     const [agentWhiteboardConfig, setAgentWhiteboardConfig] = React.useState<AgentWhiteboardConfig>({});
+    // STYLE SNAPSHOT / NEGATIVE STYLE SNAPSHOT của phong cách ảnh video đang dùng —
+    // chèn khi gửi prompt sinh ảnh (Meta.ai/Duck.ai), KHÔNG lưu vào beat_map.
+    const [imageStyleSnapshot, setImageStyleSnapshot] = React.useState('');
+    const [imageStyleSnapshotNegative, setImageStyleSnapshotNegative] = React.useState('');
+    React.useEffect(() => {
+        if (!open || !shortVideoId) {
+            setImageStyleSnapshot('');
+            setImageStyleSnapshotNegative('');
+            return;
+        }
+        let cancelled = false;
+        fetchShortVideoAgentImageStyle(shortVideoId)
+            .then((result) => {
+                if (cancelled) {
+                    return;
+                }
+                setImageStyleSnapshot(result?.styleSnapshot || '');
+                setImageStyleSnapshotNegative(result?.negativeStyleSnapshot || '');
+            })
+            .catch(() => {
+                if (!cancelled) {
+                    setImageStyleSnapshot('');
+                    setImageStyleSnapshotNegative('');
+                }
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [open, shortVideoId]);
     // Video 2s: image prompt đã chứa sẵn phong cách (thay [prompt-style] từ post
     // type image style) → KHÔNG append suffix gen_style khi dùng prompt.
     const whiteboardImageStyleSuffix = React.useMemo(
@@ -3982,6 +4012,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                     imageStyleSuffix: whiteboardImageStyleSuffix,
                     imageAspectSuffix: whiteboardImageAspectSuffix,
                     imageTextLangRule: whiteboardImageTextLangRule,
+                    imageStyleSnapshot,
+                    imageNegativeStyleSnapshot: imageStyleSnapshotNegative,
                     imageVoiceContent: resolveBeatVoice(beatId),
                 });
             } else {
@@ -3993,6 +4025,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                     imageStyleSuffix: whiteboardImageStyleSuffix,
                     imageAspectSuffix: whiteboardImageAspectSuffix,
                     imageTextLangRule: whiteboardImageTextLangRule,
+                    imageStyleSnapshot,
+                    imageNegativeStyleSnapshot: imageStyleSnapshotNegative,
                     imageVoiceContent: resolveBeatVoice(beatId),
                 });
             }
@@ -4089,6 +4123,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                     video2s: true,
                     autoSubmit: true,
                     clipAspect: agentClipAspect,
+                    imageStyleSnapshot,
+                    imageNegativeStyleSnapshot: imageStyleSnapshotNegative,
                     // Beat đã có ảnh → panel thumbload ảnh hiện trạng, không hiện "chưa có".
                     imageUrl: String(beatImage[beatId]?.image_url || '').trim(),
                     imageUrls: beatImageEntryUrls(beatImage[beatId]),
@@ -4167,6 +4203,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                     imageStyleSuffix: whiteboardImageStyleSuffix,
                     imageAspectSuffix: whiteboardImageAspectSuffix,
                     imageTextLangRule: whiteboardImageTextLangRule,
+                    imageStyleSnapshot,
+                    imageNegativeStyleSnapshot: imageStyleSnapshotNegative,
                     imageVoiceContent: resolveBeatVoice(beatId),
                     prevBeats: buildPrevBeatsReferenceFor(beatId),
                 });
@@ -4181,6 +4219,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                     imageStyleSuffix: whiteboardImageStyleSuffix,
                     imageAspectSuffix: whiteboardImageAspectSuffix,
                     imageTextLangRule: whiteboardImageTextLangRule,
+                    imageStyleSnapshot,
+                    imageNegativeStyleSnapshot: imageStyleSnapshotNegative,
                     imageVoiceContent: resolveBeatVoice(beatId),
                     beatCookieId: Number(beatImage[beatId]?.cookie_id || 0),
                     prevBeats: buildPrevBeatsReferenceFor(beatId),
@@ -5997,11 +6037,18 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                         }
                         : {}),
                     ...(isVideo2s
-                        ? { video2s: true, clipAspect: agentClipAspect }
+                        ? {
+                            video2s: true,
+                            clipAspect: agentClipAspect,
+                            imageStyleSnapshot,
+                            imageNegativeStyleSnapshot: imageStyleSnapshotNegative,
+                        }
                         : {
                             imageStyleSuffix: whiteboardImageStyleSuffix,
                             imageAspectSuffix: whiteboardImageAspectSuffix,
                             imageTextLangRule: whiteboardImageTextLangRule,
+                            imageStyleSnapshot,
+                            imageNegativeStyleSnapshot: imageStyleSnapshotNegative,
                         }),
                 });
                 const failNote = result.failed.length
@@ -6087,8 +6134,10 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                         activeBeatId: missingBeatIds[0] || '',
                         autoSubmit: true,
                         imageStyleSuffix: whiteboardImageStyleSuffix,
-                    imageAspectSuffix: whiteboardImageAspectSuffix,
-                    imageTextLangRule: whiteboardImageTextLangRule,
+                        imageAspectSuffix: whiteboardImageAspectSuffix,
+                        imageTextLangRule: whiteboardImageTextLangRule,
+                        imageStyleSnapshot,
+                        imageNegativeStyleSnapshot: imageStyleSnapshotNegative,
                     })
                     : await openImportHtmlBeatAiStudioForMissingBeats({
                         shortVideoId,
@@ -9483,17 +9532,30 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     );
 
     /** Số beat thiếu image prompt (section không có prompt hợp lệ). */
-    const missingBeatImagePromptCount = React.useMemo(
-        () => countMissingBeatImagePrompt(
+    const missingBeatImagePromptCount = React.useMemo(() => {
+        if (isVideo2sMode) {
+            // Video 2s: prompt nằm ở marks (plain string), KHÔNG dùng section beat_map
+            // (BE bơm placeholder vào section khi beat chưa có prompt → dễ đếm sai).
+            // Marks là nguồn chuẩn: đếm trực tiếp theo order để con số luôn khớp.
+            const totalBeats = beatMap?.sections?.length ?? 0;
+            if (totalBeats > 0) {
+                let missing = 0;
+                for (let order = 1; order <= totalBeats; order += 1) {
+                    if (resolveVideo2sPlainImagePrompt(manualBeatMarks, `beat_${order}`).trim() === '') {
+                        missing += 1;
+                    }
+                }
+                return missing;
+            }
+        }
+        return countMissingBeatImagePrompt(
             beatMap,
             beatImage,
-            // Video 2s: prompt lưu ở marks (plain string), không nằm trong beat-map.
             isVideo2sMode
                 ? (beatId) => resolveVideo2sPlainImagePrompt(manualBeatMarks, beatId)
                 : undefined,
-        ),
-        [beatMap, beatImage, isVideo2sMode, manualBeatMarks],
-    );
+        );
+    }, [beatMap, beatImage, isVideo2sMode, manualBeatMarks]);
 
     /** Số beat có audio item nhưng chưa ready (chỉ tính beat đã từng tạo audio). */
     const pendingBeatAudioCount = React.useMemo(
@@ -9687,6 +9749,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         agentImageTextLang,
         savingImageTextLang,
         whiteboardImageTextLangRule,
+        imageStyleSnapshot,
+        imageStyleSnapshotNegative,
         handleAgentVisualModeChange,
         handleAgentImageTextLangChange,
         handleAgentWhiteboardConfigChange,

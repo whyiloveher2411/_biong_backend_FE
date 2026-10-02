@@ -14,6 +14,10 @@ export type ShortVideoImageStyle = {
     /** JSON {type_link, link} của field view=image (hoặc chuỗi rỗng). */
     image: string | Record<string, unknown> | null;
     prompt: string;
+    /** Dữ liệu snapshot chèn sau image prompt khi gửi chatbot (nếu có). */
+    style_snapshot?: string;
+    /** Dữ liệu snapshot chèn sau negative prompt khi gửi chatbot (nếu có). */
+    negative_style_snapshot?: string;
     created_at?: string;
     updated_at?: string;
 };
@@ -25,6 +29,8 @@ export type ShortVideoImageStyleSavePayload = {
     /** JSON {type_link, link} hoặc URL — gửi nguyên qua BE. */
     image?: string | Record<string, unknown> | null;
     prompt?: string;
+    style_snapshot?: string;
+    negative_style_snapshot?: string;
 };
 
 type ApiMessageLike = { content?: string } | string | undefined;
@@ -73,6 +79,8 @@ export function saveShortVideoImageStyle(payload: ShortVideoImageStyleSavePayloa
             description: payload.description ?? '',
             image: image && typeof image === 'object' ? JSON.stringify(image) : image,
             prompt: payload.prompt ?? '',
+            style_snapshot: payload.style_snapshot ?? '',
+            negative_style_snapshot: payload.negative_style_snapshot ?? '',
         },
     }) as Promise<{ success?: boolean; style?: ShortVideoImageStyle; style_id?: number }>;
 }
@@ -114,7 +122,13 @@ export function saveShortVideoAgentImageStyle(shortVideoId: number, styleId: num
  */
 export async function fetchShortVideoAgentImageStyle(
     shortVideoId: number,
-): Promise<{ styleId: number; prompt: string; title: string } | null> {
+): Promise<{
+    styleId: number;
+    prompt: string;
+    title: string;
+    styleSnapshot: string;
+    negativeStyleSnapshot: string;
+} | null> {
     if (shortVideoId <= 0) {
         return null;
     }
@@ -129,6 +143,8 @@ export async function fetchShortVideoAgentImageStyle(
             style_id?: number;
             style?: ShortVideoImageStyle;
             prompt?: string;
+            style_snapshot?: string;
+            negative_style_snapshot?: string;
         };
         if (!result?.success) {
             return null;
@@ -137,6 +153,10 @@ export async function fetchShortVideoAgentImageStyle(
             styleId: Number(result.style_id || 0),
             prompt: String(result.prompt || ''),
             title: String(result.style?.title || ''),
+            styleSnapshot: String(result.style_snapshot || result.style?.style_snapshot || ''),
+            negativeStyleSnapshot: String(
+                result.negative_style_snapshot || result.style?.negative_style_snapshot || '',
+            ),
         };
     } catch {
         return null;

@@ -54,6 +54,38 @@ describe('countMissingBeatImagePrompt', () => {
     it('map null → 0', () => {
         expect(countMissingBeatImagePrompt(null)).toBe(0);
     });
+
+    it('placeholder prompt BE bơm vào section → vẫn tính là thiếu', () => {
+        const placeholder = {
+            subject: 'You’ve just spent weeks gathering wild barley.',
+            action: 'illustrate',
+            scene: 'You’ve just spent weeks gathering wild barley.',
+            text_overlay: '',
+            composition: 'clean 2D illustration, centered subject',
+            must_avoid: 'watermark, logo, photorealism',
+        };
+        const realPrompt = {
+            subject: 'A hunter crouching beside a smouldering fire',
+            action: 'crouches and scans the treeline',
+            scene: 'night savanna',
+            text_overlay: '',
+            composition: 'wide establishing shot',
+            must_avoid: 'watermark, logo',
+        };
+        const beatMap = map([
+            section('beat_1', placeholder),
+            section('beat_2', realPrompt),
+        ]);
+        expect(listMissingBeatImagePromptIds(beatMap)).toEqual(['beat_1']);
+        expect(countMissingBeatImagePrompt(beatMap)).toBe(1);
+
+        const beatImage = {
+            beat_1: { image_url: '', image_prompt: JSON.stringify(placeholder) },
+            beat_2: { image_url: '', image_prompt: JSON.stringify(realPrompt) },
+        };
+        expect(listMissingBeatImagePromptIds(map([section('beat_1'), section('beat_2')]), beatImage))
+            .toEqual(['beat_1']);
+    });
 });
 
 describe('listBeatsWithPendingAudio / countBeatsWithPendingAudio', () => {

@@ -5,8 +5,10 @@ import CheckIcon from '@mui/icons-material/Check';
 import ContentPasteIcon from '@mui/icons-material/ContentPaste';
 import CloseIcon from '@mui/icons-material/Close';
 import CloudUploadOutlinedIcon from '@mui/icons-material/CloudUploadOutlined';
+import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 import {
     copyWorkflowPromptToClipboard,
+    fetchWorkflowPromptText,
     MANUAL_BEAT_PROMPTS_SAVED_EVENT,
     splitWorkflowBeats,
     splitWorkflowOutputIntoParts,
@@ -15,7 +17,27 @@ import {
     type WorkflowBreakdownPlan,
     type WorkflowPromptItem,
 } from 'helpers/marketingWorkflowPrompts';
+import {
+    fetchDeepseekStep2Status,
+    startDeepseekStep2Chunk,
+    type DeepseekStep2ChunkStatus,
+} from 'helpers/marketingDeepseekVideoImage';
 import { importManualBeatPromptFile } from './AgentVideo/agentVideoApi';
+
+function readApiMessage(source: unknown, fallback: string): string {
+    const record = source && typeof source === 'object' ? (source as Record<string, unknown>) : null;
+    const message = record ? record.message : undefined;
+    if (typeof message === 'string' && message.trim()) {
+        return message;
+    }
+    if (message && typeof message === 'object' && typeof (message as { content?: unknown }).content === 'string') {
+        const content = String((message as { content?: string }).content || '').trim();
+        if (content) {
+            return content;
+        }
+    }
+    return fallback;
+}
 
 type PartNotice = {
     ok: boolean;
@@ -57,6 +79,14 @@ export default function MarketingWorkflowBreakdown({
     const [pastingIndex, setPastingIndex] = React.useState(-1);
     const [importingIndex, setImportingIndex] = React.useState(-1);
     const copiedTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+    const [deepseekStatus, setDeepseekStatus] = React.useState<Record<number, DeepseekStep2ChunkStatus>>({});
+    const [deepseekStarting, setDeepseekStarting] = React.useState(-1);
+    const [deepseekAllRunning, setDeepseekAllRunning] = React.useState(false);
+    // Giữ showMessage trong ref để effect poll không phụ thuộc hàm (tránh restart liên tục).
+    const showMessageRef = React.useRef(showMessage);
+    showMessageRef.current = showMessage;
+    // Chống race: chỉ áp dụng phản hồi của request MỚI NHẤT, bỏ qua phản hồi cũ về muộn.
+    const statusSeqRef = React.useRef(0);
 
     React.useEffect(() => {
         setParts(splitWorkflowOutputIntoParts(savedValue, plan.beatCounts));
@@ -208,6 +238,185 @@ export default function MarketingWorkflowBreakdown({
         });
     }, []);
 
+    const applyDeepseekStatus = React.useCallback((chunks: DeepseekStep2ChunkStatus[] | undefined) => {
+        const map: Record<number, DeepseekStep2ChunkStatus> = {};
+        (chunks || []).forEach((chunk) => {
+            map[chunk.index] = chunk;
+        });
+        setDeepseekStatus(map);
+    }, []);
+
+    // Số phần kỳ vọng của LẦN CHẠY hiện tại (chạy tất cả = số phần; chạy 1 phần = 1).
+    // Chỉ cần đủ số này mới coi là "xong" → tránh dừng poll sớm lúc còn enqueue tuần tự.
+    // Khi mở lại tab giữa lúc chạy (không bấm nút) thì = 0 → xong khi mọi phần đã ghi
+    // trạng thái đều kết thúc.
+    const runExpectedRef = React.useRef(0);
+    // Đánh dấu instance này đã từng thấy phần đang chạy → chỉ báo "xong" 1 lần, không
+    // spam thông báo mỗi lần mở lại tab khi mọi phần đã done từ trước.
+    const hadActiveRef = React.useRef(false);
+
+    // Poll trạng thái DeepSeek bước 2. Poll theo TRẠNG THÁI BACKEND (còn phần
+    // queued/processing) chứ không chỉ theo cờ deepseekAllRunning — nhờ vậy khi mở lại
+    // tab/đổi short video giữa lúc chạy, UI vẫn tự cập nhật realtime tới khi mọi phần xong.
+    React.useEffect(() => {
+        const sid = Number(shortVideoId || 0);
+        if (!sid || plan.chunks.length <= 0) {
+            return;
+        }
+
+        let cancelled = false;
+        let timer: ReturnType<typeof setTimeout> | null = null;
+        const mySeq = statusSeqRef.current + 1;
+        statusSeqRef.current = mySeq;
+
+        const poll = async () => {
+            if (cancelled) {
+                return;
+            }
+            let st = null;
+            try {
+                st = await fetchDeepseekStep2Status(sid);
+            } catch {
+                st = null;
+            }
+            // Bỏ qua phản hồi nếu effect đã bị hủy HOẶC đã có request mới hơn (chống race).
+            if (cancelled || statusSeqRef.current !== mySeq) {
+                return;
+            }
+
+            if (!st?.success) {
+                timer = setTimeout(() => { void poll(); }, 5000);
+                return;
+            }
+
+            applyDeepseekStatus(st.chunks);
+            const total = Number(st.total || 0);
+            const terminal = Number(st.done || 0) + Number(st.error || 0);
+            const active = Number(st.active || 0);
+            const expected = deepseekAllRunning ? Math.max(1, runExpectedRef.current) : 0;
+            const allSettled = total >= expected && terminal >= total;
+            if (active > 0) {
+                hadActiveRef.current = true;
+            }
+
+            // Còn 3 nguồn cần tiếp tục poll:
+            //  - backend còn phần queued/processing (active > 0), hoặc
+            //  - vừa bấm chạy (local) mà chưa enqueue đủ số phần, hoặc
+            //  - còn phần đã ghi trạng thái nhưng chưa kết thúc.
+            if (active > 0 || (deepseekAllRunning && !allSettled) || (total > 0 && terminal < total)) {
+                timer = setTimeout(() => { void poll(); }, 5000);
+                return;
+            }
+
+            // Báo "xong" khi lần poll này bắt được phần đang chạy, hoặc khi chính tab này
+            // vừa bấm chạy (job có thể đã xong trước lần poll đầu).
+            const shouldNotify = hadActiveRef.current || deepseekAllRunning;
+            setDeepseekAllRunning(false);
+            setDeepseekStarting(-1);
+
+            if (shouldNotify) {
+                hadActiveRef.current = false;
+                if (Number(st.done || 0) > 0) {
+                    document.dispatchEvent(new CustomEvent(MANUAL_BEAT_PROMPTS_SAVED_EVENT, {
+                        detail: { shortVideoId: sid },
+                    }));
+                }
+                showMessageRef.current(
+                    `DeepSeek bước 2: ${st.done || 0} phần xong${Number(st.error || 0) > 0 ? `, ${st.error} phần lỗi` : ''}`,
+                    Number(st.error || 0) > 0 ? 'warning' : 'success',
+                );
+            }
+        };
+
+        // Vừa enqueue → chờ 2.5s cho job kịp ghi 'queued'; còn lại (mở lại tab) poll ngay.
+        timer = setTimeout(() => { void poll(); }, deepseekAllRunning ? 2500 : 0);
+
+        return () => {
+            cancelled = true;
+            if (timer) {
+                clearTimeout(timer);
+            }
+        };
+    }, [deepseekAllRunning, shortVideoId, plan.chunks.length, applyDeepseekStatus]);
+
+    const enqueueChunk = React.useCallback(async (index: number): Promise<boolean> => {
+        const chunk = plan.chunks[index];
+        const sid = Number(shortVideoId || 0);
+        if (!chunk || !sid || !item.file) {
+            return false;
+        }
+        const prompt = await fetchWorkflowPromptText(workflowKey, item.file, chunk.context);
+        if (!prompt.ok) {
+            showMessage(prompt.message || 'Không tải được prompt cho phần này', 'error');
+            return false;
+        }
+        const res = await startDeepseekStep2Chunk({
+            shortVideoId: sid,
+            index,
+            startOrder: chunk.beatStart,
+            prompt: prompt.text,
+        });
+        if (!res?.success) {
+            showMessage(readApiMessage(res, 'Không đưa được phần này vào hàng đợi DeepSeek'), 'error');
+            return false;
+        }
+        return true;
+    }, [plan, shortVideoId, item.file, workflowKey, showMessage]);
+
+    const runChunkDeepseek = React.useCallback(async (index: number) => {
+        if (deepseekStarting >= 0 || deepseekAllRunning) {
+            return;
+        }
+        setDeepseekStarting(index);
+        try {
+            const ok = await enqueueChunk(index);
+            if (ok) {
+                showMessage(`Đã chạy DeepSeek cho phần ${index + 1} — chờ trong giây lát…`, 'success');
+                // Bật cờ để effect poll tự chạy; effect tự tắt khi phần này xong.
+                runExpectedRef.current = 1;
+                setDeepseekAllRunning(true);
+            }
+        } catch (err) {
+            showMessage(err instanceof Error ? err.message : 'Không chạy được DeepSeek', 'error');
+        } finally {
+            setDeepseekStarting(-1);
+        }
+    }, [deepseekStarting, deepseekAllRunning, enqueueChunk, showMessage]);
+
+    const runAllDeepseek = React.useCallback(async () => {
+        if (deepseekAllRunning || deepseekStarting >= 0) {
+            return;
+        }
+        if (!item.file) {
+            showMessage('Prompt này không có file', 'error');
+            return;
+        }
+        runExpectedRef.current = plan.chunks.length;
+        setDeepseekAllRunning(true);
+        let queued = 0;
+        try {
+            for (const chunk of plan.chunks) {
+                // eslint-disable-next-line no-await-in-loop
+                const ok = await enqueueChunk(chunk.index);
+                if (ok) {
+                    queued += 1;
+                }
+            }
+        } catch (err) {
+            showMessage(err instanceof Error ? err.message : 'Không chạy được DeepSeek', 'error');
+        }
+        if (queued > 0) {
+            showMessage(`Đã đưa ${queued}/${plan.chunks.length} phần vào hàng đợi DeepSeek (mỗi phần 1 luồng chat)`, 'success');
+            // Enqueue thiếu phần (một số phần lỗi) → tắt cờ "đang chạy" để poll chỉ theo
+            // trạng thái backend còn lại, tránh poll mãi vì không bao giờ đủ số phần kỳ vọng.
+            if (queued < plan.chunks.length) {
+                setDeepseekAllRunning(false);
+            }
+        } else {
+            setDeepseekAllRunning(false);
+        }
+    }, [deepseekAllRunning, deepseekStarting, item.file, plan, enqueueChunk, showMessage]);
+
     const busy = copyingIndex >= 0 || pastingIndex >= 0 || importingIndex >= 0;
 
     return (
@@ -229,6 +438,27 @@ export default function MarketingWorkflowBreakdown({
                 thẳng vào các beat của clip.
             </Typography>
 
+            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mt: 0.75 }}>
+                <Button
+                    size="small"
+                    variant="contained"
+                    color="primary"
+                    disabled={busy || deepseekAllRunning || !item.exists}
+                    startIcon={
+                        deepseekAllRunning
+                            ? <CircularProgress size={12} color="inherit" />
+                            : <SmartToyOutlinedIcon fontSize="small" />
+                    }
+                    onClick={() => { void runAllDeepseek(); }}
+                    sx={{ textTransform: 'none' }}
+                >
+                    {deepseekAllRunning ? 'DeepSeek đang chạy…' : 'Chạy DeepSeek tất cả phần'}
+                </Button>
+                <Typography variant="caption" color="text.secondary">
+                    Mỗi phần 1 luồng chat riêng; lỗi sẽ tự gửi lại chatbot để sửa.
+                </Typography>
+            </Stack>
+
             <Stack spacing={0.75} sx={{ mt: 1 }}>
                 {plan.chunks.map((chunk) => {
                     const isCopying = copyingIndex === chunk.index;
@@ -237,6 +467,8 @@ export default function MarketingWorkflowBreakdown({
                     const isImporting = importingIndex === chunk.index;
                     const validation = validations[chunk.index];
                     const notice = notices[chunk.index];
+                    const ds = deepseekStatus[chunk.index];
+                    const dsActive = ds?.status === 'queued' || ds?.status === 'processing';
                     const hasContent = String(parts[chunk.index] || '').trim().length > 0;
                     const hasError = hasContent && (!validation.ok || (notice !== undefined && !notice.ok));
                     const displayErrors = [
@@ -276,6 +508,34 @@ export default function MarketingWorkflowBreakdown({
                                     label={statusLabel}
                                     sx={{ height: 20, fontSize: 11 }}
                                 />
+                                {ds && (
+                                    <Tooltip title={ds.message || ''} placement="top">
+                                        <Chip
+                                            size="small"
+                                            variant="outlined"
+                                            color={
+                                                ds.status === 'done' ? 'success'
+                                                    : ds.status === 'error' ? 'error'
+                                                        : ds.status === 'processing' ? 'info'
+                                                            : 'default'
+                                            }
+                                            label={`DeepSeek: ${ds.status || '...'}`}
+                                            sx={{ height: 20, fontSize: 11 }}
+                                        />
+                                    </Tooltip>
+                                )}
+                                {ds?.chat_url ? (
+                                    <Button
+                                        size="small"
+                                        color="inherit"
+                                        href={ds.chat_url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        sx={{ textTransform: 'none', minWidth: 0, px: 0.5, fontSize: 11 }}
+                                    >
+                                        Chat
+                                    </Button>
+                                ) : null}
                                 {(() => {
                                     const copyButton = (
                                         <Button
@@ -307,6 +567,21 @@ export default function MarketingWorkflowBreakdown({
                                         </Tooltip>
                                     );
                                 })()}
+                                <Button
+                                    size="small"
+                                    variant="outlined"
+                                    color="primary"
+                                    disabled={busy || deepseekAllRunning || dsActive || !item.exists}
+                                    startIcon={
+                                        deepseekStarting === chunk.index
+                                            ? <CircularProgress size={12} color="inherit" />
+                                            : <SmartToyOutlinedIcon fontSize="small" />
+                                    }
+                                    onClick={() => { void runChunkDeepseek(chunk.index); }}
+                                    sx={{ textTransform: 'none' }}
+                                >
+                                    Mở DeepSeek
+                                </Button>
                                 <Button
                                     size="small"
                                     variant={hasContent ? 'outlined' : 'contained'}
@@ -354,6 +629,14 @@ export default function MarketingWorkflowBreakdown({
                                     </Tooltip>
                                 )}
                             </Box>
+
+                            {ds?.status === 'error' && ds.message ? (
+                                <Box sx={{ mt: 0.5, ml: 0.25 }}>
+                                    <Typography variant="caption" color="error.main" sx={{ display: 'block', lineHeight: 1.4 }}>
+                                        • {ds.message}
+                                    </Typography>
+                                </Box>
+                            ) : null}
 
                             {hasContent && !hasError && validation.preview && (
                                 <Typography

@@ -53,6 +53,8 @@ type StyleFormState = {
     description: string;
     image: StyleFormImage;
     prompt: string;
+    style_snapshot: string;
+    negative_style_snapshot: string;
 };
 
 const EMPTY_FORM: StyleFormState = {
@@ -61,6 +63,8 @@ const EMPTY_FORM: StyleFormState = {
     description: '',
     image: null,
     prompt: '',
+    style_snapshot: '',
+    negative_style_snapshot: '',
 };
 
 /** Parse field image (JSON {link, type_link, s3_key}) → {url, s3_key} cho form. */
@@ -236,6 +240,30 @@ function StyleForm({
                 maxRows={20}
                 helperText="Prompt mô tả đầy đủ phong cách hình ảnh — thay [prompt-style] khi copy prompt workflow"
             />
+            <TextField
+                label="STYLE SNAPSHOT"
+                value={form.style_snapshot}
+                onChange={(e) => onFormChange({ style_snapshot: e.target.value })}
+                disabled={saving || uploading}
+                size="small"
+                fullWidth
+                multiline
+                minRows={4}
+                maxRows={16}
+                helperText='Nếu có dữ liệu: chèn thành mục riêng "STYLE SNAPSHOT:" ngay SAU image prompt khi gửi chatbot (Meta.ai/Duck.ai…) — không dán dính vào image prompt.'
+            />
+            <TextField
+                label="NEGATIVE STYLE SNAPSHOT"
+                value={form.negative_style_snapshot}
+                onChange={(e) => onFormChange({ negative_style_snapshot: e.target.value })}
+                disabled={saving || uploading}
+                size="small"
+                fullWidth
+                multiline
+                minRows={3}
+                maxRows={12}
+                helperText='Nếu có dữ liệu: chèn vào SAU negative prompt gốc (mục "NEGATIVE STYLE SNAPSHOT:").'
+            />
             <Stack direction="row" spacing={1} justifyContent="flex-end">
                 <Button variant="outlined" onClick={onCancel} disabled={saving || uploading}>
                     Hủy
@@ -309,6 +337,8 @@ export default function ShortVideoImageStyleManageDrawer({
             description: style.description || '',
             image: styleToFormImage(style),
             prompt: style.prompt || '',
+            style_snapshot: style.style_snapshot || '',
+            negative_style_snapshot: style.negative_style_snapshot || '',
         });
         setMode('form');
     };
@@ -372,6 +402,8 @@ export default function ShortVideoImageStyleManageDrawer({
                 }
                 : '',
             prompt: form.prompt,
+            style_snapshot: form.style_snapshot,
+            negative_style_snapshot: form.negative_style_snapshot,
         })
             .then((result) => {
                 setSaving(false);

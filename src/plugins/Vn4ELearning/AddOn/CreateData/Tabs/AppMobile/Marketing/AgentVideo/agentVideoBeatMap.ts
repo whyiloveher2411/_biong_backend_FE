@@ -1208,8 +1208,36 @@ export function listBeatIdsWithHtml(beatHtml: Record<string, BeatHtmlEntry>): st
 }
 
 /**
+ * image_prompt "placeholder" do BE tự sinh khi beat CHƯA có prompt thật
+ * (syncManualBeat → beat_map): subject = chính câu script, action = 'illustrate',
+ * composition = 'clean 2D illustration, centered subject' / 'clean 2D documentary
+ * illustration, ...'. Đây KHÔNG phải prompt user/AI tạo → coi như thiếu prompt.
+ * Mirror marketing_short_video_manual_beat_wrap_image_prompt_for_beat_map (nhánh else)
+ * trong marketing-short-video-manual-beat-helper.php.
+ */
+export function isPlaceholderBeatImagePrompt(value: unknown): boolean {
+    const record = normalizeBeatImagePrompt(value);
+    if (!record) {
+        // String rỗng/không parse được → không phải placeholder (đã tính là thiếu ở nơi khác).
+        return false;
+    }
+    const action = String(record.action ?? '').trim().toLowerCase();
+    if (action !== 'illustrate' && action !== 'illustrate the script moment') {
+        return false;
+    }
+    const composition = String(record.composition ?? '').trim().toLowerCase();
+    const placeholderComposition = composition === ''
+        || composition.startsWith('clean 2d illustration, centered subject')
+        || composition.startsWith('clean 2d documentary illustration');
+    const mustAvoid = String(record.must_avoid ?? '').trim().toLowerCase();
+    const placeholderMustAvoid = mustAvoid === 'watermark, logo, photorealism'
+        || mustAvoid === 'watermark, logo, photorealism, 3d render, dense text';
+    return placeholderComposition || placeholderMustAvoid;
+}
+
+/**
  * Beat thiếu image prompt = section không có `image_prompt` hợp lệ, HOẶC
- * prompt nằm ở beat_image block nhưng rỗng.
+ * prompt nằm ở beat_image block nhưng rỗng, HOẶC prompt chỉ là placeholder do BE sinh.
  * `promptResolver` cho phép mode đặc biệt (video-2s: prompt ở marks) cung cấp
  * prompt theo beat — trả '' nghĩa là không có.
  * Dùng cho panel thống kê trên timeline.
@@ -1223,6 +1251,9 @@ export function isBeatImagePromptMissing(
     if (promptResolver && String(promptResolver(beatId) || '').trim() !== '') {
         return false;
     }
+    if (section?.image_prompt != null && isPlaceholderBeatImagePrompt(section.image_prompt)) {
+        return true;
+    }
     const sectionPrompt = String(
         beatImagePromptToText(section?.image_prompt) || (section?.image_prompt as string) || '',
     ).trim();
@@ -1230,6 +1261,9 @@ export function isBeatImagePromptMissing(
         return false;
     }
     const savedPrompt = beatImage?.[beatId]?.image_prompt;
+    if (savedPrompt != null && isPlaceholderBeatImagePrompt(savedPrompt)) {
+        return true;
+    }
     return String(beatImagePromptToText(savedPrompt)).trim() === '';
 }
 

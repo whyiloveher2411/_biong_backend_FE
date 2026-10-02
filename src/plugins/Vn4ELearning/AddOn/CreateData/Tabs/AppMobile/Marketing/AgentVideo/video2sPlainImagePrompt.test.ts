@@ -69,4 +69,31 @@ describe('buildVideo2sChatbotPrompt', () => {
         expect(buildVideo2sChatbotPrompt('IMAGE PROMPT:\nX', '16:9')).toContain('1920x1080');
         expect(buildVideo2sChatbotPrompt('', '9:16')).toBe('');
     });
+
+    it('chèn STYLE SNAPSHOT sau image prompt và NEGATIVE STYLE SNAPSHOT sau negative', () => {
+        const prompt = buildVideo2sChatbotPrompt(
+            'IMAGE PROMPT:\nCave at dawn.\n\nNEGATIVE PROMPT:\nNo modern objects.',
+            '9:16',
+            'warm parchment texture, hand-drawn edges',
+            'no neon colors, no gradients',
+        );
+        expect(prompt).toContain('STYLE SNAPSHOT:\nwarm parchment texture, hand-drawn edges');
+        expect(prompt).toContain('NEGATIVE STYLE SNAPSHOT:\nno neon colors, no gradients');
+        const stylePos = prompt.indexOf('STYLE SNAPSHOT:');
+        const negPos = prompt.indexOf('NEGATIVE PROMPT:');
+        const negStylePos = prompt.indexOf('NEGATIVE STYLE SNAPSHOT:');
+        expect(stylePos).toBeGreaterThanOrEqual(0);
+        expect(negPos).toBeGreaterThan(stylePos);
+        expect(negStylePos).toBeGreaterThan(negPos);
+    });
+
+    it('snapshot rỗng → không thêm mục (giữ nguyên hành vi cũ)', () => {
+        const prompt = buildVideo2sChatbotPrompt(
+            'IMAGE PROMPT:\nCave at dawn.\n\nNEGATIVE PROMPT:\nNo modern objects.',
+            '9:16',
+            '',
+            '',
+        );
+        expect(prompt).not.toContain('STYLE SNAPSHOT');
+    });
 });

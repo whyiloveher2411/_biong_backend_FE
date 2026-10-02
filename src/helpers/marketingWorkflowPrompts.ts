@@ -304,6 +304,26 @@ export function replaceWorkflowPromptKeys(
     return { content: result, replaced };
 }
 
+/**
+ * Như copyWorkflowPromptToClipboard nhưng trả về TEXT đã thay key (không copy clipboard).
+ * Dùng để gửi thẳng prompt cho DeepSeek.
+ */
+export async function fetchWorkflowPromptText(
+    workflow: string,
+    file: string,
+    context: WorkflowPromptContext = {},
+): Promise<{ ok: boolean; text: string; message?: string }> {
+    const res = await fetchWorkflowPromptContent(workflow, file);
+    if (!res.ok) {
+        return { ok: false, text: '', message: res.message || 'Không tải được prompt' };
+    }
+    const { content } = replaceWorkflowPromptKeys(res.content, context);
+    if (!content.trim()) {
+        return { ok: false, text: '', message: `Prompt rỗng: ${file}` };
+    }
+    return { ok: true, text: content };
+}
+
 export async function copyWorkflowPromptToClipboard(
     workflow: string,
     file: string,
