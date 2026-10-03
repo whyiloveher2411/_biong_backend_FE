@@ -2182,14 +2182,16 @@ export type ActiveFullAutoPipelineItem = {
 
 /**
  * Checkbox «Chạy» — sibling agent_video_json.full_auto_step_toggles.
- * Mặc định bật, riêng bgm (audio background) mặc định TẮT — không ghép audio nền vào video.
+ * Mặc định bật, riêng bgm (audio background) và animate ảnh beat mặc định TẮT
+ * (bgm = không ghép audio nền; animate = bỏ qua animate ảnh, dùng video có sẵn để render).
  */
 export type FullAutoStepToggleKey =
     | 'script_improve'
     | 'script_phonetic_normalize'
     | 'bgm'
     | 'render'
-    | 'thumbnail';
+    | 'thumbnail'
+    | 'beat_video_animate';
 
 export type FullAutoStepToggles = Record<FullAutoStepToggleKey, boolean>;
 
@@ -2199,6 +2201,7 @@ export const DEFAULT_FULL_AUTO_STEP_TOGGLES: FullAutoStepToggles = {
     bgm: false,
     render: true,
     thumbnail: true,
+    beat_video_animate: false,
 };
 
 export function normalizeFullAutoStepToggles(
@@ -2210,6 +2213,7 @@ export function normalizeFullAutoStepToggles(
         bgm: raw?.bgm === true,
         render: raw?.render !== false,
         thumbnail: raw?.thumbnail !== false,
+        beat_video_animate: raw?.beat_video_animate === true,
     };
 }
 
@@ -2223,6 +2227,9 @@ export function fullAutoStepToggleKeyForStep(stepKey: string): FullAutoStepToggl
     }
     if (stepKey === 'bgm') {
         return 'bgm';
+    }
+    if (stepKey === 'beat_video_animate') {
+        return 'beat_video_animate';
     }
     if (stepKey === 'render' || stepKey === 'upload') {
         return 'render';
@@ -4164,6 +4171,25 @@ export async function importManualBeatAiDivision(
         'plugin/vn4-e-learning/app-mobile/marketing/short-video/manual-beat/import-ai-division',
         shortVideoBody(shortVideoId, { ai_output: aiOutput }),
     ) as Promise<ManualBeatResponse & { warnings?: string[] }>;
+}
+
+export type VideoSubtitlesResponse = JsonResponse & {
+    content?: string;
+    filename?: string;
+    cue_count?: number;
+    beat_count?: number;
+    source?: string;
+};
+
+/**
+ * Tải phụ đề thủ công (SBV — định dạng YouTube) cho toàn video, mỗi beat 1 cue.
+ * Text lấy từ audio script; mốc thời gian tuyệt đối lấy từ beat/whisper.
+ */
+export async function downloadVideoSubtitles(shortVideoId: number): Promise<VideoSubtitlesResponse> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/download-subtitles',
+        shortVideoBody(shortVideoId, {}),
+    ) as Promise<VideoSubtitlesResponse>;
 }
 
 export async function saveManualBeatMarkPrompt(

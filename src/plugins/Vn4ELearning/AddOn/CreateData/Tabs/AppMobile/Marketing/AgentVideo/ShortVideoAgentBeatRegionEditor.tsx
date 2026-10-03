@@ -6132,7 +6132,7 @@ export default function ShortVideoAgentBeatRegionEditor({
                             key={beatId}
                             state={state}
                             beatId={beatId}
-                            headline="Prompt image (beat đang chọn)"
+                            headline="Prompt image"
                         />
                     ) : null}
                     {!selectedEffect && bgSampleMode ? (

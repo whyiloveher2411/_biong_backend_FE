@@ -52,13 +52,13 @@ function resolvePipelineGroupToggleKey(groupKey: string): FullAutoStepToggleKey 
     return null;
 }
 
-/** bgm (audio background) mặc định tắt; các toggle khác mặc định bật khi thiếu giá trị. */
+/** bgm + animate ảnh beat mặc định tắt; các toggle khác mặc định bật khi thiếu giá trị. */
 function resolveStepToggleChecked(
     toggles: FullAutoStepToggles | undefined,
     key: FullAutoStepToggleKey,
 ): boolean {
     const value = toggles?.[key];
-    if (key === 'bgm') {
+    if (key === 'bgm' || key === 'beat_video_animate') {
         return value === true;
     }
     return value !== false;
@@ -80,6 +80,9 @@ const PIPELINE_HEADLESS_TOOLTIP = [
     'Login Google lần đầu: GEMINI_WEB_OPEN_BROWSER=1 GEMINI_WEB_HEADLESS=false node scripts/run-gemini-web-beat.mjs',
 ].join(' ');
 const PIPELINE_AI_TOOLTIP = 'Bước này dùng AI (Gemini, Whisper, ChatGPT TTS…)';
+const PIPELINE_ANIMATE_TOGGLE_TOOLTIP =
+    'Chạy bước animate ảnh beat trong pipeline A→Z. Bỏ check = bỏ qua animate '
+    + '(beat có video vẫn dùng video để render), pipeline chạy nhanh hơn.';
 
 function resolveHeadlessStepSet(headlessSteps?: FullAutoPipelineStepKey[]): Set<string> {
     const source = headlessSteps && headlessSteps.length > 0
@@ -552,7 +555,8 @@ export function PipelineGroupedMenuItems({
         const showRowToggle = Boolean(
             rowToggleKey
             && onStepToggleChange
-            && rowToggleKey === 'script_phonetic_normalize',
+            && (rowToggleKey === 'script_phonetic_normalize'
+                || rowToggleKey === 'beat_video_animate'),
         );
 
         return (
@@ -678,9 +682,10 @@ export function PipelineGroupedMenuItems({
                     {showRowToggle && rowToggleKey && onStepToggleChange ? (
                         <PipelineStepToggleCheckbox
                             toggleKey={rowToggleKey}
-                            checked={stepToggles?.[rowToggleKey] !== false}
+                            checked={resolveStepToggleChecked(stepToggles, rowToggleKey)}
                             disabled={disabled || stepToggleDisabled}
                             onChange={onStepToggleChange}
+                            tooltip={rowToggleKey === 'beat_video_animate' ? PIPELINE_ANIMATE_TOGGLE_TOOLTIP : undefined}
                         />
                     ) : null}
                     {key === 'beat_image_fill' && onBeatImageFillModeChange ? (
@@ -875,7 +880,8 @@ export function PipelineGroupedStepList({
         const showRowToggle = Boolean(
             rowToggleKey
             && onStepToggleChange
-            && rowToggleKey === 'script_phonetic_normalize',
+            && (rowToggleKey === 'script_phonetic_normalize'
+                || rowToggleKey === 'beat_video_animate'),
         );
 
         return (
@@ -931,9 +937,10 @@ export function PipelineGroupedStepList({
                 {showRowToggle && rowToggleKey ? (
                     <PipelineStepToggleCheckbox
                         toggleKey={rowToggleKey}
-                        checked={stepToggles?.[rowToggleKey] !== false}
+                        checked={resolveStepToggleChecked(stepToggles, rowToggleKey)}
                         disabled={stepToggleDisabled}
                         onChange={onStepToggleChange}
+                        tooltip={rowToggleKey === 'beat_video_animate' ? PIPELINE_ANIMATE_TOGGLE_TOOLTIP : undefined}
                     />
                 ) : null}
             </Box>
@@ -1144,7 +1151,8 @@ export function PipelineGroupedWorkflowListV3({
         const showRowToggle = Boolean(
             rowToggleKey
             && onStepToggleChange
-            && rowToggleKey === 'script_phonetic_normalize',
+            && (rowToggleKey === 'script_phonetic_normalize'
+                || rowToggleKey === 'beat_video_animate'),
         );
 
         return (
@@ -1263,9 +1271,10 @@ export function PipelineGroupedWorkflowListV3({
                     {showRowToggle && rowToggleKey && onStepToggleChange ? (
                         <PipelineStepToggleCheckbox
                             toggleKey={rowToggleKey}
-                            checked={stepToggles?.[rowToggleKey] !== false}
+                            checked={resolveStepToggleChecked(stepToggles, rowToggleKey)}
                             disabled={selectStepDisabled || stepToggleDisabled}
                             onChange={onStepToggleChange}
+                            tooltip={rowToggleKey === 'beat_video_animate' ? PIPELINE_ANIMATE_TOGGLE_TOOLTIP : undefined}
                         />
                     ) : null}
                     {key === 'beat_image_fill' && onBeatImageFillModeChange ? (

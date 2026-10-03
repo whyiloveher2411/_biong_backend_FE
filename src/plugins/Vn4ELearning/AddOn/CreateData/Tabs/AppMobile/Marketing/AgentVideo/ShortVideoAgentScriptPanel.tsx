@@ -28,6 +28,7 @@ import DragHandleIcon from '@mui/icons-material/DragHandle';
 import PlaylistAddCheckIcon from '@mui/icons-material/PlaylistAddCheck';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import DnsIcon from '@mui/icons-material/Dns';
+import DownloadIcon from '@mui/icons-material/Download';
 import SaveIcon from '@mui/icons-material/Save';
 import ReplayIcon from '@mui/icons-material/Replay';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -727,6 +728,18 @@ export default function ShortVideoAgentScriptPanel({ state }: Props) {
                                     </LoadingButton>
                                 </>
                             )}
+                            <LoadingButton
+                                size="small"
+                                variant="outlined"
+                                loading={state.downloadingSubtitles}
+                                disabled={!state.hasScript}
+                                startIcon={<DownloadIcon />}
+                                onClick={() => { void state.handleDownloadSubtitles(); }}
+                                sx={{ whiteSpace: 'nowrap' }}
+                                title="Phụ đề SBV (YouTube) toàn video, mỗi beat 1 cue — text theo audio script, mốc thời gian theo beat/whisper"
+                            >
+                                Tải phụ đề (.sbv)
+                            </LoadingButton>
                             <Button
                                 size="small"
                                 variant={scriptEditMode ? 'contained' : 'outlined'}

@@ -41,6 +41,7 @@ import {
     importManualBeatPromptFile,
     saveManualBeatMarks,
     saveManualBeatTranslations,
+    downloadVideoSubtitles,
     fetchImportHtmlContext,
     normalizePlatforms,
     parseApiMessage,
@@ -7632,6 +7633,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [copyingBeatDivisionPrompt, setCopyingBeatDivisionPrompt] = React.useState(false);
     const [importingAiBeatDivision, setImportingAiBeatDivision] = React.useState(false);
     const [mergingManualBeat, setMergingManualBeat] = React.useState(false);
+    const [downloadingSubtitles, setDownloadingSubtitles] = React.useState(false);
     /** Mode điều chỉnh timeline audio (overlay trên thanh timeline) — video 2s. */
     const [manualBeatTimelineAdjOpen, setManualBeatTimelineAdjOpen] = React.useState(false);
     const [confirmingManualBeatTimeline, setConfirmingManualBeatTimeline] = React.useState(false);
@@ -7849,8 +7851,39 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }
     }, [loadRow, shortVideoId]);
 
-    // Workflow drawer import xong image prompt cho beat → reload marks để nút
-    // "Mở Meta.ai" đọc prompt mới nhất (thay vì giữ dữ liệu cũ trong state).
+    /**
+     * Tải phụ đề thủ công (SBV — định dạng YouTube) cho toàn video, mỗi beat 1 cue.
+     * Text lấy từ audio script; mốc thời gian tuyệt đối lấy từ beat/whisper.
+     */
+    const handleDownloadSubtitles = React.useCallback(async () => {
+        if (!shortVideoId || downloadingSubtitles) {
+            return;
+        }
+        setDownloadingSubtitles(true);
+        try {
+            const res = await downloadVideoSubtitles(shortVideoId);
+            const content = String(res?.content || '');
+            if (!res?.success || content.trim() === '') {
+                showMessage(parseApiMessage(res?.message) || 'Không tạo được phụ đề', 'error');
+                return;
+            }
+            const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const anchor = document.createElement('a');
+            anchor.href = url;
+            anchor.download = String(res.filename || 'phu-de.sbv');
+            document.body.appendChild(anchor);
+            anchor.click();
+            document.body.removeChild(anchor);
+            URL.revokeObjectURL(url);
+            showMessage(`Đã tải phụ đề ${Number(res.cue_count || 0)} cue (SBV)`, 'success');
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setDownloadingSubtitles(false);
+        }
+    }, [downloadingSubtitles, shortVideoId, showMessage]);
+
     React.useEffect(() => {
         if (!open || !isVideo2sMode) {
             return;
@@ -9636,6 +9669,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         mergingManualBeat,
         handleMergeManualBeats,
         reloadManualBeatMarks,
+        downloadingSubtitles,
+        handleDownloadSubtitles,
         manualBeatTimelineAdjOpen,
         toggleManualBeatTimelineAdj,
         closeManualBeatTimelineAdj,

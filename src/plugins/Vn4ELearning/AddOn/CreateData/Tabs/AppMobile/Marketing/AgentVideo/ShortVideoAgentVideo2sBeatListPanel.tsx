@@ -12,6 +12,7 @@ import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import ContentPasteIcon from '@mui/icons-material/ContentPaste';
+import DownloadIcon from '@mui/icons-material/Download';
 import DnsIcon from '@mui/icons-material/Dns';
 import ManageAccountsIcon from '@mui/icons-material/ManageAccounts';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -352,8 +353,19 @@ export default function ShortVideoAgentVideo2sBeatListPanel({ state, onOpenAudio
                     >
                         Tải lại
                     </Button>
+                    <LoadingButton
+                        size="small"
+                        variant="outlined"
+                        loading={state.downloadingSubtitles}
+                        disabled={marks.length === 0}
+                        startIcon={<DownloadIcon />}
+                        onClick={() => { void state.handleDownloadSubtitles(); }}
+                    >
+                        Tải phụ đề (.sbv)
+                    </LoadingButton>
                     <Typography variant="caption" color="text.secondary">
-                        Sửa/xóa dòng rồi cập nhật lại — beat đổi nội dung sẽ tự tạo lại audio.
+                        Sửa/xóa dòng rồi cập nhật lại — beat đổi nội dung sẽ tự tạo lại audio. Phụ đề SBV (YouTube)
+                        toàn video, mỗi beat 1 cue — text theo audio script, mốc thời gian theo beat/whisper.
                     </Typography>
                 </Stack>
 
