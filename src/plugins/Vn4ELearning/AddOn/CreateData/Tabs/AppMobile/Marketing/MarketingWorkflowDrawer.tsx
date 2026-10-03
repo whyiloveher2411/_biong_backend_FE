@@ -10,6 +10,8 @@ import {
     DialogTitle,
     IconButton,
     Stack,
+    Tab,
+    Tabs,
     TextField,
     Tooltip,
     Typography,
@@ -19,7 +21,8 @@ import CheckIcon from '@mui/icons-material/Check';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import TipsAndUpdatesOutlinedIcon from '@mui/icons-material/TipsAndUpdatesOutlined';
 import CloudUploadOutlinedIcon from '@mui/icons-material/CloudUploadOutlined';
-import DownloadOutlinedIcon from '@mui/icons-material/DownloadOutlined';
+import OpenInNewOutlinedIcon from '@mui/icons-material/OpenInNewOutlined';
+import SaveOutlinedIcon from '@mui/icons-material/SaveOutlined';
 import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 import PersonAddAltOutlinedIcon from '@mui/icons-material/PersonAddAltOutlined';
 import LandscapeOutlinedIcon from '@mui/icons-material/LandscapeOutlined';
@@ -34,12 +37,14 @@ import {
     buildWorkflowBreakdownPlan,
     copyWorkflowPromptToClipboard,
     fetchWorkflowOutputs,
+    fetchWorkflowPromptContent,
     fetchWorkflowPromptText,
     getWorkflowContrastTextColor,
     MANUAL_BEAT_PROMPTS_SAVED_EVENT,
     saveWorkflowOutput,
     splitWorkflowStepTitle,
     WORKFLOW_AUDIO_SCRIPT_KEY,
+    WORKFLOW_INPUT_PROMPT_KEY,
     type WorkflowDefinition,
     type WorkflowOutputsMap,
     type WorkflowPromptContext,
@@ -62,11 +67,15 @@ type Props = {
     open: boolean;
     onClose: () => void;
     workflow: WorkflowDefinition | null;
+    /** Toàn bộ workflow — render thành tab trong drawer (1 workflow = 1 tab). */
+    workflows?: WorkflowDefinition[];
+    /** Đổi tab workflow. */
+    onSelectWorkflow?: (key: string) => void;
     /** Giá trị thay các key [key] trong prompt khi copy. VD: { topic: title } */
     promptContext?: WorkflowPromptContext;
     /** ID short video hiện tại — load/lưu workflow outputs (key/value theo updateField). */
     shortVideoId?: number;
-    /** Audio script hiện tại của post — nút download ở đầu drawer. */
+    /** Audio script hiện tại — thay key [audio-script] khi copy prompt. */
     audioScript?: string;
 };
 
@@ -82,6 +91,8 @@ export default function MarketingWorkflowDrawer({
     open,
     onClose,
     workflow,
+    workflows = [],
+    onSelectWorkflow,
     promptContext,
     shortVideoId,
     audioScript,
@@ -98,6 +109,9 @@ export default function MarketingWorkflowDrawer({
     const [beatPromptErrors, setBeatPromptErrors] = React.useState<string[]>([]);
     const [deepseekRunning, setDeepseekRunning] = React.useState(false);
     const [deepseekMessage, setDeepseekMessage] = React.useState('');
+    const [masterPromptUrl, setMasterPromptUrl] = React.useState('');
+    const [loadingMasterPrompt, setLoadingMasterPrompt] = React.useState(false);
+    const masterPromptObjectUrlRef = React.useRef('');
     const deepseekPollRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
     /** buttonUpdate = imagePromptBeatUpdate → update image prompt cho các beat. */
@@ -116,6 +130,8 @@ export default function MarketingWorkflowDrawer({
             setUpdateValue('');
             setSavingUpdate(false);
             setImportingAsset(false);
+            setMasterPromptUrl('');
+            setLoadingMasterPrompt(false);
             setOutputs({});
             outputsLoadedRef.current = -1;
             return;
@@ -128,6 +144,60 @@ export default function MarketingWorkflowDrawer({
         outputsLoadedRef.current = sid;
         fetchWorkflowOutputs(sid).then((map) => setOutputs(map || {}));
     }, [open, shortVideoId]);
+
+    // Đổi tab workflow → reset trạng thái tạm của workflow trước (outputs giữ nguyên, đã load theo short video).
+    React.useEffect(() => {
+        setCopyingStep('');
+        setCopiedStep('');
+        setUpdatingItem(null);
+        setUpdateValue('');
+    }, [workflow?.key]);
+
+    /**
+     * Prefetch file master prompt (documentFile) → blob URL để nút "Xem master prompt" là 1 anchor
+     * target=_blank mở ngay, không bị chặn popup. Blob URL được thu hồi khi đổi tab / đóng drawer.
+     */
+    React.useEffect(() => {
+        if (!open || !workflow?.documentFile || !workflow.documentFileExists) {
+            setMasterPromptUrl('');
+            setLoadingMasterPrompt(false);
+            return;
+        }
+
+        let cancelled = false;
+        setLoadingMasterPrompt(true);
+        setMasterPromptUrl('');
+
+        fetchWorkflowPromptContent(workflow.key, workflow.documentFile)
+            .then((result) => {
+                if (cancelled) {
+                    return;
+                }
+                setLoadingMasterPrompt(false);
+                if (!result.ok) {
+                    setMasterPromptUrl('');
+                    return;
+                }
+                const blob = new Blob([result.content], { type: 'text/plain;charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+                masterPromptObjectUrlRef.current = url;
+                setMasterPromptUrl(url);
+            })
+            .catch(() => {
+                if (!cancelled) {
+                    setLoadingMasterPrompt(false);
+                    setMasterPromptUrl('');
+                }
+            });
+
+        return () => {
+            cancelled = true;
+            if (masterPromptObjectUrlRef.current) {
+                URL.revokeObjectURL(masterPromptObjectUrlRef.current);
+                masterPromptObjectUrlRef.current = '';
+            }
+        };
+    }, [open, workflow?.key, workflow?.documentFile, workflow?.documentFileExists]);
 
     React.useEffect(() => {
         return () => {
@@ -142,17 +212,86 @@ export default function MarketingWorkflowDrawer({
 
     const workflowOutputs = (workflow && outputs[workflow.key]) || {};
 
-    /** Context thay key khi copy prompt = outputs đã lưu + promptContext (topic...) + audio script hiện tại. */
+    /** Giá trị biến inputPrompt đã lưu: {name: value}. */
+    const inputValues = React.useMemo<Record<string, string>>(() => {
+        const stored = workflowOutputs[WORKFLOW_INPUT_PROMPT_KEY];
+        if (!stored) {
+            return {};
+        }
+        try {
+            const parsed = JSON.parse(stored);
+            return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+                ? (parsed as Record<string, string>)
+                : {};
+        } catch {
+            return {};
+        }
+    }, [workflowOutputs]);
+
+    const [draftInputs, setDraftInputs] = React.useState<Record<string, string>>({});
+    const [savingInputs, setSavingInputs] = React.useState(false);
+    const storedInputsJson = workflowOutputs[WORKFLOW_INPUT_PROMPT_KEY] || '';
+
+    // Nạp giá trị input vào draft khi đổi tab workflow hoặc khi giá trị đã lưu thay đổi.
+    React.useEffect(() => {
+        setDraftInputs(inputValues);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [workflow?.key, storedInputsJson]);
+
+    const handleSaveInputs = React.useCallback(async () => {
+        if (!workflow || savingInputs) {
+            return;
+        }
+        const sid = Number(shortVideoId || 0);
+        if (!sid) {
+            api.showMessage('Thiếu short_video_id — không lưu được biến', 'warning');
+            return;
+        }
+        setSavingInputs(true);
+        const result = await saveWorkflowOutput(
+            sid,
+            workflow.key,
+            WORKFLOW_INPUT_PROMPT_KEY,
+            JSON.stringify(draftInputs),
+        );
+        setSavingInputs(false);
+        if (!result.ok) {
+            api.showMessage(result.message || 'Không lưu được biến', 'error');
+            return;
+        }
+        if (result.outputs) {
+            setOutputs(result.outputs);
+        } else {
+            setOutputs((prev) => ({
+                ...prev,
+                [workflow.key]: {
+                    ...(prev[workflow.key] || {}),
+                    [WORKFLOW_INPUT_PROMPT_KEY]: JSON.stringify(draftInputs),
+                },
+            }));
+        }
+        api.showMessage('Đã lưu biến — copy prompt sẽ thay đúng giá trị', 'success');
+    }, [workflow, savingInputs, shortVideoId, draftInputs, api]);
+
+    /** Context thay key khi copy prompt = outputs đã lưu + biến inputPrompt + promptContext (topic...) + audio script hiện tại. */
     const mergedPromptContext = React.useMemo<WorkflowPromptContext>(() => {
         const audioScriptText = String(audioScript || '');
+        // Biến input: default của định nghĩa, ghi đè bởi giá trị đã lưu (hoặc draft đang sửa).
+        const variableValues: Record<string, string> = {};
+        (workflow?.steps || []).forEach((step) => {
+            (step.inputPrompt || []).forEach((def) => {
+                variableValues[def.name] = String(draftInputs[def.name] ?? inputValues[def.name] ?? def.default);
+            });
+        });
         return {
             ...workflowOutputs,
+            ...variableValues,
             ...(promptContext || {}),
             ...(audioScriptText.trim()
                 ? { [WORKFLOW_AUDIO_SCRIPT_KEY]: audioScriptText }
                 : {}),
         };
-    }, [workflowOutputs, promptContext, audioScript]);
+    }, [workflowOutputs, draftInputs, inputValues, workflow?.steps, promptContext, audioScript]);
 
     const handleCopy = React.useCallback(async (stepKey: string, file: string) => {
         if (!workflow || !file || copyingStep) {
@@ -256,24 +395,6 @@ export default function MarketingWorkflowDrawer({
             setDeepseekMessage('');
         }
     }, [workflow, deepseekRunning, shortVideoId, mergedPromptContext, api]);
-
-    const handleDownloadAudioScript = React.useCallback(() => {
-        const text = String(audioScript || '');
-        if (!text.trim()) {
-            api.showMessage('Chưa có audio script để tải — hãy sinh/lưu script trước', 'warning');
-            return;
-        }
-        const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-        const url = URL.createObjectURL(blob);
-        const anchor = document.createElement('a');
-        anchor.href = url;
-        anchor.download = `short-video-${shortVideoId || 'draft'}-audio-script.txt`;
-        document.body.appendChild(anchor);
-        anchor.click();
-        anchor.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
-        api.showMessage('Đã tải audio script', 'success');
-    }, [audioScript, shortVideoId, api]);
 
     const openUpdateDialog = React.useCallback((
         itemKey: string,
@@ -457,10 +578,43 @@ export default function MarketingWorkflowDrawer({
             open={open}
             onClose={onClose}
             width={560}
-            title={workflow ? `Workflow: ${workflow.title}` : 'Workflow'}
+            title="Prompt"
         >
             {!workflow ? null : (
                 <Box sx={{ pb: 2 }}>
+                    {workflows.length > 1 && (
+                        <Tabs
+                            value={workflow.key}
+                            onChange={(_event, key) => onSelectWorkflow?.(String(key))}
+                            variant="scrollable"
+                            scrollButtons="auto"
+                            allowScrollButtonsMobile
+                            sx={{
+                                mt: 1.5,
+                                mb: 1.5,
+                                minHeight: 36,
+                                borderBottom: '1px solid',
+                                borderColor: 'divider',
+                                '& .MuiTab-root': {
+                                    textTransform: 'none',
+                                    minHeight: 36,
+                                    minWidth: 'auto',
+                                    px: 1.5,
+                                    fontSize: 13,
+                                    fontWeight: 600,
+                                },
+                            }}
+                        >
+                            {workflows.map((item) => (
+                                <Tab
+                                    key={item.key}
+                                    value={item.key}
+                                    label={item.title}
+                                />
+                            ))}
+                        </Tabs>
+                    )}
+
                     {accent && (
                         <Box
                             sx={{
@@ -482,17 +636,43 @@ export default function MarketingWorkflowDrawer({
                         </Box>
                     )}
 
-                    <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1.5 }}>
-                        <Button
-                            size="small"
-                            variant="outlined"
-                            startIcon={<DownloadOutlinedIcon fontSize="small" />}
-                            onClick={handleDownloadAudioScript}
-                            sx={{ textTransform: 'none' }}
-                        >
-                            Download audio script
-                        </Button>
-                    </Box>
+                    {workflow.documentFile ? (
+                        <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1.5 }}>
+                            <Tooltip
+                                title={
+                                    !workflow.documentFileExists
+                                        ? `File master prompt chưa tồn tại: ${workflow.documentFile}`
+                                        : (masterPromptUrl
+                                            ? (workflow.documentFilePath || workflow.documentFile)
+                                            : 'Đang tải master prompt…')
+                                }
+                                placement="top"
+                            >
+                                <span>
+                                    <Button
+                                        component="a"
+                                        href={masterPromptUrl || undefined}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        size="small"
+                                        variant="outlined"
+                                        disabled={!masterPromptUrl}
+                                        startIcon={
+                                            loadingMasterPrompt
+                                                ? <CircularProgress size={12} color="inherit" />
+                                                : <OpenInNewOutlinedIcon fontSize="small" />
+                                        }
+                                        sx={{
+                                            textTransform: 'none',
+                                            '&.Mui-disabled': { pointerEvents: 'none' },
+                                        }}
+                                    >
+                                        Xem master prompt
+                                    </Button>
+                                </span>
+                            </Tooltip>
+                        </Box>
+                    ) : null}
 
                     {workflow.steps.length === 0 && (
                         <Alert severity="info">Workflow chưa có bước nào — thêm bước vào index.md của thư mục workflow.</Alert>
@@ -600,6 +780,66 @@ export default function MarketingWorkflowDrawer({
                                         )}
 
                                         
+
+                                        {step.inputPrompt.length > 0 && (
+                                            <Box
+                                                sx={{
+                                                    mt: 1.25,
+                                                    p: 1.25,
+                                                    border: '1px dashed',
+                                                    borderColor: 'divider',
+                                                    borderRadius: 1.5,
+                                                    bgcolor: 'action.hover',
+                                                }}
+                                            >
+                                                <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary' }}>
+                                                    Biến prompt (copy sẽ tự thay)
+                                                </Typography>
+                                                <Box
+                                                    sx={{
+                                                        mt: 0.75,
+                                                        display: 'grid',
+                                                        gridTemplateColumns: '1fr 1fr',
+                                                        gap: 1,
+                                                    }}
+                                                >
+                                                    {step.inputPrompt.map((def) => (
+                                                        <TextField
+                                                            key={def.name}
+                                                            label={def.description || def.name}
+                                                            placeholder={def.default}
+                                                            size="small"
+                                                            fullWidth
+                                                            value={draftInputs[def.name] ?? inputValues[def.name] ?? def.default}
+                                                            onChange={(event) => setDraftInputs((prev) => ({
+                                                                ...prev,
+                                                                [def.name]: event.target.value,
+                                                            }))}
+                                                            InputProps={{
+                                                                sx: { fontSize: 13 },
+                                                            }}
+                                                            sx={{ '& .MuiInputLabel-root': { fontSize: 12 } }}
+                                                        />
+                                                    ))}
+                                                </Box>
+                                                <Box sx={{ mt: 1, display: 'flex', justifyContent: 'flex-end' }}>
+                                                    <Button
+                                                        size="small"
+                                                        variant="contained"
+                                                        disabled={savingInputs}
+                                                        startIcon={
+                                                            savingInputs
+                                                                ? <CircularProgress size={12} color="inherit" />
+                                                                : <SaveOutlinedIcon fontSize="small" />
+                                                        }
+                                                        onClick={() => { void handleSaveInputs(); }}
+                                                        sx={{ textTransform: 'none' }}
+                                                    >
+                                                        Lưu biến
+                                                    </Button>
+                                                </Box>
+                                            </Box>
+                                        )}
 
                                         {(step.prompts.length > 0 || step.prompt) && (
                                             <Box

@@ -2,8 +2,9 @@ import React from 'react';
 import { Button, CircularProgress, Tooltip } from '@mui/material';
 import AccountTreeOutlinedIcon from '@mui/icons-material/AccountTreeOutlined';
 import {
+    fetchWorkflowActive,
     fetchWorkflowDefinitions,
-    getWorkflowContrastTextColor,
+    saveWorkflowActive,
     type WorkflowPromptContext,
     type WorkflowDefinition,
 } from 'helpers/marketingWorkflowPrompts';
@@ -15,13 +16,13 @@ type Props = {
     promptContext?: WorkflowPromptContext;
     /** ID short video hiện tại — lưu/đọc workflow outputs (key/value updateField). */
     shortVideoId?: number;
-    /** Audio script hiện tại của post — nút download ở đầu drawer. */
+    /** Audio script hiện tại — thay key [audio-script] khi copy prompt. */
     audioScript?: string;
 };
 
 /**
- * Danh sách button workflow (1 workflow = 1 màu theo index.md).
- * Click mở drawer xem các bước + copy prompt từng bước.
+ * 1 button "Prompt" duy nhất mở drawer; mỗi workflow là 1 tab bên trong drawer.
+ * Nhờ vậy timeline không bị tràn button dù có nhiều workflow document.
  */
 export default function MarketingWorkflowButtons({
     disabled = false,
@@ -31,8 +32,10 @@ export default function MarketingWorkflowButtons({
 }: Props) {
     const [workflows, setWorkflows] = React.useState<WorkflowDefinition[] | null>(null);
     const [loading, setLoading] = React.useState(false);
-    const [activeWorkflow, setActiveWorkflow] = React.useState<WorkflowDefinition | null>(null);
+    const [open, setOpen] = React.useState(false);
+    const [activeWorkflowKey, setActiveWorkflowKey] = React.useState('');
     const loadedRef = React.useRef(false);
+    const activeLoadedRef = React.useRef<number>(-1);
 
     React.useEffect(() => {
         if (loadedRef.current) {
@@ -48,6 +51,29 @@ export default function MarketingWorkflowButtons({
             .catch(() => setLoading(false));
     }, []);
 
+    const sid = Number(shortVideoId || 0);
+
+    // Khôi phục workflow đang chọn của short video (mỗi video thuộc 1 workflow).
+    React.useEffect(() => {
+        if (!sid || activeLoadedRef.current === sid) {
+            return;
+        }
+        activeLoadedRef.current = sid;
+        fetchWorkflowActive(sid).then((key) => {
+            if (key) {
+                setActiveWorkflowKey(key);
+            }
+        });
+    }, [sid]);
+
+    // Đổi tab workflow → lưu lại vào short video để refresh vẫn thấy đúng.
+    const handleSelectWorkflow = React.useCallback((key: string) => {
+        setActiveWorkflowKey(key);
+        if (sid && key) {
+            void saveWorkflowActive(sid, key);
+        }
+    }, [sid]);
+
     if (loading && !workflows) {
         return <CircularProgress size={16} sx={{ mx: 0.5 }} />;
     }
@@ -56,59 +82,50 @@ export default function MarketingWorkflowButtons({
         return null;
     }
 
+    const activeWorkflow = workflows.find((workflow) => workflow.key === activeWorkflowKey) || null;
+
+    const handleOpen = () => {
+        setActiveWorkflowKey((prev) => {
+            const next = prev && workflows.some((workflow) => workflow.key === prev) ? prev : workflows[0].key;
+            if (sid && next !== prev) {
+                void saveWorkflowActive(sid, next);
+            }
+            return next;
+        });
+        setOpen(true);
+    };
+
     return (
         <>
-            {workflows.map((workflow) => {
-                const background = workflow.background || 'primary.main';
-                const textColor = workflow.background
-                    ? getWorkflowContrastTextColor(workflow.background)
-                    : 'primary.contrastText';
-
-                return (
-                    <Tooltip
-                        key={workflow.key}
-                        title={`${workflow.title} · ${workflow.steps.length} bước`}
-                        placement="top"
+            <Tooltip title={`Prompt workflow (${workflows.length})`} placement="top">
+                <span>
+                    <Button
+                        size="small"
+                        variant="contained"
+                        disabled={disabled}
+                        startIcon={<AccountTreeOutlinedIcon fontSize="small" />}
+                        onClick={handleOpen}
+                        sx={{
+                            textTransform: 'none',
+                            fontSize: 12,
+                            py: 0.25,
+                            boxShadow: 'none',
+                        }}
                     >
-                        <span>
-                            <Button
-                                size="small"
-                                variant="contained"
-                                disabled={disabled}
-                                startIcon={<AccountTreeOutlinedIcon fontSize="small" />}
-                                onClick={() => setActiveWorkflow(workflow)}
-                                sx={{
-                                    textTransform: 'none',
-                                    fontSize: 12,
-                                    py: 0.25,
-                                    color: textColor,
-                                    bgcolor: background,
-                                    boxShadow: 'none',
-                                    '&:hover': {
-                                        bgcolor: background,
-                                        filter: 'brightness(0.93)',
-                                    },
-                                    '&:disabled': {
-                                        bgcolor: background,
-                                        color: textColor,
-                                        opacity: 0.5,
-                                    },
-                                }}
-                            >
-                                {workflow.title}
-                            </Button>
-                        </span>
-                    </Tooltip>
-                );
-            })}
+                        Prompt
+                    </Button>
+                </span>
+            </Tooltip>
 
             <MarketingWorkflowDrawer
-                open={Boolean(activeWorkflow)}
+                open={open && Boolean(activeWorkflow)}
                 workflow={activeWorkflow}
+                workflows={workflows}
+                onSelectWorkflow={handleSelectWorkflow}
                 promptContext={promptContext}
                 shortVideoId={shortVideoId}
                 audioScript={audioScript}
-                onClose={() => setActiveWorkflow(null)}
+                onClose={() => setOpen(false)}
             />
         </>
     );

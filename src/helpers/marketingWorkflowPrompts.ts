@@ -17,6 +17,18 @@ export type WorkflowPromptItem = {
     note: string;
 };
 
+/** Biến cho phép user nhập của 1 bước (từ khối inputPrompt trong index.md). */
+export type WorkflowInputPrompt = {
+    /** Tên biến — thay [name] trong prompt. */
+    name: string;
+    /** Kiểu input (hiện hỗ trợ text). */
+    type: string;
+    /** Nhãn mô tả hiển thị cạnh input. */
+    description: string;
+    /** Giá trị mặc định khi user chưa lưu. */
+    default: string;
+};
+
 export type WorkflowPromptStep = {
     title: string;
     prompt: string;
@@ -25,6 +37,8 @@ export type WorkflowPromptStep = {
     result: string;
     note: string;
     prompts: WorkflowPromptItem[];
+    /** Biến cho phép user nhập — lưu DB và thay [name] khi copy prompt. */
+    inputPrompt: WorkflowInputPrompt[];
 };
 
 /** Outputs đã lưu theo workflow: {workflow: {KEY: value}} — key/value của updateField. */
@@ -40,10 +54,22 @@ export const WORKFLOW_AUDIO_SCRIPT_KEY = 'audio-script';
 /** Workflow step import xong image prompt cho beat → workspace reload manual beat marks. */
 export const MANUAL_BEAT_PROMPTS_SAVED_EVENT = 'vn4-manual-beat-prompts-saved';
 
+/**
+ * Key output đặc biệt lưu giá trị các biến inputPrompt của 1 workflow (JSON {name: value}).
+ * Không trùng với updateField nào — dùng nội bộ để bền hoá biến user nhập.
+ */
+export const WORKFLOW_INPUT_PROMPT_KEY = '__input-prompt';
+
 export type WorkflowDefinition = {
     key: string;
     title: string;
     background: string;
+    /** File master prompt (tương đối trong thư mục workflow) — có thì UI hiện nút "Xem master prompt". */
+    documentFile: string;
+    /** Đường dẫn tuyệt đối tới file master prompt (server resolve). */
+    documentFilePath: string;
+    /** File master prompt có tồn tại trên server. */
+    documentFileExists: boolean;
     steps: WorkflowPromptStep[];
 };
 
@@ -51,6 +77,8 @@ const WORKFLOW_PROMPTS_PATH = 'plugin/vn4-e-learning/app-mobile/marketing/workfl
 const WORKFLOW_PROMPT_CONTENT_PATH = 'plugin/vn4-e-learning/app-mobile/marketing/workflow-prompt-content';
 const WORKFLOW_OUTPUTS_PATH = 'plugin/vn4-e-learning/app-mobile/marketing/workflow-outputs';
 const WORKFLOW_OUTPUTS_SAVE_PATH = 'plugin/vn4-e-learning/app-mobile/marketing/workflow-outputs-save';
+const WORKFLOW_ACTIVE_PATH = 'plugin/vn4-e-learning/app-mobile/marketing/workflow-active';
+const WORKFLOW_ACTIVE_SAVE_PATH = 'plugin/vn4-e-learning/app-mobile/marketing/workflow-active-save';
 
 let workflowListCache: WorkflowDefinition[] | null = null;
 let workflowListPromise: Promise<WorkflowDefinition[]> | null = null;
@@ -92,7 +120,22 @@ function normalizeStep(raw: ANY): WorkflowPromptStep | null {
         })
         .filter(Boolean) as WorkflowPromptItem[];
 
-    if (!title && !prompt && description.length === 0 && !result && !note && prompts.length === 0) {
+    const inputPrompt = (Array.isArray(raw?.input_prompt) ? raw.input_prompt : [])
+        .map((item: ANY): WorkflowInputPrompt | null => {
+            const name = String(item?.name || '').trim();
+            if (!name) {
+                return null;
+            }
+            return {
+                name,
+                type: String(item?.type || 'text').trim() || 'text',
+                description: String(item?.description || '').trim(),
+                default: String(item?.default ?? ''),
+            };
+        })
+        .filter(Boolean) as WorkflowInputPrompt[];
+
+    if (!title && !prompt && description.length === 0 && !result && !note && prompts.length === 0 && inputPrompt.length === 0) {
         return null;
     }
 
@@ -104,6 +147,7 @@ function normalizeStep(raw: ANY): WorkflowPromptStep | null {
         result,
         note,
         prompts,
+        inputPrompt,
     };
 }
 
@@ -123,6 +167,9 @@ function normalizeWorkflow(raw: ANY): WorkflowDefinition | null {
         key,
         title: String(raw?.title || '').trim() || key,
         background: /^#[0-9a-fA-F]{3,8}$/.test(backgroundRaw) ? backgroundRaw : '',
+        documentFile: String(raw?.document_file || '').trim(),
+        documentFilePath: String(raw?.document_file_path || '').trim(),
+        documentFileExists: raw?.document_file_exists === true,
         steps,
     };
 }
@@ -266,6 +313,52 @@ export async function saveWorkflowOutput(
         };
     } catch {
         return { ok: false, message: 'Không lưu được output' };
+    }
+}
+
+/** Đọc key workflow đang chọn của short video (khôi phục tab sau refresh). */
+export async function fetchWorkflowActive(shortVideoId: number): Promise<string> {
+    if (!shortVideoId || shortVideoId <= 0) {
+        return '';
+    }
+
+    try {
+        const res: ANY = await ajax({
+            url: WORKFLOW_ACTIVE_PATH,
+            method: 'POST',
+            data: { short_video_id: shortVideoId, id: shortVideoId },
+        });
+        return String(res?.workflow_active || '').trim();
+    } catch {
+        return '';
+    }
+}
+
+/** Lưu key workflow đang chọn của short video. */
+export async function saveWorkflowActive(
+    shortVideoId: number,
+    workflow: string,
+): Promise<{ ok: boolean; message?: string }> {
+    if (!shortVideoId || shortVideoId <= 0) {
+        return { ok: false, message: 'Thiếu short_video_id' };
+    }
+    const key = String(workflow || '').trim();
+    if (!key) {
+        return { ok: false, message: 'Thiếu workflow' };
+    }
+
+    try {
+        const res: ANY = await ajax({
+            url: WORKFLOW_ACTIVE_SAVE_PATH,
+            method: 'POST',
+            data: { short_video_id: shortVideoId, id: shortVideoId, workflow: key },
+        });
+        if (!res?.success) {
+            return { ok: false, message: parseApiMessage(res?.message) || 'Không lưu được workflow đang chọn' };
+        }
+        return { ok: true };
+    } catch {
+        return { ok: false, message: 'Không lưu được workflow đang chọn' };
     }
 }
 
