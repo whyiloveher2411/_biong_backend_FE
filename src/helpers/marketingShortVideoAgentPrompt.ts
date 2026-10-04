@@ -276,6 +276,20 @@ export async function fetchImproveScriptPrompt(
     return postShortVideoPrompt('short-video/get-improve-script-prompt', shortVideoId);
 }
 
+export type SaveAgentTitleResponse = {
+    success?: boolean;
+    title?: string;
+    message?: { content?: string } | string;
+};
+
+/** Cập nhật tiêu đề (field `title`) của short video hiện tại. */
+export async function saveAgentTitle(
+    shortVideoId: number,
+    title: string,
+): Promise<SaveAgentTitleResponse> {
+    return postShortVideoPrompt('short-video/save-agent-title', shortVideoId, { title });
+}
+
 export async function fetchScriptPhoneticPrompt(
     shortVideoId: number,
     contentMode: 'text' | 'file' = 'text',

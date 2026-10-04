@@ -39,6 +39,7 @@ import {
     importManualBeatAiDivision,
     importManualBeatList,
     importManualBeatPromptFile,
+    openMetaAiBrowserForBeat,
     saveManualBeatMarks,
     saveManualBeatTranslations,
     downloadVideoSubtitles,
@@ -1035,6 +1036,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [bulkDeletingBeatAsset, setBulkDeletingBeatAsset] = React.useState<BulkDeleteBeatAssetsTarget | ''>('');
     const [openingBeatGeminiBeatIds, setOpeningBeatGeminiBeatIds] = React.useState<string[]>([]);
     const [openingBeatGeminiHeadlessBeatIds, setOpeningBeatGeminiHeadlessBeatIds] = React.useState<string[]>([]);
+    const [openingBeatMetaAiBrowserBeatIds, setOpeningBeatMetaAiBrowserBeatIds] = React.useState<string[]>([]);
     const [refiningBeatHtmlBeatId, setRefiningBeatHtmlBeatId] = React.useState('');
     const [regeneratingBeatImageBeatId, setRegeneratingBeatImageBeatId] = React.useState('');
     const [deletingBeatImageId, setDeletingBeatImageId] = React.useState('');
@@ -5795,6 +5797,41 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         );
     };
 
+    /**
+     * Mở browser Meta.ai HIỆN CỬA SỔ (GUI trên server) với cookie account meta.ai —
+     * tương tự "Mở luồng chat cũ" của DeepSeek. Thay cho mở tab trên browser hiện tại
+     * (hay sai cookie/account). Mặc định mở lại chat cũ của beat (đúng account đó).
+     */
+    const handleOpenBeatMetaAiBrowser = (beatId: string, mode: 'reopen' | 'new' = 'reopen') => {
+        const id = String(beatId || '').trim();
+        if (!id) {
+            return;
+        }
+        if (!isAgentWhiteboardMode(agentVisualMode) && !isAgentVideo2sMode(agentVisualMode)) {
+            showMessage('Meta.ai headless chỉ dùng cho mode Whiteboard / Video 2s', 'info');
+            return;
+        }
+        if (openingBeatMetaAiBrowserBeatIds.includes(id)) {
+            return;
+        }
+        setOpeningBeatMetaAiBrowserBeatIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+        void (async () => {
+            try {
+                // showMessage(`Đang mở browser Meta.ai cho ${id} (cookie pool)…`, 'info');
+                const res = await openMetaAiBrowserForBeat(shortVideoId, id, mode);
+                if (!res?.success) {
+                    showMessage(parseApiMessage(res?.message) || 'Không mở được browser Meta.ai', 'error');
+                    return;
+                }
+                // showMessage(parseApiMessage(res?.message) || `Đã mở browser Meta.ai cho ${id}`, 'success');
+            } catch (e) {
+                showMessage(e instanceof Error ? e.message : String(e), 'error');
+            } finally {
+                setOpeningBeatMetaAiBrowserBeatIds((prev) => prev.filter((x) => x !== id));
+            }
+        })();
+    };
+
     const handleOpenBeatGeminiHeadless = (beatId: string) => {
         if (!beatMapReady || !beatMap) {
             showMessage('Cần beat-map hợp lệ trước', 'warning');
@@ -10091,6 +10128,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         pendingBeatAudioCount,
         openingBeatGeminiBeatIds,
         openingBeatGeminiHeadlessBeatIds,
+        openingBeatMetaAiBrowserBeatIds,
         refiningBeatHtmlBeatId,
         regeneratingBeatImageBeatId,
         deletingBeatImageId,
@@ -10182,6 +10220,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         handleDeleteAllBeatHtml,
         handleOpenBeatGemini,
         handleOpenBeatMetaAi,
+        handleOpenBeatMetaAiBrowser,
         handleOpenBeatGeminiHeadless,
         handleOpenAllMissingBeatGemini,
         handleOpenAllMissingBeatMetaAi,

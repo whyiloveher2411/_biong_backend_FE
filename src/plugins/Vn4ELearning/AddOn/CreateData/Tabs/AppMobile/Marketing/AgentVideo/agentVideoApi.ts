@@ -4009,6 +4009,22 @@ export async function addManualBeatMark(
     ) as Promise<ManualBeatResponse>;
 }
 
+/**
+ * Mở browser Meta.ai HIỆN CỬA SỔ (GUI trên server) với cookie account meta.ai —
+ * tương tự "Mở luồng chat cũ" của DeepSeek. Thay cho mở tab trên browser hiện tại.
+ * mode 'reopen' (mặc định): mở lại chat cũ của beat; 'new': trang tạo mới.
+ */
+export async function openMetaAiBrowserForBeat(
+    shortVideoId: number,
+    beatId: string,
+    mode: 'reopen' | 'new' = 'reopen',
+): Promise<ManualBeatResponse & { pid?: number; cookie_id?: number; url?: string }> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/metaai-browser-open',
+        shortVideoBody(shortVideoId, { beat_id: beatId, mode }),
+    ) as Promise<ManualBeatResponse & { pid?: number; cookie_id?: number; url?: string }>;
+}
+
 export async function deleteManualBeatMark(
     shortVideoId: number,
     markId: string,

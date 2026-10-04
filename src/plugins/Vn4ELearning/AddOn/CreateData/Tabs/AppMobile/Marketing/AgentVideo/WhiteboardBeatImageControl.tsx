@@ -15,7 +15,6 @@ import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import SettingsIcon from '@mui/icons-material/Settings';
 import RateReviewIcon from '@mui/icons-material/RateReview';
-import { openImportHtmlBeatMetaAiChatSyncLatest } from 'helpers/marketingImportHtmlWorkflow';
 import type { useAgentVideoContent } from './useAgentVideoContent';
 import ShortVideoAgentVideoSettingsDialog from './ShortVideoAgentVideoSettingsDialog';
 
@@ -51,6 +50,7 @@ export default function WhiteboardBeatImageControl({ state, beatId }: Props) {
     const hasImage = Boolean(String(entry?.image_url || '').trim());
     const deleting = state.deletingBeatImageId === beatId;
     const busy = Boolean(state.deletingBeatImageId);
+    const openingHeadless = (state.openingBeatMetaAiBrowserBeatIds || []).includes(beatId);
     const [settingsOpen, setSettingsOpen] = React.useState(false);
     // Dialog feedback được neo ngay TRÊN button "Update ảnh theo feedback".
     const feedbackAnchorRef = React.useRef<HTMLSpanElement | null>(null);
@@ -194,7 +194,7 @@ export default function WhiteboardBeatImageControl({ state, beatId }: Props) {
                     <Tooltip
                         placement="top"
                         title={chatUrl
-                            ? 'Mở lại chat chatbot (Meta.ai / Duck.ai) đã tạo ảnh beat này để xem/update ngay trong conversation'
+                            ? 'Mở lại chat Meta.ai đã tạo ảnh beat này trong browser headless (đúng cookie account) để xem/update ngay trong conversation'
                             : 'Chưa có url chatbot — ảnh sẽ được ghi url khi sinh lại qua extension hoặc pipeline'}
                     >
                         <span>
@@ -202,8 +202,12 @@ export default function WhiteboardBeatImageControl({ state, beatId }: Props) {
                                 size="small"
                                 variant="outlined"
                                 sx={compactButtonSx}
-                                startIcon={<OpenInNewIcon sx={{ fontSize: 14 }} />}
-                                disabled={!chatUrl}
+                                startIcon={openingHeadless ? (
+                                    <CircularProgress size={13} color="inherit" />
+                                ) : (
+                                    <OpenInNewIcon sx={{ fontSize: 14 }} />
+                                )}
+                                disabled={!chatUrl || openingHeadless}
                                 onClick={(event) => {
                                     event.stopPropagation();
                                     event.preventDefault();
@@ -216,43 +220,10 @@ export default function WhiteboardBeatImageControl({ state, beatId }: Props) {
                                         return;
                                     }
                                     openChatInFlightRef.current[beatId] = now;
-                                    // Meta.ai: mở qua extension — panel bên phải có nút
-                                    // "Update ảnh mới nhất từ chatbot" (pull ảnh sau
-                                    // khi user feedback trực tiếp trong chat).
-                                    let host = '';
-                                    try {
-                                        host = new URL(chatUrl).hostname || '';
-                                    } catch {
-                                        host = '';
-                                    }
-                                    const isMetaAiChat = /(^|\.)meta\.ai$/i.test(host);
-                                    if (isMetaAiChat) {
-                                        void openImportHtmlBeatMetaAiChatSyncLatest({
-                                            shortVideoId: state.shortVideoId,
-                                            beatId,
-                                            chatUrl,
-                                            imageUrl: String(entry?.image_url || '').trim(),
-                                            imagePrompt: String(entry?.image_prompt || '').trim(),
-                                            objectLayerCount: 1,
-                                            video2s: true,
-                                            // Account tạo chat gốc — extension set đúng cookie này.
-                                            cookieId: Number(entry?.cookie_id || 0),
-                                        }).then(() => {
-                                            state.showMessage(
-                                                `Đã mở tab Meta.ai pull ảnh ${beatId} — bấm nút Update ảnh mới nhất trong panel bên phải`,
-                                                'success',
-                                            );
-                                        }).catch((e) => {
-                                            // KHÔNG window.open fallback — tránh tab thứ 2
-                                            // không có panel; lỗi thông báo rõ ràng.
-                                            state.showMessage(
-                                                e instanceof Error ? e.message : String(e),
-                                                'warning',
-                                            );
-                                        });
-                                    } else {
-                                        window.open(chatUrl, '_blank', 'noopener,noreferrer');
-                                    }
+                                    // Mở browser headless với đúng cookie account đã tạo
+                                    // chat (tương tự "Mở luồng chat cũ" của DeepSeek) —
+                                    // không mở tab trên browser hiện tại (hay sai cookie).
+                                    void state.handleOpenBeatMetaAiBrowser(beatId, 'reopen');
                                 }}
                             >
                                 Mở url chatbot

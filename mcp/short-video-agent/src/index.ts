@@ -176,7 +176,7 @@ server.tool(
 
 server.tool(
   'short_video_update_beat_image_prompts',
-  'Import prompt ảnh vào đúng vị trí beat (buttonUpdate imagePromptBeatUpdate). Input là output "BEAT IMAGE PROMPTS" (khối BEAT N kèm SCRIPT SENTENCE / IMAGE PROMPT / NEGATIVE PROMPT). All-or-nothing, validate phía backend.',
+  'Import prompt ảnh vào đúng vị trí beat (buttonUpdate imagePromptBeatUpdate). Input là output "BEAT IMAGE PROMPTS" (khối BEAT N kèm SCRIPT SENTENCE / IMAGE PROMPT). All-or-nothing, validate phía backend.',
   {
     short_video_id: z.number().int().positive(),
     file_text: z.string().min(1).describe('Toàn bộ output BEAT IMAGE PROMPTS'),

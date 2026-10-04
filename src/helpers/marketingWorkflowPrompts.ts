@@ -13,6 +13,13 @@ export type WorkflowPromptItem = {
     /** Số beat mỗi lần chạy (từ dòng scriptBreakdown trong index.md) — 0 = tắt chia đoạn.
      * Khi > 0, UI tự chia audio script thành nhiều phần và render nhiều button copy. */
     scriptBreakdown: number;
+    /**
+     * Bật UI "mở browser DeepSeek" cho item (từ dòng deepseekSession trong index.md):
+     * - true  → item là prompt GENERATE (mở phiên + dán prompt này + Enter).
+     * - 'beat'/'translate' → item là prompt gửi ở bước chia beat / dịch (dán khi bấm nút trên overlay).
+     * - ''    → tắt.
+     */
+    deepseekSession: '' | 'generate' | 'beat' | 'translate';
     /** Ghi chú của prompt (từ dòng note trong index.md) — hiển thị nhỏ dưới button. */
     note: string;
 };
@@ -93,6 +100,21 @@ function parseApiMessage(message: ANY): string {
     return '';
 }
 
+/**
+ * Chuẩn hoá giá trị deepseekSession của 1 prompt item:
+ * true/1 → 'generate'; 'beat'/'translate' → chính nó; còn lại → ''.
+ */
+function normalizeDeepseekSession(raw: string): '' | 'generate' | 'beat' | 'translate' {
+    const value = String(raw || '').trim().toLowerCase();
+    if (value === 'beat' || value === 'translate') {
+        return value;
+    }
+    if (value === '1' || value === 'true' || value === 'yes' || value === 'on') {
+        return 'generate';
+    }
+    return '';
+}
+
 function normalizeStep(raw: ANY): WorkflowPromptStep | null {
     const title = String(raw?.title || '').trim();
     const prompt = String(raw?.prompt || '').trim();
@@ -115,6 +137,7 @@ function normalizeStep(raw: ANY): WorkflowPromptStep | null {
                 updateField: normalizeWorkflowUpdateFieldKey(String(item?.update_field || '')),
                 buttonUpdate: String(item?.button_update || '').trim(),
                 scriptBreakdown: Math.max(0, parseInt(String(item?.script_breakdown ?? ''), 10) || 0),
+                deepseekSession: normalizeDeepseekSession(String(item?.deepseek_session ?? '')),
                 note: String(item?.note || '').trim(),
             };
         })
@@ -729,8 +752,8 @@ export type WorkflowBreakdownPartValidation = {
 
 /**
  * Validate 1 phần đã dán trước khi gộp vào input tổng: đủ số beat, đúng thứ tự audio
- * (chống dán nhầm phần), đủ SCRIPT SENTENCE / IMAGE PROMPT / NEGATIVE PROMPT, prompt
- * không trùng trong phần. Mirror các check quan trọng của backend import-prompt-file.
+ * (chống dán nhầm phần), đủ SCRIPT SENTENCE / IMAGE PROMPT (cấu trúc mới chỉ 2 field),
+ * prompt không trùng trong phần. Mirror các check quan trọng của backend import-prompt-file.
  */
 export function validateWorkflowBreakdownPart(
     partText: string,
@@ -771,7 +794,6 @@ export function validateWorkflowBreakdownPart(
         const sections = parsed[index].sections;
         const script = (sections['SCRIPT SENTENCE'] || '').trim();
         const imagePrompt = (sections['IMAGE PROMPT'] || '').trim();
-        const negativePrompt = (sections['NEGATIVE PROMPT'] || '').trim();
 
         if (!script) {
             errors.push(`Beat ${index + 1}: thiếu SCRIPT SENTENCE`);
@@ -780,9 +802,6 @@ export function validateWorkflowBreakdownPart(
         }
         if (!imagePrompt) {
             errors.push(`Beat ${index + 1}: thiếu IMAGE PROMPT`);
-        }
-        if (!negativePrompt) {
-            errors.push(`Beat ${index + 1}: thiếu NEGATIVE PROMPT`);
         }
         if (imagePrompt) {
             const signature = normalizeWorkflowScriptKey(imagePrompt);

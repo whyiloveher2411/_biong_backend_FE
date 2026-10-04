@@ -13,8 +13,10 @@ import {
     splitWorkflowBeats,
     splitWorkflowOutputIntoParts,
     validateWorkflowBreakdownPart,
+    type WorkflowBreakdownChunk,
     type WorkflowBreakdownPartValidation,
     type WorkflowBreakdownPlan,
+    type WorkflowPromptContext,
     type WorkflowPromptItem,
 } from 'helpers/marketingWorkflowPrompts';
 import {
@@ -53,6 +55,12 @@ type Props = {
     /** ID short video — để cập nhật prompt vào đúng beat (imagePromptBeatUpdate). */
     shortVideoId?: number;
     showMessage: (message: string, type?: 'success' | 'error' | 'warning' | 'info') => void;
+    /**
+     * Lấy context tươi cho 1 phần trước khi copy/gửi DeepSeek — drawer tải lại
+     * workflow outputs (character sheet / audio gốc có thể vừa lưu từ overlay
+     * DeepSeek) rồi cắt theo dải beat của phần. Không có thì dùng chunk.context.
+     */
+    getFreshContext?: (chunk: WorkflowBreakdownChunk, totalBeats: number) => Promise<WorkflowPromptContext>;
 };
 
 /**
@@ -68,6 +76,7 @@ export default function MarketingWorkflowBreakdown({
     savedValue,
     shortVideoId,
     showMessage,
+    getFreshContext,
 }: Props) {
     const beatCountsKey = plan.beatCounts.join(',');
     const [parts, setParts] = React.useState<string[]>(
@@ -118,7 +127,10 @@ export default function MarketingWorkflowBreakdown({
         setCopyingIndex(index);
         let result: { ok: boolean; message: string };
         try {
-            result = await copyWorkflowPromptToClipboard(workflowKey, item.file, chunk.context);
+            const context = getFreshContext
+                ? await getFreshContext(chunk, plan.totalBeats)
+                : chunk.context;
+            result = await copyWorkflowPromptToClipboard(workflowKey, item.file, context);
         } catch {
             result = { ok: false, message: 'Không copy được prompt' };
         }
@@ -131,7 +143,7 @@ export default function MarketingWorkflowBreakdown({
             copiedTimerRef.current = setTimeout(() => setCopiedIndex(-1), 2000);
         }
         showMessage(result.message, result.ok ? 'success' : 'error');
-    }, [plan, copyingIndex, workflowKey, item.file, showMessage]);
+    }, [plan, copyingIndex, workflowKey, item.file, showMessage, getFreshContext]);
 
     /** Cập nhật prompt của 1 phần thẳng vào các beat tương ứng (partial import). */
     const runImport = React.useCallback(async (index: number, text: string) => {
@@ -345,7 +357,10 @@ export default function MarketingWorkflowBreakdown({
         if (!chunk || !sid || !item.file) {
             return false;
         }
-        const prompt = await fetchWorkflowPromptText(workflowKey, item.file, chunk.context);
+        const context = getFreshContext
+            ? await getFreshContext(chunk, plan.totalBeats)
+            : chunk.context;
+        const prompt = await fetchWorkflowPromptText(workflowKey, item.file, context);
         if (!prompt.ok) {
             showMessage(prompt.message || 'Không tải được prompt cho phần này', 'error');
             return false;
@@ -361,7 +376,7 @@ export default function MarketingWorkflowBreakdown({
             return false;
         }
         return true;
-    }, [plan, shortVideoId, item.file, workflowKey, showMessage]);
+    }, [plan, shortVideoId, item.file, workflowKey, showMessage, getFreshContext]);
 
     const runChunkDeepseek = React.useCallback(async (index: number) => {
         if (deepseekStarting >= 0 || deepseekAllRunning) {

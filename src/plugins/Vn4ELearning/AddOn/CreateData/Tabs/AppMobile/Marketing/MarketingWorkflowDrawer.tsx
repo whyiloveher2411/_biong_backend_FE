@@ -3,6 +3,7 @@ import {
     Alert,
     Box,
     Button,
+    Chip,
     CircularProgress,
     Dialog,
     DialogActions,
@@ -42,16 +43,18 @@ import {
     getWorkflowContrastTextColor,
     MANUAL_BEAT_PROMPTS_SAVED_EVENT,
     saveWorkflowOutput,
+    splitWorkflowBeatBlocks,
     splitWorkflowStepTitle,
     WORKFLOW_AUDIO_SCRIPT_KEY,
     WORKFLOW_INPUT_PROMPT_KEY,
+    type WorkflowBreakdownChunk,
     type WorkflowDefinition,
     type WorkflowOutputsMap,
     type WorkflowPromptContext,
 } from 'helpers/marketingWorkflowPrompts';
 import {
-    fetchDeepseekVideoImageStatus,
-    startDeepseekVideoImage,
+    fetchDeepseekVideoImageSessionStatus,
+    openDeepseekVideoImageSession,
 } from 'helpers/marketingDeepseekVideoImage';
 import MarketingWorkflowBreakdown from './MarketingWorkflowBreakdown';
 import {
@@ -87,6 +90,33 @@ type UpdateDialogState = {
     buttonUpdate: string;
 };
 
+/** Trạng thái phiên DeepSeek của 1 bước (sessionKey = workflow#step). */
+type DeepseekStepState = {
+    sessionAlive: boolean;
+    chatUrl: string;
+    hasOriginalAudio: boolean;
+    beatCount: number;
+    translationCount: number;
+    message: string;
+};
+
+const EMPTY_DEEPSEEK_STATE: DeepseekStepState = {
+    sessionAlive: false,
+    chatUrl: '',
+    hasOriginalAudio: false,
+    beatCount: 0,
+    translationCount: 0,
+    message: '',
+};
+
+/**
+ * Nhịp poll trạng thái phiên DeepSeek khi đang mở drawer. User thao tác trên browser
+ * DeepSeek (lưu beat/dịch/audio/URL chat) → CMS tự cập nhật gần realtime.
+ * Khi tab bị ẩn thì giãn nhịp để đỡ tốn request.
+ */
+const DEEPSEEK_POLL_INTERVAL_MS = 4000;
+const DEEPSEEK_POLL_HIDDEN_INTERVAL_MS = 8000;
+
 export default function MarketingWorkflowDrawer({
     open,
     onClose,
@@ -107,12 +137,25 @@ export default function MarketingWorkflowDrawer({
     const [importingAsset, setImportingAsset] = React.useState(false);
     const [importingBeatPrompts, setImportingBeatPrompts] = React.useState(false);
     const [beatPromptErrors, setBeatPromptErrors] = React.useState<string[]>([]);
-    const [deepseekRunning, setDeepseekRunning] = React.useState(false);
-    const [deepseekMessage, setDeepseekMessage] = React.useState('');
+    // Trạng thái phiên DeepSeek theo TỪNG BƯỚC (sessionKey = workflow#step) — tránh lẫn giữa các bước.
+    const [deepseekAction, setDeepseekAction] = React.useState('');
+    const [deepseekStates, setDeepseekStates] = React.useState<Record<string, DeepseekStepState>>({});
+    const patchDeepseekState = React.useCallback((key: string, patch: Partial<DeepseekStepState>) => {
+        setDeepseekStates((prev) => {
+            const current = prev[key] || EMPTY_DEEPSEEK_STATE;
+            const next = { ...current, ...patch };
+            // Không đổi gì (poll về cùng dữ liệu) → giữ nguyên reference, tránh re-render thừa.
+            const unchanged = (Object.keys(next) as (keyof DeepseekStepState)[])
+                .every((field) => current[field] === next[field]);
+            if (unchanged) {
+                return prev;
+            }
+            return { ...prev, [key]: next };
+        });
+    }, []);
     const [masterPromptUrl, setMasterPromptUrl] = React.useState('');
     const [loadingMasterPrompt, setLoadingMasterPrompt] = React.useState(false);
     const masterPromptObjectUrlRef = React.useRef('');
-    const deepseekPollRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
     /** buttonUpdate = imagePromptBeatUpdate → update image prompt cho các beat. */
     const isBeatPromptUpdate = Boolean(
@@ -132,6 +175,8 @@ export default function MarketingWorkflowDrawer({
             setImportingAsset(false);
             setMasterPromptUrl('');
             setLoadingMasterPrompt(false);
+            setDeepseekAction('');
+            setDeepseekStates({});
             setOutputs({});
             outputsLoadedRef.current = -1;
             return;
@@ -142,6 +187,8 @@ export default function MarketingWorkflowDrawer({
             return;
         }
         outputsLoadedRef.current = sid;
+        // Đổi short video → xoá trạng thái phiên DeepSeek cũ trước khi nạp lại.
+        setDeepseekStates({});
         fetchWorkflowOutputs(sid).then((map) => setOutputs(map || {}));
     }, [open, shortVideoId]);
 
@@ -152,6 +199,8 @@ export default function MarketingWorkflowDrawer({
         setUpdatingItem(null);
         setUpdateValue('');
     }, [workflow?.key]);
+
+
 
     /**
      * Prefetch file master prompt (documentFile) → blob URL để nút "Xem master prompt" là 1 anchor
@@ -203,9 +252,6 @@ export default function MarketingWorkflowDrawer({
         return () => {
             if (copiedTimerRef.current) {
                 clearTimeout(copiedTimerRef.current);
-            }
-            if (deepseekPollRef.current) {
-                clearTimeout(deepseekPollRef.current);
             }
         };
     }, []);
@@ -273,8 +319,14 @@ export default function MarketingWorkflowDrawer({
         api.showMessage('Đã lưu biến — copy prompt sẽ thay đúng giá trị', 'success');
     }, [workflow, savingInputs, shortVideoId, draftInputs, api]);
 
-    /** Context thay key khi copy prompt = outputs đã lưu + biến inputPrompt + promptContext (topic...) + audio script hiện tại. */
-    const mergedPromptContext = React.useMemo<WorkflowPromptContext>(() => {
+    /**
+     * Context thay key khi copy prompt = outputs đã lưu + biến inputPrompt + promptContext (topic...)
+     * + audio script hiện tại. Nhận outputs map qua tham số để caller có thể dùng bản fresh
+     * vừa fetch (overlay DeepSeek lưu character sheet / audio gốc trực tiếp vào DB, không qua
+     * state của drawer nên bản state có thể cũ).
+     */
+    const buildBaseContext = React.useCallback((allOutputs: WorkflowOutputsMap): WorkflowPromptContext => {
+        const currentBucket = (workflow && allOutputs[workflow.key]) || {};
         const audioScriptText = String(audioScript || '');
         // Biến input: default của định nghĩa, ghi đè bởi giá trị đã lưu (hoặc draft đang sửa).
         const variableValues: Record<string, string> = {};
@@ -283,15 +335,110 @@ export default function MarketingWorkflowDrawer({
                 variableValues[def.name] = String(draftInputs[def.name] ?? inputValues[def.name] ?? def.default);
             });
         });
+        // Audio gốc đã lưu (chưa chia beat) → thay [PASTE ORIGINAL AUDIO HERE] trong prompt.
+        // Ưu tiên bucket của workflow hiện tại; fallback tìm ở mọi workflow (audio có thể
+        // được lưu từ phiên trước khi workflow_key được truyền).
+        let originalAudio = String(currentBucket['deepseek_original_audio'] || '').trim();
+        if (!originalAudio) {
+            Object.values(allOutputs).forEach((bucket) => {
+                if (originalAudio) {
+                    return;
+                }
+                const candidate = String((bucket || {})['deepseek_original_audio'] || '').trim();
+                if (candidate) {
+                    originalAudio = candidate;
+                }
+            });
+        }
+        // CHARACTER SHEET DESCRIPTION (workflow stickman, overlay DeepSeek lưu):
+        // thay [PASTE CHARACTER SHEET DESCRIPTION HERE] trong buoc-3-merged.md.
+        // Ưu tiên bucket workflow hiện tại, fallback mọi workflow (kể cả step key #index).
+        let characterSheet = String(currentBucket['character_sheet_description'] || '').trim();
+        if (!characterSheet) {
+            const stickmanBucket = (allOutputs as Record<string, Record<string, string>>)['stickman'];
+            const stickmanCandidate = String((stickmanBucket || {})['character_sheet_description'] || '').trim();
+            if (stickmanCandidate) {
+                characterSheet = stickmanCandidate;
+            }
+        }
+        if (!characterSheet) {
+            Object.values(allOutputs).forEach((bucket) => {
+                if (characterSheet) {
+                    return;
+                }
+                const candidate = String((bucket || {})['character_sheet_description'] || '').trim();
+                if (candidate) {
+                    characterSheet = candidate;
+                }
+            });
+        }
         return {
-            ...workflowOutputs,
+            ...currentBucket,
             ...variableValues,
             ...(promptContext || {}),
             ...(audioScriptText.trim()
                 ? { [WORKFLOW_AUDIO_SCRIPT_KEY]: audioScriptText }
                 : {}),
+            ...(originalAudio
+                ? { 'PASTE ORIGINAL AUDIO HERE': originalAudio }
+                : {}),
+            ...(characterSheet
+                ? { 'PASTE CHARACTER SHEET DESCRIPTION HERE': characterSheet }
+                : {}),
         };
-    }, [workflowOutputs, draftInputs, inputValues, workflow?.steps, promptContext, audioScript]);
+    }, [workflow, workflow?.steps, draftInputs, inputValues, promptContext, audioScript]);
+
+    const mergedPromptContext = React.useMemo<WorkflowPromptContext>(
+        () => buildBaseContext(outputs),
+        [buildBaseContext, outputs],
+    );
+
+    /**
+     * Tải lại workflow outputs từ server (overlay DeepSeek có thể đã lưu character sheet /
+     * audio gốc / beat sau lần tải trước). Trả về bản mới nhất, đồng thời cập nhật state.
+     */
+    const refreshWorkflowOutputs = React.useCallback(async (): Promise<WorkflowOutputsMap> => {
+        const sid = Number(shortVideoId || 0);
+        if (!sid) {
+            return outputs;
+        }
+        try {
+            const fresh = await fetchWorkflowOutputs(sid);
+            if (fresh && typeof fresh === 'object' && Object.keys(fresh).length > 0) {
+                setOutputs(fresh);
+                return fresh;
+            }
+        } catch {
+            // Lỗi mạng → dùng bản state hiện tại.
+        }
+        return outputs;
+    }, [shortVideoId, outputs]);
+
+    /**
+     * Context tươi cho 1 phần breakdown (mirror buildWorkflowBreakdownPlan): base mới nhất +
+     * audio script của phần + output block BEAT cắt theo dải beat của phần.
+     */
+    const getFreshChunkContext = React.useCallback(async (
+        chunk: Pick<WorkflowBreakdownChunk, 'beatStart' | 'beatEnd' | 'audioScript'>,
+        totalBeats: number,
+    ): Promise<WorkflowPromptContext> => {
+        const fresh = await refreshWorkflowOutputs();
+        const base = buildBaseContext(fresh);
+        const context: WorkflowPromptContext = {
+            ...base,
+            [WORKFLOW_AUDIO_SCRIPT_KEY]: chunk.audioScript,
+        };
+        Object.entries(base).forEach(([key, value]) => {
+            if (key === WORKFLOW_AUDIO_SCRIPT_KEY) {
+                return;
+            }
+            const blocks = splitWorkflowBeatBlocks(value);
+            if (totalBeats > 0 && blocks.length === totalBeats) {
+                context[key] = blocks.slice(chunk.beatStart - 1, chunk.beatEnd).join('\n\n');
+            }
+        });
+        return context;
+    }, [refreshWorkflowOutputs, buildBaseContext]);
 
     const handleCopy = React.useCallback(async (stepKey: string, file: string) => {
         if (!workflow || !file || copyingStep) {
@@ -300,7 +447,10 @@ export default function MarketingWorkflowDrawer({
         setCopyingStep(stepKey);
         let result: { ok: boolean; message: string };
         try {
-            result = await copyWorkflowPromptToClipboard(workflow.key, file, mergedPromptContext);
+            // Tải lại outputs trước khi copy — character sheet / audio gốc có thể vừa
+            // được lưu từ overlay DeepSeek sau lần tải trước của drawer.
+            const fresh = await refreshWorkflowOutputs();
+            result = await copyWorkflowPromptToClipboard(workflow.key, file, buildBaseContext(fresh));
         } catch {
             result = { ok: false, message: 'Không copy được prompt' };
         }
@@ -313,88 +463,184 @@ export default function MarketingWorkflowDrawer({
             copiedTimerRef.current = setTimeout(() => setCopiedStep(''), 2000);
         }
         api.showMessage(result.message, result.ok ? 'success' : 'error');
-    }, [workflow, copyingStep, mergedPromptContext, api]);
+    }, [workflow, copyingStep, refreshWorkflowOutputs, buildBaseContext, api]);
+
+    /** Đọc trạng thái phiên DeepSeek của 1 bước (sessionKey = workflow#step). */
+    const refreshDeepseekSession = React.useCallback(async (sessionKey: string) => {
+        const sid = Number(shortVideoId || 0);
+        if (!sid || !sessionKey) {
+            return;
+        }
+        const st = await fetchDeepseekVideoImageSessionStatus(sid, sessionKey).catch(() => null);
+        if (!st?.success) {
+            return;
+        }
+        patchDeepseekState(sessionKey, {
+            sessionAlive: Boolean(st.session_alive),
+            chatUrl: String(st.chat_url || ''),
+            hasOriginalAudio: Boolean(st.has_original_audio),
+            beatCount: Number(st.beat_count || 0),
+            translationCount: Number(st.translation_count || 0),
+            message: parseShortVideoResourceApiMessage(st, ''),
+        });
+    }, [shortVideoId, patchDeepseekState]);
+
+    // POLL trạng thái phiên cho MỌI bước có deepseekSession khi drawer mở → CMS tự cập nhật
+    // gần realtime khi user thao tác trên browser DeepSeek (lưu beat / dịch / audio / URL chat).
+    // Không overlap request; tab ẩn thì giãn nhịp; quay lại tab thì refresh ngay.
+    React.useEffect(() => {
+        if (!open || !workflow || !shortVideoId) {
+            return;
+        }
+        const sessionKeys = workflow.steps
+            .map((step, index) => (
+                step.prompts.some((p) => Boolean(p.deepseekSession)) ? `${workflow.key}#${index}` : ''
+            ))
+            .filter(Boolean);
+        if (sessionKeys.length === 0) {
+            return;
+        }
+
+        let cancelled = false;
+        let inFlight = false;
+        let timer: ReturnType<typeof setTimeout> | null = null;
+
+        const schedule = () => {
+            const hidden = typeof document !== 'undefined' && document.visibilityState === 'hidden';
+            timer = setTimeout(
+                () => { void tick(); },
+                hidden ? DEEPSEEK_POLL_HIDDEN_INTERVAL_MS : DEEPSEEK_POLL_INTERVAL_MS,
+            );
+        };
+
+        const tick = async () => {
+            if (cancelled || inFlight) {
+                return;
+            }
+            inFlight = true;
+            try {
+                await Promise.all(sessionKeys.map((key) => refreshDeepseekSession(key)));
+            } finally {
+                inFlight = false;
+            }
+            if (cancelled) {
+                return;
+            }
+            schedule();
+        };
+
+        // Quay lại tab → refresh ngay (không chờ hết nhịp giãn khi tab ẩn).
+        const onVisibilityChange = () => {
+            if (cancelled || (typeof document !== 'undefined' && document.visibilityState === 'hidden')) {
+                return;
+            }
+            if (timer) {
+                clearTimeout(timer);
+                timer = null;
+            }
+            void tick();
+        };
+        if (typeof document !== 'undefined') {
+            document.addEventListener('visibilitychange', onVisibilityChange);
+        }
+
+        void tick();
+
+        return () => {
+            cancelled = true;
+            if (timer) {
+                clearTimeout(timer);
+            }
+            if (typeof document !== 'undefined') {
+                document.removeEventListener('visibilitychange', onVisibilityChange);
+            }
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [open, workflow?.key, shortVideoId, refreshDeepseekSession]);
 
     /**
-     * Bước 1 workflow "video-image": chạy DeepSeek 3 bước trong CÙNG 1 luồng chat
-     * (viết nội dung → chia beat lưu audio script + beat map → dịch lưu bản dịch).
+     * Bước có cấu hình deepseekSession trong index.md — mở browser DeepSeek (GUI) và tự dán
+     * prompt generate + Enter. Các nút chia beat / dịch / lưu clipboard / kết thúc nằm NGAY
+     * TRÊN OVERLAY của browser DeepSeek, user điều khiển tại đó.
+     *
+     * @param prompts { generate?, beat?, translate? } — file prompt theo vai trò.
+     * @param sessionKey workflow#step — mỗi bước 1 phiên/luồng chat riêng.
      */
-    const handleRunDeepseekPipeline = React.useCallback(async (files: string[]) => {
-        if (!workflow || deepseekRunning) {
+    const runOpenDeepseekSession = React.useCallback(async (
+        prompts: {
+            generate?: string;
+            beat?: string;
+            translate?: string;
+        },
+        sessionKey: string,
+        resume = false,
+    ) => {
+        if (!workflow || deepseekAction) {
             return;
         }
         const sid = Number(shortVideoId || 0);
         if (!sid) {
-            api.showMessage('Thiếu short video — không chạy được DeepSeek', 'warning');
+            api.showMessage('Thiếu short video — không mở được DeepSeek', 'warning');
             return;
         }
-        const [fGenerate, fBeat, fTranslate] = files;
-        if (!fGenerate || !fBeat || !fTranslate) {
-            api.showMessage('Thiếu file prompt cho Bước 1 (generate / chia beat / dịch)', 'error');
+        if (!resume && !prompts.generate) {
+            api.showMessage('Thiếu file prompt generate (gắn deepseekSession: true cho prompt mở phiên)', 'error');
             return;
         }
 
-        setDeepseekRunning(true);
-        setDeepseekMessage('Đang tải prompt…');
+        setDeepseekAction(sessionKey);
+        patchDeepseekState(sessionKey, {
+            message: resume ? 'Đang mở lại luồng chat cũ…' : 'Đang mở browser DeepSeek…',
+        });
         try {
+            const fresh = await refreshWorkflowOutputs();
+            const freshContext = buildBaseContext(fresh);
+            const load = (file?: string) => (
+                file
+                    ? fetchWorkflowPromptText(workflow.key, file, freshContext)
+                    : Promise.resolve({ ok: true, text: '', message: '' })
+            );
             const [g, b, t] = await Promise.all([
-                fetchWorkflowPromptText(workflow.key, fGenerate, mergedPromptContext),
-                fetchWorkflowPromptText(workflow.key, fBeat, mergedPromptContext),
-                fetchWorkflowPromptText(workflow.key, fTranslate, mergedPromptContext),
+                load(prompts.generate),
+                load(prompts.beat),
+                load(prompts.translate),
             ]);
             if (!g.ok || !b.ok || !t.ok) {
                 api.showMessage(g.message || b.message || t.message || 'Không tải được prompt', 'error');
-                setDeepseekRunning(false);
-                setDeepseekMessage('');
+                patchDeepseekState(sessionKey, { message: '' });
                 return;
             }
-
-            const enq = await startDeepseekVideoImage({
+            const res = await openDeepseekVideoImageSession({
                 shortVideoId: sid,
                 promptGenerate: g.text,
                 promptBeat: b.text,
                 promptTranslate: t.text,
+                resume,
+                workflowKey: sessionKey,
             });
-            if (!enq?.success) {
-                api.showMessage(parseShortVideoResourceApiMessage(enq, 'Không chạy được DeepSeek'), 'error');
-                setDeepseekRunning(false);
-                setDeepseekMessage('');
+            if (!res?.success) {
+                api.showMessage(parseShortVideoResourceApiMessage(res, 'Không mở được phiên DeepSeek'), 'error');
+                patchDeepseekState(sessionKey, { message: '' });
                 return;
             }
-            api.showMessage(parseShortVideoResourceApiMessage(enq, 'DeepSeek đang chạy 3 bước…'), 'success');
-            setDeepseekMessage('DeepSeek đang viết nội dung…');
-
-            const startedAt = Date.now();
-            const poll = async (): Promise<void> => {
-                if (Date.now() - startedAt > 45 * 60 * 1000) {
-                    setDeepseekMessage('Quá lâu — kiểm tra lại sau');
-                    setDeepseekRunning(false);
-                    return;
-                }
-                const st = await fetchDeepseekVideoImageStatus(sid).catch(() => null);
-                if (st?.status === 'done') {
-                    api.showMessage(parseShortVideoResourceApiMessage(st, 'DeepSeek hoàn tất'), 'success');
-                    setDeepseekMessage(parseShortVideoResourceApiMessage(st, 'Hoàn tất'));
-                    setDeepseekRunning(false);
-                    setTimeout(() => window.location.reload(), 1200);
-                    return;
-                }
-                if (st?.status === 'error') {
-                    api.showMessage(parseShortVideoResourceApiMessage(st, 'DeepSeek lỗi'), 'error');
-                    setDeepseekMessage(parseShortVideoResourceApiMessage(st, 'Lỗi'));
-                    setDeepseekRunning(false);
-                    return;
-                }
-                setDeepseekMessage(parseShortVideoResourceApiMessage(st, 'DeepSeek đang xử lý…'));
-                deepseekPollRef.current = setTimeout(() => { void poll(); }, 5000);
-            };
-            void poll();
+            const responseMessage = parseShortVideoResourceApiMessage(
+                res,
+                resume ? 'Đã mở lại luồng chat cũ' : 'Đã mở browser — điều khiển bằng các nút trên browser',
+            );
+            const hasWarning = Array.isArray(res.warnings) && res.warnings.length > 0;
+            patchDeepseekState(sessionKey, {
+                sessionAlive: true,
+                ...(res.chat_url ? { chatUrl: String(res.chat_url) } : {}),
+                message: responseMessage,
+            });
+            api.showMessage(responseMessage, hasWarning ? 'warning' : 'success');
         } catch (err) {
-            api.showMessage(err instanceof Error ? err.message : 'Không chạy được DeepSeek', 'error');
-            setDeepseekRunning(false);
-            setDeepseekMessage('');
+            api.showMessage(err instanceof Error ? err.message : 'Không mở được phiên DeepSeek', 'error');
+            patchDeepseekState(sessionKey, { message: '' });
+        } finally {
+            setDeepseekAction('');
         }
-    }, [workflow, deepseekRunning, shortVideoId, mergedPromptContext, api]);
+    }, [workflow, deepseekAction, shortVideoId, refreshWorkflowOutputs, buildBaseContext, api, patchDeepseekState]);
 
     const openUpdateDialog = React.useCallback((
         itemKey: string,
@@ -684,8 +930,11 @@ export default function MarketingWorkflowDrawer({
                             const stepKey = String(index);
                             const isCopying = copyingStep === stepKey;
                             const isCopied = copiedStep === stepKey;
-                            const isVideoImageStep1 = workflow.key === 'video-image'
-                                && /vi\u1ebft n\u1ed9i dung/i.test(label || step.title);
+                            // Bước có cấu hình deepseekSession trong index.md → hiện nút mở browser DeepSeek.
+                            const deepseekPrompts = step.prompts.filter((p) => Boolean(p.deepseekSession));
+                            const hasDeepseekSession = deepseekPrompts.length > 0;
+                            const sessionKey = `${workflow.key}#${index}`;
+                            const dsState = deepseekStates[sessionKey] || EMPTY_DEEPSEEK_STATE;
 
                             return (
                                 <Box
@@ -944,6 +1193,7 @@ export default function MarketingWorkflowDrawer({
                                                                     savedValue={workflowOutputs[promptItem.updateField] || ''}
                                                                     shortVideoId={shortVideoId}
                                                                     showMessage={api.showMessage}
+                                                                    getFreshContext={getFreshChunkContext}
                                                                 />
                                                                 {noteNode}
                                                             </Box>
@@ -1008,40 +1258,136 @@ export default function MarketingWorkflowDrawer({
                                         )}
 
 
-                                        {isVideoImageStep1 ? (
-                                            <Box sx={{ mt: 1.25 }}>
-                                                <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
-                                                    <Button
-                                                        size="small"
-                                                        variant="contained"
-                                                        color="primary"
-                                                        disabled={deepseekRunning}
-                                                        startIcon={
-                                                            deepseekRunning
-                                                                ? <CircularProgress size={12} color="inherit" />
-                                                                : <SmartToyOutlinedIcon fontSize="small" />
-                                                        }
-                                                        onClick={() => {
-                                                            void handleRunDeepseekPipeline(
-                                                                step.prompts.map((p) => p.file).filter(Boolean),
-                                                            );
-                                                        }}
-                                                        sx={{ textTransform: 'none' }}
-                                                    >
-                                                        {deepseekRunning ? 'DeepSeek đang chạy…' : 'Chạy DeepSeek (3 bước)'}
-                                                    </Button>
-                                                    {deepseekMessage ? (
-                                                        <Typography variant="caption" color="text.secondary">
-                                                            {deepseekMessage}
+                                        {hasDeepseekSession ? (() => {
+                                            // Khớp ĐÚNG vai trò — không fallback sang prompt khác
+                                            // (tránh gửi nhầm prompt beat/translate thành generate).
+                                            const findPrompt = (role: '' | 'generate' | 'beat' | 'translate') => (
+                                                deepseekPrompts.find((p) => p.deepseekSession === role)
+                                            );
+                                            const generatePrompt = findPrompt('generate');
+                                            const beatPrompt = findPrompt('beat');
+                                            const translatePrompt = findPrompt('translate');
+                                            const busy = Boolean(deepseekAction);
+                                            const generateExists = Boolean(generatePrompt?.exists);
+                                            const cb = {
+                                                generate: generatePrompt?.file,
+                                                beat: beatPrompt?.file,
+                                                translate: translatePrompt?.file,
+                                            };
+
+                                            return (
+                                                <Box
+                                                    sx={{
+                                                        mt: 1.25,
+                                                        p: 1.25,
+                                                        border: '1px solid',
+                                                        borderColor: dsState.sessionAlive ? 'success.light' : 'divider',
+                                                        borderRadius: 2,
+                                                        bgcolor: 'action.hover',
+                                                    }}
+                                                >
+                                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap' }}>
+                                                        <SmartToyOutlinedIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+                                                        <Typography variant="caption" sx={{ fontWeight: 700 }}>
+                                                            DeepSeek (browser)
+                                                        </Typography>
+                                                        <Chip
+                                                            size="small"
+                                                            color={dsState.sessionAlive ? 'success' : 'default'}
+                                                            variant={dsState.sessionAlive ? 'filled' : 'outlined'}
+                                                            label={dsState.sessionAlive ? 'Browser đang mở' : 'Chưa mở browser'}
+                                                            sx={{ height: 20, fontSize: 11 }}
+                                                        />
+                                                        {dsState.beatCount > 0 ? (
+                                                            <Chip
+                                                                size="small"
+                                                                variant="outlined"
+                                                                color="info"
+                                                                label={`${dsState.beatCount} beat`}
+                                                                sx={{ height: 20, fontSize: 11 }}
+                                                            />
+                                                        ) : null}
+                                                        {dsState.translationCount > 0 ? (
+                                                            <Chip
+                                                                size="small"
+                                                                variant="outlined"
+                                                                color="info"
+                                                                label={`Dịch ${dsState.translationCount}`}
+                                                                sx={{ height: 20, fontSize: 11 }}
+                                                            />
+                                                        ) : null}
+                                                        {dsState.hasOriginalAudio ? (
+                                                            <Chip
+                                                                size="small"
+                                                                variant="outlined"
+                                                                color="warning"
+                                                                label="Có audio gốc"
+                                                                sx={{ height: 20, fontSize: 11 }}
+                                                            />
+                                                        ) : null}
+                                                    </Box>
+
+                                                    <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mt: 1 }}>
+                                                        <Button
+                                                            size="small"
+                                                            variant="contained"
+                                                            color="primary"
+                                                            disabled={busy || !generateExists}
+                                                            startIcon={
+                                                                deepseekAction === sessionKey
+                                                                    ? <CircularProgress size={12} color="inherit" />
+                                                                    : <SmartToyOutlinedIcon fontSize="small" />
+                                                            }
+                                                            onClick={() => { void runOpenDeepseekSession(cb, sessionKey, false); }}
+                                                            sx={{ textTransform: 'none' }}
+                                                        >
+                                                            {deepseekAction === sessionKey ? 'Đang mở browser…' : 'Mở DeepSeek'}
+                                                        </Button>
+                                                        {dsState.chatUrl ? (
+                                                            <Tooltip title={dsState.chatUrl} placement="top">
+                                                                <span>
+                                                                    <Button
+                                                                        size="small"
+                                                                        variant="outlined"
+                                                                        color="secondary"
+                                                                        disabled={busy}
+                                                                        startIcon={<OpenInNewOutlinedIcon fontSize="small" />}
+                                                                        onClick={() => { void runOpenDeepseekSession(cb, sessionKey, true); }}
+                                                                        sx={{ textTransform: 'none' }}
+                                                                    >
+                                                                        Mở lại luồng chat cũ
+                                                                    </Button>
+                                                                </span>
+                                                            </Tooltip>
+                                                        ) : null}
+                                                        {dsState.message ? (
+                                                            <Typography variant="caption" color="text.secondary">
+                                                                {dsState.message}
+                                                            </Typography>
+                                                        ) : null}
+                                                    </Stack>
+
+                                                    {dsState.chatUrl ? (
+                                                        <Typography
+                                                            variant="caption"
+                                                            sx={{ display: 'block', mt: 0.5, wordBreak: 'break-all' }}
+                                                            color="text.secondary"
+                                                        >
+                                                            Luồng chat đã lưu:{' '}
+                                                            <a href={dsState.chatUrl} target="_blank" rel="noopener noreferrer">
+                                                                {dsState.chatUrl}
+                                                            </a>
                                                         </Typography>
                                                     ) : null}
-                                                </Stack>
-                                                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                                                    Tự động trong cùng 1 luồng chat DeepSeek: viết nội dung → chia beat (lưu
-                                                    audio script + beat map) → dịch (lưu bản dịch).
-                                                </Typography>
-                                            </Box>
-                                        ) : null}
+
+                                                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                                                        Bấm mở browser DeepSeek ở cửa sổ riêng — prompt đầu tiên được dán sẵn vào ô chat
+                                                        (bạn tự bấm Enter để gửi). Các nút thao tác nằm NGAY TRÊN browser. Mỗi bước là một
+                                                        luồng chat riêng; nhớ bấm "Lưu URL luồng chat" sau khi chat xong.
+                                                    </Typography>
+                                                </Box>
+                                            );
+                                        })() : null}
 
 {step.note && (
                                             <Box
