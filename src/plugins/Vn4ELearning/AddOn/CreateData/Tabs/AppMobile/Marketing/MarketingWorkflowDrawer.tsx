@@ -3,6 +3,7 @@ import {
     Alert,
     Box,
     Button,
+    ButtonGroup,
     Chip,
     CircularProgress,
     Dialog,
@@ -42,11 +43,14 @@ import {
     fetchWorkflowPromptText,
     getWorkflowContrastTextColor,
     MANUAL_BEAT_PROMPTS_SAVED_EVENT,
+    parseWorkflowPromptChoiceValues,
+    resolveWorkflowPromptChoiceFile,
     saveWorkflowOutput,
     splitWorkflowBeatBlocks,
     splitWorkflowStepTitle,
     WORKFLOW_AUDIO_SCRIPT_KEY,
     WORKFLOW_INPUT_PROMPT_KEY,
+    WORKFLOW_PROMPT_CHOICE_KEY,
     type WorkflowBreakdownChunk,
     type WorkflowDefinition,
     type WorkflowOutputsMap,
@@ -318,6 +322,66 @@ export default function MarketingWorkflowDrawer({
         }
         api.showMessage('Đã lưu biến — copy prompt sẽ thay đúng giá trị', 'success');
     }, [workflow, savingInputs, shortVideoId, draftInputs, api]);
+
+    /** Lựa chọn nhóm prompt đã lưu: {choiceName: label} — từ workflow outputs. */
+    const storedChoicesJson = workflowOutputs[WORKFLOW_PROMPT_CHOICE_KEY] || '';
+    const savedChoiceValues = React.useMemo<Record<string, string>>(
+        () => parseWorkflowPromptChoiceValues(storedChoicesJson),
+        [storedChoicesJson],
+    );
+    const [draftChoiceValues, setDraftChoiceValues] = React.useState<Record<string, string>>({});
+    const [savingChoice, setSavingChoice] = React.useState('');
+
+    // Nạp lựa chọn đã lưu vào draft khi đổi workflow hoặc giá trị đã lưu thay đổi.
+    React.useEffect(() => {
+        setDraftChoiceValues(savedChoiceValues);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [workflow?.key, storedChoicesJson]);
+
+    /** Giá trị lựa chọn hiệu lực: đã lưu, ghi đè bởi draft đang chọn (chưa lưu xong). */
+    const effectiveChoiceValues = React.useMemo<Record<string, string>>(
+        () => ({ ...savedChoiceValues, ...draftChoiceValues }),
+        [savedChoiceValues, draftChoiceValues],
+    );
+
+    /** Chọn nhóm prompt (Business/History…) → lưu vào workflow outputs, refresh vẫn giữ. */
+    const handleSelectChoice = React.useCallback(async (choiceName: string, label: string) => {
+        if (!workflow || !choiceName || savingChoice) {
+            return;
+        }
+        const sid = Number(shortVideoId || 0);
+        if (!sid) {
+            api.showMessage('Thiếu short_video_id — không lưu được lựa chọn', 'warning');
+            return;
+        }
+        const previous = draftChoiceValues;
+        const next = { ...savedChoiceValues, [choiceName]: label };
+        setDraftChoiceValues(next);
+        setSavingChoice(choiceName);
+        const result = await saveWorkflowOutput(
+            sid,
+            workflow.key,
+            WORKFLOW_PROMPT_CHOICE_KEY,
+            JSON.stringify(next),
+        );
+        setSavingChoice('');
+        if (!result.ok) {
+            setDraftChoiceValues(previous);
+            api.showMessage(result.message || 'Không lưu được lựa chọn', 'error');
+            return;
+        }
+        if (result.outputs) {
+            setOutputs(result.outputs);
+        } else {
+            setOutputs((prev) => ({
+                ...prev,
+                [workflow.key]: {
+                    ...(prev[workflow.key] || {}),
+                    [WORKFLOW_PROMPT_CHOICE_KEY]: JSON.stringify(next),
+                },
+            }));
+        }
+    }, [workflow, savingChoice, shortVideoId, draftChoiceValues, savedChoiceValues, api]);
 
     /**
      * Context thay key khi copy prompt = outputs đã lưu + biến inputPrompt + promptContext (topic...)
@@ -1104,12 +1168,47 @@ export default function MarketingWorkflowDrawer({
                                                     const itemKey = `${stepKey}:p${promptIndex}`;
                                                     const itemCopying = copyingStep === itemKey;
                                                     const itemCopied = copiedStep === itemKey;
+                                                    // Item có nhóm lựa chọn (choice) → dùng file của option đang chọn.
+                                                    const choiceInfo = resolveWorkflowPromptChoiceFile(promptItem, effectiveChoiceValues);
+                                                    const hasChoice = Boolean(promptItem.choice) && promptItem.choiceOptions.length > 0;
+                                                    const selectedChoiceLabel = hasChoice
+                                                        ? (effectiveChoiceValues[promptItem.choice] || promptItem.choiceOptions[0].label)
+                                                        : '';
+
+                                                    const choiceNode = hasChoice ? (
+                                                        <Box sx={{ mb: 0.5, width: '100%' }}>
+                                                            <Typography
+                                                                variant="caption"
+                                                                sx={{ fontWeight: 700, color: 'text.secondary', display: 'block', mb: 0.5 }}
+                                                            >
+                                                                {promptItem.choiceLabel || 'Chọn loại'}
+                                                            </Typography>
+                                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                                <ButtonGroup size="small" variant="outlined" disabled={Boolean(savingChoice)}>
+                                                                    {promptItem.choiceOptions.map((option) => (
+                                                                        <Button
+                                                                            key={option.label}
+                                                                            variant={option.label === selectedChoiceLabel ? 'contained' : 'outlined'}
+                                                                            disabled={!option.exists}
+                                                                            onClick={() => { void handleSelectChoice(promptItem.choice, option.label); }}
+                                                                            sx={{ textTransform: 'none' }}
+                                                                        >
+                                                                            {option.label}
+                                                                        </Button>
+                                                                    ))}
+                                                                </ButtonGroup>
+                                                                {savingChoice === promptItem.choice ? (
+                                                                    <CircularProgress size={12} />
+                                                                ) : null}
+                                                            </Box>
+                                                        </Box>
+                                                    ) : null;
 
                                                     const button = (
                                                         <Button
                                                             size="small"
                                                             variant="outlined"
-                                                            disabled={Boolean(copyingStep) || !promptItem.exists}
+                                                            disabled={Boolean(copyingStep) || !choiceInfo.exists}
                                                             startIcon={
                                                                 itemCopying
                                                                     ? <CircularProgress size={12} color="inherit" />
@@ -1117,7 +1216,7 @@ export default function MarketingWorkflowDrawer({
                                                                         ? <CheckIcon fontSize="small" />
                                                                         : <ContentCopyIcon fontSize="small" />
                                                             }
-                                                            onClick={() => handleCopy(itemKey, promptItem.file)}
+                                                            onClick={() => handleCopy(itemKey, choiceInfo.file)}
                                                             sx={{ textTransform: 'none' }}
                                                         >
                                                             {itemCopied ? 'Đã copy' : promptItem.label}
@@ -1180,6 +1279,7 @@ export default function MarketingWorkflowDrawer({
                                                     if (breakdownPlan) {
                                                         return (
                                                             <Box key={itemKey} sx={{ minWidth: 0, width: '100%', mb: 0.5 }}>
+                                                                {choiceNode}
                                                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
                                                                     {updateButton}
                                                                     <Typography variant="body2" sx={{ fontWeight: 600 }}>
@@ -1200,11 +1300,11 @@ export default function MarketingWorkflowDrawer({
                                                         );
                                                     }
 
-                                                    const row = promptItem.exists
+                                                    const row = choiceInfo.exists
                                                         ? button
                                                         : (
                                                             <Tooltip
-                                                                title={promptItem.file ? `File prompt chưa tồn tại: ${promptItem.file}` : 'Prompt này không có file'}
+                                                                title={choiceInfo.file ? `File prompt chưa tồn tại: ${choiceInfo.file}` : 'Prompt này không có file'}
                                                                 placement="top"
                                                             >
                                                                 <span>{button}</span>
@@ -1213,6 +1313,7 @@ export default function MarketingWorkflowDrawer({
 
                                                     return (
                                                         <Box key={itemKey} sx={{ minWidth: 0 }}>
+                                                            {choiceNode}
                                                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25 }}>
                                                                 {row}
                                                                 {updateButton}
@@ -1268,11 +1369,21 @@ export default function MarketingWorkflowDrawer({
                                             const beatPrompt = findPrompt('beat');
                                             const translatePrompt = findPrompt('translate');
                                             const busy = Boolean(deepseekAction);
-                                            const generateExists = Boolean(generatePrompt?.exists);
+                                            // Item generate có thể có nhóm lựa chọn (choice) → dùng file của option đang chọn.
+                                            const generateInfo = generatePrompt
+                                                ? resolveWorkflowPromptChoiceFile(generatePrompt, effectiveChoiceValues)
+                                                : null;
+                                            const beatInfo = beatPrompt
+                                                ? resolveWorkflowPromptChoiceFile(beatPrompt, effectiveChoiceValues)
+                                                : null;
+                                            const translateInfo = translatePrompt
+                                                ? resolveWorkflowPromptChoiceFile(translatePrompt, effectiveChoiceValues)
+                                                : null;
+                                            const generateExists = Boolean(generateInfo?.exists);
                                             const cb = {
-                                                generate: generatePrompt?.file,
-                                                beat: beatPrompt?.file,
-                                                translate: translatePrompt?.file,
+                                                generate: generateInfo?.file,
+                                                beat: beatInfo?.file,
+                                                translate: translateInfo?.file,
                                             };
 
                                             return (

@@ -1,6 +1,13 @@
 import { ajax } from 'hook/useApi';
 import { writePromptTextToClipboard } from 'helpers/marketingShortVideoAgentPrompt';
 
+/** 1 lựa chọn prompt của nhóm choice (dòng option trong index.md): "Nhãn | file.md". */
+export type WorkflowPromptChoiceOption = {
+    label: string;
+    file: string;
+    exists: boolean;
+};
+
 export type WorkflowPromptItem = {
     label: string;
     file: string;
@@ -22,6 +29,15 @@ export type WorkflowPromptItem = {
     deepseekSession: '' | 'generate' | 'beat' | 'translate';
     /** Ghi chú của prompt (từ dòng note trong index.md) — hiển thị nhỏ dưới button. */
     note: string;
+    /**
+     * Tên nhóm lựa chọn prompt (từ dòng choice trong index.md). Khi có choice + choiceOptions,
+     * item dùng file của option đang chọn (lưu ở WORKFLOW_PROMPT_CHOICE_KEY) thay cho file cố định.
+     */
+    choice: string;
+    /** Nhãn hiển thị của nhóm lựa chọn (từ dòng choiceLabel trong index.md). */
+    choiceLabel: string;
+    /** Các lựa chọn của nhóm (từ các dòng option: "Nhãn | file.md"). Option đầu = mặc định. */
+    choiceOptions: WorkflowPromptChoiceOption[];
 };
 
 /** Biến cho phép user nhập của 1 bước (từ khối inputPrompt trong index.md). */
@@ -66,6 +82,12 @@ export const MANUAL_BEAT_PROMPTS_SAVED_EVENT = 'vn4-manual-beat-prompts-saved';
  * Không trùng với updateField nào — dùng nội bộ để bền hoá biến user nhập.
  */
 export const WORKFLOW_INPUT_PROMPT_KEY = '__input-prompt';
+
+/**
+ * Key output lưu lựa chọn nhóm prompt (dòng choice trong index.md) của 1 workflow.
+ * Giá trị là JSON { [choiceName]: label } — bền hoá lựa chọn để refresh UI vẫn giữ.
+ */
+export const WORKFLOW_PROMPT_CHOICE_KEY = '__prompt-choice';
 
 export type WorkflowDefinition = {
     key: string;
@@ -139,6 +161,22 @@ function normalizeStep(raw: ANY): WorkflowPromptStep | null {
                 scriptBreakdown: Math.max(0, parseInt(String(item?.script_breakdown ?? ''), 10) || 0),
                 deepseekSession: normalizeDeepseekSession(String(item?.deepseek_session ?? '')),
                 note: String(item?.note || '').trim(),
+                choice: String(item?.choice || '').trim(),
+                choiceLabel: String(item?.choice_label || '').trim(),
+                choiceOptions: (Array.isArray(item?.choice_options) ? item.choice_options : [])
+                    .map((opt: ANY): WorkflowPromptChoiceOption | null => {
+                        const optLabel = String(opt?.label || '').trim();
+                        const optFile = String(opt?.file || '').trim();
+                        if (!optLabel && !optFile) {
+                            return null;
+                        }
+                        return {
+                            label: optLabel || optFile,
+                            file: optFile,
+                            exists: opt?.exists !== false,
+                        };
+                    })
+                    .filter(Boolean) as WorkflowPromptChoiceOption[],
             };
         })
         .filter(Boolean) as WorkflowPromptItem[];
@@ -269,6 +307,42 @@ export type WorkflowPromptContext = Record<string, string>;
  */
 export function normalizeWorkflowUpdateFieldKey(value: string): string {
     return String(value || '').trim().replace(/^\[+|\]+$/g, '').trim();
+}
+
+/** Parse JSON lựa chọn nhóm prompt đã lưu ({ [choiceName]: label }); lỗi → {}. */
+export function parseWorkflowPromptChoiceValues(raw: string | undefined): Record<string, string> {
+    const stored = String(raw || '').trim();
+    if (!stored) {
+        return {};
+    }
+    try {
+        const parsed = JSON.parse(stored);
+        return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+            ? (parsed as Record<string, string>)
+            : {};
+    } catch {
+        return {};
+    }
+}
+
+/**
+ * File prompt hiệu lực của 1 item có nhóm lựa chọn: lấy option đang chọn (theo label),
+ * fallback option đầu tiên (mặc định). Item không có choice → dùng file cố định.
+ */
+export function resolveWorkflowPromptChoiceFile(
+    item: Pick<WorkflowPromptItem, 'file' | 'exists' | 'choice' | 'choiceOptions'>,
+    choiceValues: Record<string, string>,
+): { file: string; exists: boolean; optionLabel: string } {
+    if (!item.choice || item.choiceOptions.length === 0) {
+        return { file: item.file, exists: item.exists, optionLabel: '' };
+    }
+    const selectedLabel = String(choiceValues[item.choice] || '').trim();
+    const option = item.choiceOptions.find((entry) => entry.label === selectedLabel) || item.choiceOptions[0];
+    return {
+        file: option?.file || item.file,
+        exists: option ? option.exists !== false : item.exists,
+        optionLabel: option?.label || '',
+    };
 }
 
 /**
