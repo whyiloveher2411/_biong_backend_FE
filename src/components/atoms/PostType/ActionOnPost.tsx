@@ -152,7 +152,15 @@ function ActionOnPost({
         const editId = parseShortVideoEditIdFromSearch(searchParams.toString());
         if (editId && postId === editId) {
             setActiveClientDrawer('drawer:ShortVideoEdit');
+            return;
         }
+        // URL đã chuyển sang video khác (hoặc đã đóng): đóng drawer do URL mở.
+        // Nếu không, mỗi lần mở video mới sẽ chồng thêm 1 drawer và phải tắt n lần.
+        setActiveClientDrawer((current) => (
+            current === 'drawer:ShortVideoAgentAudio' || current === 'drawer:ShortVideoEdit'
+                ? null
+                : current
+        ));
     }, [post.id, searchParams]);
 
     const useAjaxAction = useAjax();

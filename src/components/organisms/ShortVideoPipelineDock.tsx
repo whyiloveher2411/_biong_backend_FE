@@ -15,7 +15,6 @@ import BookmarkIcon from '@mui/icons-material/Bookmark';
 import BookmarkBorderIcon from '@mui/icons-material/BookmarkBorder';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
-import LaunchIcon from '@mui/icons-material/Launch';
 import StopIcon from '@mui/icons-material/Stop';
 import LoadingButton from 'components/atoms/LoadingButton';
 import {
@@ -30,11 +29,6 @@ import {
     subscribeQuickPreview,
     type QuickPreviewItem,
 } from 'helpers/shortVideoQuickPreview';
-import {
-    getHeadlessPreviewLayout,
-    subscribeHeadlessPreviewLayout,
-    type HeadlessPreviewLayout,
-} from 'helpers/shortVideoHeadlessPreviewBus';
 import {
     cancelFullAutoPipeline,
     listActiveFullAutoPipelines,
@@ -57,8 +51,6 @@ const LIST_COLUMN_WIDTH = 248;
 const DETAIL_COLUMN_WIDTH = 480;
 const BODY_MAX_HEIGHT = 400;
 const DOCK_MAX_WIDTH = LIST_COLUMN_WIDTH + DETAIL_COLUMN_WIDTH + 16;
-/** Khoảng cách dock với box preview headless khi nằm cạnh nhau. */
-const PREVIEW_GAP = 12;
 
 /** Item dock = pipeline đang chạy, hoặc video user ghim (không chạy pipeline). */
 type DockItem = ActiveFullAutoPipelineItem & { pinnedOnly?: boolean };
@@ -229,12 +221,10 @@ export default function ShortVideoPipelineDock() {
     const [stoppingId, setStoppingId] = React.useState<number | null>(null);
     // Mặc định thu gọn — tránh dock che UI khi refresh/mở trang.
     const [dockCollapsed, setDockCollapsed] = React.useState(true);
-    const [previewLayout, setPreviewLayout] = React.useState<HeadlessPreviewLayout>(
-        () => getHeadlessPreviewLayout(),
-    );
     // Worker chuyển giữa job con có thể khiến 1 nhịp poll trả rỗng — chỉ ẩn pipeline
     // đang chạy sau 2 nhịp liên tiếp để box không nhấp nháy.
     const emptyStreakRef = React.useRef(0);
+    const dockRef = React.useRef<HTMLDivElement | null>(null);
 
     const load = React.useCallback(async () => {
         try {
@@ -270,7 +260,24 @@ export default function ShortVideoPipelineDock() {
         return subscribeQuickPreview(sync);
     }, []);
 
-    React.useEffect(() => subscribeHeadlessPreviewLayout(setPreviewLayout), []);
+    // Box đang mở → click ra ngoài vùng thì tự thu gọn; click trong vùng giữ nguyên.
+    React.useEffect(() => {
+        if (dockCollapsed) {
+            return undefined;
+        }
+        const handlePointerDown = (event: MouseEvent | TouchEvent) => {
+            const node = dockRef.current;
+            if (node && !node.contains(event.target as Node)) {
+                setDockCollapsed(true);
+            }
+        };
+        document.addEventListener('mousedown', handlePointerDown, true);
+        document.addEventListener('touchstart', handlePointerDown, true);
+        return () => {
+            document.removeEventListener('mousedown', handlePointerDown, true);
+            document.removeEventListener('touchstart', handlePointerDown, true);
+        };
+    }, [dockCollapsed]);
 
     const merged = React.useMemo<DockItem[]>(() => {
         const runningIds = new Set(runningItems.map((item) => item.id));
@@ -340,31 +347,26 @@ export default function ShortVideoPipelineDock() {
     const selected = merged.find((item) => item.id === selectedId) || merged[0];
     const selectedPinned = selected ? isQuickPreviewPinned(selected.id) : false;
 
-    // Neo sát phải; khi có box preview headless thì đặt ngay bên trái nó
-    // (giống dock chat Facebook).
-    const previewVisible = previewLayout.visible && previewLayout.width > 0;
-    const dockRight = previewVisible
-        ? previewLayout.right + previewLayout.width + PREVIEW_GAP
-        : previewLayout.right;
-    const dockBottom = previewLayout.bottom;
-    const dockMaxWidth = `calc(100vw - ${Math.round(dockRight + 16)}px)`;
+    // Neo sát góc trái dưới màn hình.
+    const dockMaxWidth = 'calc(100vw - 16px)';
 
     return (
         <Paper
+            ref={dockRef}
             elevation={dockCollapsed ? 6 : 12}
             sx={{
                 position: 'fixed',
-                right: dockCollapsed ? 0 : dockRight,
-                bottom: dockCollapsed ? 0 : dockBottom,
+                left: 0,
+                bottom: 0,
                 zIndex: 1400,
                 width: dockCollapsed ? 'auto' : `min(${DOCK_MAX_WIDTH}px, ${dockMaxWidth})`,
                 maxWidth: dockMaxWidth,
                 bgcolor: 'rgba(9,12,16,0.97)',
                 color: 'common.white',
                 border: '1px solid rgba(255,255,255,0.16)',
-                borderRadius: dockCollapsed ? '10px 0 0 0' : 2,
+                borderRadius: dockCollapsed ? '0 10px 0 0' : 2,
                 borderBottom: dockCollapsed ? 'none' : undefined,
-                borderRight: dockCollapsed ? 'none' : undefined,
+                borderLeft: dockCollapsed ? 'none' : undefined,
                 overflow: 'hidden',
                 transition: 'width 160ms ease',
             }}
@@ -438,7 +440,10 @@ export default function ShortVideoPipelineDock() {
                             return (
                                 <Box
                                     key={item.id}
-                                    onClick={() => setSelectedId(item.id)}
+                                    onClick={() => {
+                                        setSelectedId(item.id);
+                                        handleView(item);
+                                    }}
                                     sx={{
                                         display: 'flex',
                                         alignItems: 'flex-start',
@@ -528,25 +533,6 @@ export default function ShortVideoPipelineDock() {
                                             <BookmarkIcon sx={{ fontSize: 14, color: '#ffb74d' }} />
                                         ) : null}
                                     </Box>
-                                    <Tooltip title="View — mở workspace agent video">
-                                        <IconButton
-                                            size="small"
-                                            color="inherit"
-                                            aria-label={`View ${displayTitle(item)}`}
-                                            onClick={(event) => {
-                                                event.stopPropagation();
-                                                handleView(item);
-                                            }}
-                                            sx={{
-                                                mt: 0.1,
-                                                p: 0.25,
-                                                color: 'rgba(255,255,255,0.7)',
-                                                '&:hover': { color: 'common.white' },
-                                            }}
-                                        >
-                                            <LaunchIcon sx={{ fontSize: 15 }} />
-                                        </IconButton>
-                                    </Tooltip>
                                 </Box>
                             );
                         })}
