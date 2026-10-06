@@ -14,8 +14,6 @@ import {
     DialogTitle,
     Stack,
     TextField,
-    ToggleButton,
-    ToggleButtonGroup,
     Tooltip,
     Typography,
 } from '@mui/material';
@@ -39,8 +37,7 @@ import {
     type YoutubePromptKind,
     type YoutubeThumbnailConceptPrompt,
 } from 'helpers/marketingShortVideoAgentPrompt';
-import { parseYoutubeTitleResponse, isYoutubeTitleResponse } from 'helpers/shortVideoYoutubeTitleResponse';
-import { parseYoutubeThumbnailResponse, isYoutubeThumbnailResponse } from 'helpers/shortVideoYoutubeThumbnailResponse';
+import { parseYoutubeContentResponse, isYoutubeContentResponse } from 'helpers/shortVideoYoutubeContentResponse';
 import { fetchShortVideoAgentImageStyle } from 'helpers/marketingShortVideoImageStyleApi';
 import { openMetaAiChatUrlWithCookie } from 'helpers/marketingImportHtmlWorkflow';
 import {
@@ -65,40 +62,20 @@ type Props = {
 /** Khoá workflow lưu output title/thumbnail vào field workflow_outputs của short video. */
 const YOUTUBE_WORKFLOW_KEY = 'youtube';
 
-type YoutubeSubTab = 'title' | 'thumbnail';
+/**
+ * Prompt gộp: dùng TITLE GỐC của video, trả về mô tả + chapter + tags + SEO và concept ảnh thu nhỏ
+ * trong 1 response (KHÔNG sinh tiêu đề).
+ */
+const PROMPT_KIND: YoutubePromptKind = 'content';
 
-type PromptSpec = {
-    kind: YoutubePromptKind;
-    title: string;
-    description: string;
-    copyLabel: string;
-    pasteLabel: string;
-    resultLabel: string;
-    placeholder: string;
-    saveLabel: string;
-};
-
-const PROMPT_SPECS: Record<YoutubeSubTab, PromptSpec> = {
-    title: {
-        kind: 'title',
-        title: 'Prompt tạo tiêu đề',
-        description: 'Copy prompt → gửi chatbot → dán toàn bộ phản hồi vào ô bên dưới để lưu và phân tích.',
-        copyLabel: 'Copy prompt tiêu đề',
-        pasteLabel: 'Dán & lưu tiêu đề từ clipboard',
-        resultLabel: 'Phản hồi tiêu đề từ chatbot',
-        placeholder: 'Dán phản hồi tiêu đề từ chatbot…',
-        saveLabel: 'Lưu & phân tích tiêu đề',
-    },
-    thumbnail: {
-        kind: 'thumbnail',
-        title: 'Prompt tạo ảnh thu nhỏ',
-        description: 'Copy prompt → gửi chatbot → dán ý tưởng/prompt ảnh thu nhỏ nhận được vào ô bên dưới để lưu.',
-        copyLabel: 'Copy prompt ảnh thu nhỏ',
-        pasteLabel: 'Dán & lưu ảnh thu nhỏ từ clipboard',
-        resultLabel: 'Phản hồi ảnh thu nhỏ từ chatbot',
-        placeholder: 'Dán phản hồi ảnh thu nhỏ từ chatbot…',
-        saveLabel: 'Lưu ảnh thu nhỏ',
-    },
+const PROMPT_SPEC = {
+    title: 'Prompt tạo nội dung YouTube',
+    description: 'Dùng tiêu đề gốc của video → copy prompt → gửi chatbot → dán toàn bộ phản hồi vào ô bên dưới để lưu, tách mô tả + chapter + tags + ảnh thu nhỏ.',
+    copyLabel: 'Copy prompt nội dung YouTube',
+    pasteLabel: 'Dán & lưu nội dung từ clipboard',
+    resultLabel: 'Phản hồi nội dung YouTube từ chatbot',
+    placeholder: 'Dán phản hồi nội dung YouTube từ chatbot…',
+    saveLabel: 'Lưu & phân tích nội dung',
 };
 
 /**
@@ -156,13 +133,11 @@ function CollapsibleResponseField({
 export default function ShortVideoAgentYoutubePanel({ state }: Props) {
     const shortVideoId = Number(state.shortVideoId || 0);
     const hasScript = Boolean(String(state.audioScript || '').trim());
+    // Tiêu đề gốc của video — prompt dùng làm [TITLE] (không sinh tiêu đề mới).
+    const videoTitle = String(state.title || '').trim();
 
-    const [subTab, setSubTab] = React.useState<YoutubeSubTab>('title');
     const [outputs, setOutputs] = React.useState<WorkflowOutputsMap>({});
-    const [values, setValues] = React.useState<Record<YoutubePromptKind, string>>({
-        title: '',
-        thumbnail: '',
-    });
+    const [value, setValue] = React.useState('');
     const [copyingKind, setCopyingKind] = React.useState<YoutubePromptKind | ''>('');
     const [copiedKind, setCopiedKind] = React.useState<YoutubePromptKind | ''>('');
     const [pastingKind, setPastingKind] = React.useState<YoutubePromptKind | ''>('');
@@ -192,7 +167,7 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
         if (!shortVideoId) {
             loadedRef.current = -1;
             setOutputs({});
-            setValues({ title: '', thumbnail: '' });
+            setValue('');
             setHasStyleReference(false);
             setPendingRanks(new Set());
             setJobImageUrls({});
@@ -215,10 +190,8 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
         fetchWorkflowOutputs(shortVideoId).then((map) => {
             setOutputs(map || {});
             const saved = map?.[YOUTUBE_WORKFLOW_KEY] || {};
-            setValues({
-                title: saved.title || '',
-                thumbnail: saved.thumbnail || '',
-            });
+            // Nội dung gộp lưu ở key `content`; fallback dữ liệu cũ (title/thumbnail) để không mất.
+            setValue(String(saved.content || saved.title || saved.thumbnail || ''));
             setChaptersText(String(saved.chapters_text || ''));
         });
         // Nạp job thumbnail đang chạy (nếu mở lại tab khi có job pending).
@@ -311,15 +284,21 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
         };
     }, [shortVideoId, pendingRanks.size]);
 
-    const parsedTitle = React.useMemo(
-        () => parseYoutubeTitleResponse(values.title),
-        [values.title],
+    // Audio gốc (chưa chia beat) lưu ở bucket workflow bất kỳ — dùng để bật nút copy dù
+    // video chưa có audio_script (BE fallback: audio gốc → audio_script).
+    const hasOriginalAudio = React.useMemo(
+        () => Object.values(outputs).some((bucket) => (
+            bucket
+            && typeof bucket === 'object'
+            && String((bucket as Record<string, unknown>).deepseek_original_audio || '').trim() !== ''
+        )),
+        [outputs],
     );
+    const hasVideoSource = hasScript || hasOriginalAudio;
 
-    const parsedThumbnail = React.useMemo(
-        () => parseYoutubeThumbnailResponse(values.thumbnail),
-        [values.thumbnail],
-    );
+    const parsedContent = React.useMemo(() => parseYoutubeContentResponse(value), [value]);
+    const parsedTitle = parsedContent.title;
+    const parsedThumbnail = parsedContent.thumbnail;
 
     /**
      * Chatbot chỉ trả chapter dạng NEO NỘI DUNG (không có mốc thời gian). Nhờ BE
@@ -450,22 +429,22 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
         () => statusFeedbackNotes,
         [statusFeedbackNotes],
     );
-    const isDirty = (kind: YoutubePromptKind) => (values[kind] || '') !== (savedValues[kind] || '');
+    const isDirty = value !== String(savedValues[PROMPT_KIND] || '');
 
-    const handleCopy = React.useCallback(async (kind: YoutubePromptKind) => {
+    const handleCopy = React.useCallback(async () => {
         if (!shortVideoId || copyingKind) {
             return;
         }
-        setCopyingKind(kind);
+        setCopyingKind(PROMPT_KIND);
         let result: { ok: boolean; message: string };
         try {
-            result = await copyYoutubePromptToClipboard(shortVideoId, kind);
+            result = await copyYoutubePromptToClipboard(shortVideoId, PROMPT_KIND);
         } catch {
             result = { ok: false, message: 'Không copy được prompt' };
         }
         setCopyingKind('');
         if (result.ok) {
-            setCopiedKind(kind);
+            setCopiedKind(PROMPT_KIND);
             if (copiedTimerRef.current) {
                 clearTimeout(copiedTimerRef.current);
             }
@@ -474,7 +453,7 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
         state.showMessage(result.message, result.ok ? 'success' : 'error');
     }, [shortVideoId, copyingKind, state]);
 
-    const handleSave = React.useCallback(async (kind: YoutubePromptKind, overrideValue?: string) => {
+    const handleSave = React.useCallback(async (overrideValue?: string) => {
         if (savingKind) {
             return;
         }
@@ -482,9 +461,9 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
             state.showMessage('Thiếu short video — không lưu được kết quả', 'warning');
             return;
         }
-        const value = overrideValue !== undefined ? overrideValue : (values[kind] || '');
-        setSavingKind(kind);
-        const res = await saveWorkflowOutput(shortVideoId, YOUTUBE_WORKFLOW_KEY, kind, value);
+        const next = overrideValue !== undefined ? overrideValue : value;
+        setSavingKind(PROMPT_KIND);
+        const res = await saveWorkflowOutput(shortVideoId, YOUTUBE_WORKFLOW_KEY, PROMPT_KIND, next);
         setSavingKind('');
         if (!res.ok) {
             state.showMessage(res.message || 'Không lưu được kết quả', 'error');
@@ -497,18 +476,18 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
                 ...prev,
                 [YOUTUBE_WORKFLOW_KEY]: {
                     ...(prev[YOUTUBE_WORKFLOW_KEY] || {}),
-                    [kind]: value,
+                    [PROMPT_KIND]: next,
                 },
             }));
         }
-        state.showMessage(kind === 'title' ? 'Đã lưu & phân tích tiêu đề' : 'Đã lưu ảnh thu nhỏ', 'success');
-    }, [savingKind, shortVideoId, values, state]);
+        state.showMessage('Đã lưu & phân tích nội dung YouTube', 'success');
+    }, [savingKind, shortVideoId, value, state]);
 
     /**
      * Đọc nội dung dài từ clipboard rồi lưu luôn — không cần mở ô phản hồi
      * (phản hồi chatbot rất dài, mở ra phải scroll xa mới thấy kết quả phân tích).
      */
-    const handlePasteAndSave = React.useCallback(async (kind: YoutubePromptKind) => {
+    const handlePasteAndSave = React.useCallback(async () => {
         if (pastingKind || savingKind) {
             return;
         }
@@ -521,7 +500,7 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
             return;
         }
 
-        setPastingKind(kind);
+        setPastingKind(PROMPT_KIND);
         let text = '';
         try {
             text = (await navigator.clipboard.readText()) || '';
@@ -538,28 +517,23 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
         }
 
         // Chặn lưu khi clipboard không đúng cấu trúc phản hồi (tránh user copy nhầm).
-        const isValid = kind === 'title'
-            ? isYoutubeTitleResponse(text)
-            : isYoutubeThumbnailResponse(text);
-        if (!isValid) {
+        if (!isYoutubeContentResponse(text)) {
             state.showMessage(
-                kind === 'title'
-                    ? 'Clipboard không đúng cấu trúc phản hồi tiêu đề (cần JSON/markdown có danh sách tiêu đề) — kiểm tra lại đã copy đúng kết quả chatbot chưa.'
-                    : 'Clipboard không đúng cấu trúc phản hồi ảnh thu nhỏ (cần JSON/markdown có danh sách concept) — kiểm tra lại đã copy đúng kết quả chatbot chưa.',
+                'Clipboard không đúng cấu trúc phản hồi nội dung YouTube (cần JSON/markdown có danh sách tiêu đề hoặc concept ảnh thu nhỏ) — kiểm tra lại đã copy đúng kết quả chatbot chưa.',
                 'warning',
             );
             return;
         }
 
-        setValues((prev) => ({ ...prev, [kind]: text }));
-        await handleSave(kind, text);
+        setValue(text);
+        await handleSave(text);
     }, [pastingKind, savingKind, shortVideoId, handleSave, state]);
 
     /**
-     * Đưa job DeepSeek sinh title/thumbnail vào hàng đợi rồi poll trạng thái tới khi xong.
-     * (DeepThink/Search có thể mất vài phút → không giữ HTTP request, worker chạy nền.)
+     * Đưa job DeepSeek sinh nội dung YouTube (gộp title + description + thumbnail) vào hàng đợi
+     * rồi poll trạng thái tới khi xong. (DeepThink/Search có thể mất vài phút → worker chạy nền.)
      */
-    const handleDeepseekGenerate = React.useCallback(async (kind: YoutubePromptKind) => {
+    const handleDeepseekGenerate = React.useCallback(async () => {
         if (deepseekKind || savingKind) {
             return;
         }
@@ -567,9 +541,9 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
             state.showMessage('Thiếu short video — không gọi được DeepSeek', 'warning');
             return;
         }
-        setDeepseekKind(kind);
+        setDeepseekKind(PROMPT_KIND);
         try {
-            const enq = await deepseekYoutubeGenerate(shortVideoId, kind);
+            const enq = await deepseekYoutubeGenerate(shortVideoId, PROMPT_KIND);
             if (!enq?.success) {
                 state.showMessage(
                     parseShortVideoPromptMessage(enq?.message) || enq?.error || 'Không đưa được yêu cầu DeepSeek vào hàng đợi',
@@ -594,7 +568,7 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
                 const st = await fetchDeepseekYoutubeStatus(shortVideoId).catch(() => null);
                 if (st?.status === 'done') {
                     const text = String(st.text || '');
-                    setValues((prev) => ({ ...prev, [kind]: text }));
+                    setValue(text);
                     if (st.outputs) {
                         setOutputs(st.outputs as WorkflowOutputsMap);
                     } else {
@@ -602,13 +576,13 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
                             ...prev,
                             [YOUTUBE_WORKFLOW_KEY]: {
                                 ...(prev[YOUTUBE_WORKFLOW_KEY] || {}),
-                                [kind]: text,
+                                [PROMPT_KIND]: text,
                             },
                         }));
                     }
                     state.showMessage(
                         parseShortVideoPromptMessage(st.message)
-                            || (kind === 'title' ? 'DeepSeek đã sinh & lưu tiêu đề' : 'DeepSeek đã sinh & lưu nội dung ảnh thu nhỏ'),
+                            || 'DeepSeek đã sinh & lưu nội dung YouTube',
                         'success',
                     );
                     setDeepseekKind('');
@@ -978,20 +952,19 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
         }
     }, [shortVideoId, syncingLatestRank, generatingRank, thumbnailChatUrls, state]);
 
-    const spec = PROMPT_SPECS[subTab];
-    const copying = copyingKind === spec.kind;
-    const copied = copiedKind === spec.kind;
-    const pasting = pastingKind === spec.kind;
-    const saving = savingKind === spec.kind;
-    const deepseeking = deepseekKind === spec.kind;
+    const copying = copyingKind === PROMPT_KIND;
+    const copied = copiedKind === PROMPT_KIND;
+    const pasting = pastingKind === PROMPT_KIND;
+    const saving = savingKind === PROMPT_KIND;
+    const deepseeking = deepseekKind === PROMPT_KIND;
     const pasteDisabled = !shortVideoId || Boolean(pastingKind) || Boolean(savingKind) || Boolean(deepseekKind);
-    const copyDisabled = !shortVideoId || !hasScript || Boolean(copyingKind);
-    const copyDisabledReason = !hasScript
-        ? 'Cần audio script trước'
-        : (subTab === 'thumbnail' && !selectedTitle
-            ? 'Chưa chọn tiêu đề — [TITLE] sẽ không được thay'
+    const copyDisabled = !shortVideoId || !hasVideoSource || Boolean(copyingKind);
+    const copyDisabledReason = !hasVideoSource
+        ? 'Cần audio gốc / audio script trước'
+        : (!hasStyleReference
+            ? 'Video chưa chọn phong cách hình ảnh — [STYLE_REFERENCE] sẽ không được thay'
             : '');
-    const hasParsedTitle = subTab === 'title' && (
+    const hasParsedTitle = (
         parsedTitle.items.length > 0
         || parsedTitle.audienceInsight.length > 0
         || parsedTitle.winner !== null
@@ -1003,7 +976,7 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
         || parsedTitle.seo.title !== null
         || parsedTitle.seo.description !== null
     );
-    const hasParsedThumbnail = subTab === 'thumbnail' && (
+    const hasParsedThumbnail = (
         parsedThumbnail.concepts.length > 0
         || parsedThumbnail.videoAnalysis.length > 0
         || parsedThumbnail.strategyTriggers.length > 0
@@ -1019,25 +992,9 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
                         YouTube
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                        Copy prompt generate title/thumbnail, gửi lên chatbot, rồi dán kết quả để lưu và phân tích — hoặc bấm “Mở DeepSeek” để tự động sinh và lưu.
+                        Prompt dùng tiêu đề gốc của video để sinh mô tả + chapter + tags + ảnh thu nhỏ. Copy prompt gửi lên chatbot rồi dán kết quả để lưu và phân tích — hoặc bấm “Mở DeepSeek” để tự động sinh và lưu.
                     </Typography>
                 </Box>
-
-                <ToggleButtonGroup
-                    exclusive
-                    fullWidth
-                    size="small"
-                    value={subTab}
-                    onChange={(_event, next: YoutubeSubTab | null) => {
-                        if (next) {
-                            setSubTab(next);
-                        }
-                    }}
-                    sx={{ '& .MuiToggleButton-root': { textTransform: 'none', py: 0.5 } }}
-                >
-                    <ToggleButton value="title">Tiêu đề</ToggleButton>
-                    <ToggleButton value="thumbnail">Ảnh thu nhỏ</ToggleButton>
-                </ToggleButtonGroup>
 
                 {!shortVideoId ? (
                     <Alert severity="info" sx={{ py: 0.5 }}>
@@ -1045,19 +1002,25 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
                     </Alert>
                 ) : null}
 
-                {shortVideoId && !hasScript ? (
+                {shortVideoId && !hasVideoSource ? (
                     <Alert severity="warning" sx={{ py: 0.5 }}>
-                        Chưa có audio script — [VIDEO_CONTENT] trong prompt sẽ không được thay. Hãy sinh/lưu script trước.
+                        Chưa có audio gốc / audio script — [VIDEO_CONTENT] trong prompt sẽ không được thay. Hãy sinh/lưu script trước.
                     </Alert>
                 ) : null}
 
-                {subTab === 'thumbnail' && shortVideoId && !selectedTitle ? (
+                {shortVideoId && videoTitle ? (
                     <Alert severity="info" sx={{ py: 0.5 }}>
-                        Chưa chọn tiêu đề — [TITLE] trong prompt sẽ không được thay. Chọn 1 tiêu đề ở tab Tiêu đề.
+                        Tiêu đề gốc dùng cho prompt ([TITLE]): <strong>{videoTitle}</strong>
                     </Alert>
                 ) : null}
 
-                {subTab === 'thumbnail' && shortVideoId && !hasStyleReference ? (
+                {shortVideoId && !videoTitle ? (
+                    <Alert severity="warning" sx={{ py: 0.5 }}>
+                        Video chưa có tiêu đề gốc — [TITLE] trong prompt sẽ không được thay. Đặt tiêu đề video trước.
+                    </Alert>
+                ) : null}
+
+                {shortVideoId && !hasStyleReference ? (
                     <Alert severity="info" sx={{ py: 0.5 }}>
                         Video chưa chọn phong cách hình ảnh — [STYLE_REFERENCE] trong prompt sẽ không được thay.
                         Chọn phong cách trong phần cài đặt hình ảnh của video.
@@ -1065,9 +1028,9 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
                 ) : null}
 
                 <WorkflowSection
-                    title={spec.title}
+                    title={PROMPT_SPEC.title}
                     tone="prompt"
-                    description={spec.description}
+                    description={PROMPT_SPEC.description}
                 >
                     <Stack spacing={1.5}>
                         <Stack
@@ -1090,10 +1053,10 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
                                                     ? <CheckIcon fontSize="small" />
                                                     : <ContentCopyIcon fontSize="small" />
                                         }
-                                        onClick={() => { void handleCopy(spec.kind); }}
+                                        onClick={() => { void handleCopy(); }}
                                         sx={{ textTransform: 'none' }}
                                     >
-                                        {copied ? 'Đã copy' : spec.copyLabel}
+                                        {copied ? 'Đã copy' : PROMPT_SPEC.copyLabel}
                                     </Button>
                                 </span>
                             </Tooltip>
@@ -1108,10 +1071,10 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
                                         ? <CircularProgress size={12} color="inherit" />
                                         : <ContentPasteIcon fontSize="small" />
                                 }
-                                onClick={() => { void handlePasteAndSave(spec.kind); }}
+                                onClick={() => { void handlePasteAndSave(); }}
                                 sx={{ textTransform: 'none' }}
                             >
-                                {spec.pasteLabel}
+                                {PROMPT_SPEC.pasteLabel}
                             </Button>
 
                             <Tooltip
@@ -1130,7 +1093,7 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
                                         loading={deepseeking}
                                         disabled={copyDisabled || Boolean(deepseekKind) || Boolean(savingKind)}
                                         startIcon={<SmartToyOutlinedIcon fontSize="small" />}
-                                        onClick={() => { void handleDeepseekGenerate(spec.kind); }}
+                                        onClick={() => { void handleDeepseekGenerate(); }}
                                         sx={{ textTransform: 'none' }}
                                     >
                                         {deepseeking ? 'DeepSeek đang xử lý…' : 'Mở DeepSeek'}
@@ -1140,17 +1103,13 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
                         </Stack>
 
                         <CollapsibleResponseField
-                            key={spec.kind}
-                            label={spec.resultLabel}
-                            value={values[spec.kind]}
-                            placeholder={spec.placeholder}
-                            helperText={
-                                spec.kind === 'title'
-                                    ? 'Khi lưu, phản hồi sẽ được phân tích thành danh sách tiêu đề ngay bên dưới.'
-                                    : 'Khi lưu, phản hồi sẽ được phân tích thành danh sách concept ảnh thu nhỏ ngay bên dưới.'
-                            }
+                            key={PROMPT_KIND}
+                            label={PROMPT_SPEC.resultLabel}
+                            value={value}
+                            placeholder={PROMPT_SPEC.placeholder}
+                            helperText="Khi lưu, phản hồi sẽ được tách thành mô tả + chapter + tags + concept ảnh thu nhỏ ngay bên dưới."
                             onChange={(next) => {
-                                setValues((prev) => ({ ...prev, [spec.kind]: next }));
+                                setValue(next);
                             }}
                         />
 
@@ -1158,21 +1117,19 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
                             size="small"
                             variant="contained"
                             loading={saving}
-                            disabled={savingKind !== '' || !shortVideoId || !isDirty(spec.kind)}
-                            onClick={() => { void handleSave(spec.kind); }}
+                            disabled={savingKind !== '' || !shortVideoId || !isDirty}
+                            onClick={() => { void handleSave(); }}
                             sx={{ alignSelf: 'flex-start' }}
                         >
-                            {spec.saveLabel}
+                            {PROMPT_SPEC.saveLabel}
                         </LoadingButton>
 
-                        {spec.kind === 'thumbnail' ? (
-                            <ShortVideoAgentYoutubeThumbnailResourcePicker
-                                shortVideoId={shortVideoId}
-                                selectedIds={thumbnailResourceIds}
-                                onChange={(ids) => { void handleThumbnailResourcesChange(ids); }}
-                                disabled={savingKind !== ''}
-                            />
-                        ) : null}
+                        <ShortVideoAgentYoutubeThumbnailResourcePicker
+                            shortVideoId={shortVideoId}
+                            selectedIds={thumbnailResourceIds}
+                            onChange={(ids) => { void handleThumbnailResourcesChange(ids); }}
+                            disabled={savingKind !== ''}
+                        />
                     </Stack>
                 </WorkflowSection>
 
@@ -1180,9 +1137,9 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
                     <WorkflowSection
                         collapsible
                         defaultExpanded
-                        title={`Kết quả phân tích (${parsedTitle.items.length} tiêu đề)`}
+                        title="Kết quả phân tích (mô tả, chapter, tags, SEO)"
                         tone="neutral"
-                        description="Danh sách tiêu đề theo phản hồi chatbot — bấm Người thắng / Gợi ý đóng gói để xem chi tiết."
+                        description="Mô tả, chapter, comment ghim, tags và điểm SEO theo phản hồi chatbot (video dùng tiêu đề gốc, không sinh tiêu đề)."
                     >
                         {resolvingChapters ? (
                             <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>

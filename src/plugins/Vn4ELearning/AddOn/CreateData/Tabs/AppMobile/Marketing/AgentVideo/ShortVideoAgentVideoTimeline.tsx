@@ -78,6 +78,7 @@ import {
     type BeatQaStatus,
     type BeatVersion,
 } from './agentVideoBeatMap';
+import type { BeatUsage } from './ShortVideoAgentBeatAssetsInfoDialog';
 
 const TRACK_LABELS_WIDTH = 100;
 const TIMELINE_SCALE = 1;
@@ -683,14 +684,33 @@ export default function ShortVideoAgentVideoTimeline({
         [beatHtml],
     );
 
-    /** Toàn bộ beat kèm cờ "đang dùng video" — hiển thị ở panel tài nguyên beat. */
-    const beatUsage = React.useMemo(
-        () => (beatMap?.sections ?? []).map((section, index) => ({
+    // Beat-map dùng cho panel "Tài nguyên beat": video 2s lấy effectiveBeatMap (dựng từ marks)
+    // để vẫn hiện đủ beat kể cả khi beat_map chưa sync.
+    const assetsBeatMap = agentState?.effectiveBeatMap ?? beatMap;
+    const missingPromptIdSet = React.useMemo(
+        () => new Set(agentState?.missingBeatImagePromptIds ?? []),
+        [agentState?.missingBeatImagePromptIds],
+    );
+    const missingImageIdSet = React.useMemo(
+        () => new Set(agentState?.missingBeatImageIds ?? []),
+        [agentState?.missingBeatImageIds],
+    );
+    const pendingAudioIdSet = React.useMemo(
+        () => new Set(agentState?.pendingBeatAudioIds ?? []),
+        [agentState?.pendingBeatAudioIds],
+    );
+
+    /** Toàn bộ beat kèm cờ tài nguyên — hiển thị ở panel tài nguyên beat. */
+    const beatUsage = React.useMemo<BeatUsage[]>(
+        () => (assetsBeatMap?.sections ?? []).map((section, index) => ({
             id: section.id,
             label: `Beat ${index + 1}`,
             hasVideo: beatImageEntryUsesVideo(beatImage[section.id]),
+            hasImagePrompt: !missingPromptIdSet.has(section.id),
+            hasImage: !missingImageIdSet.has(section.id),
+            hasPendingAudio: pendingAudioIdSet.has(section.id),
         })),
-        [beatMap?.sections, beatImage],
+        [assetsBeatMap?.sections, beatImage, missingPromptIdSet, missingImageIdSet, pendingAudioIdSet],
     );
     const beatQaCounts = React.useMemo(() => {
         if (isWhiteboardMode) {
@@ -1859,24 +1879,27 @@ export default function ShortVideoAgentVideoTimeline({
                 <ShortVideoAgentBeatAssetsInfoDialog
                     open={beatAssetsInfoOpen}
                     onClose={() => setBeatAssetsInfoOpen(false)}
-                    totalBeats={beatMap?.sections?.length ?? 0}
+                    totalBeats={assetsBeatMap?.sections?.length ?? 0}
                     missingImagePromptCount={agentState.missingBeatImagePromptCount}
                     missingImageCount={agentState.missingBeatImageCount}
                     pendingAudioCount={agentState.pendingBeatAudioCount}
+                    missingImagePromptIds={agentState.missingBeatImagePromptIds}
+                    missingImageIds={agentState.missingBeatImageIds}
+                    pendingAudioIds={agentState.pendingBeatAudioIds}
                     imagePromptHaveCount={Math.max(
                         0,
-                        (beatMap?.sections?.length ?? 0) - agentState.missingBeatImagePromptCount,
+                        (assetsBeatMap?.sections?.length ?? 0) - agentState.missingBeatImagePromptCount,
                     )}
                     imageHaveCount={Math.max(
                         0,
-                        (beatMap?.sections?.length ?? 0) - agentState.missingBeatImageCount,
+                        (assetsBeatMap?.sections?.length ?? 0) - agentState.missingBeatImageCount,
                     )}
                     readyAudioCount={Number(agentState.beatAudio?.ready || 0)}
                     beats={beatUsage}
                     activeBeatId={activeBeatId}
                     onSelectBeat={(beatId) => {
                         onBeatClick?.(beatId);
-                        const section = beatMap?.sections.find((item) => item.id === beatId);
+                        const section = assetsBeatMap?.sections.find((item) => item.id === beatId);
                         if (section) {
                             agentState.handleSeekBeatPlayback(
                                 beatId,

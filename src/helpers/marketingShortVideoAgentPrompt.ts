@@ -85,7 +85,7 @@ export type ShortVideoPromptFetchResponse = {
     content?: string;
     content_file_name?: string;
     file?: string;
-    kind?: 'title' | 'thumbnail' | string;
+    kind?: 'content' | string;
     video_content?: string;
     selected_title?: string;
     style_reference?: string;
@@ -93,7 +93,8 @@ export type ShortVideoPromptFetchResponse = {
     message?: { content?: string } | string;
 };
 
-export type YoutubePromptKind = 'title' | 'thumbnail';
+/** Prompt gộp: 1 loại duy nhất sinh title + description + thumbnail cùng lúc. */
+export type YoutubePromptKind = 'content';
 
 export type YoutubeThumbnailImageResponse = ShortVideoPromptFetchResponse & {
     url?: string;
@@ -300,8 +301,9 @@ export async function fetchScriptPhoneticPrompt(
 }
 
 /**
- * Prompt generate title/thumbnail YouTube — BE thay các keyword:
- * [VIDEO_CONTENT] = audio script, [TITLE] = tiêu đề đã chọn, [STYLE_REFERENCE] = phong cách hình ảnh.
+ * Prompt generate content YouTube (gộp title + description + thumbnail) — BE thay các keyword:
+ * [VIDEO_CONTENT] = audio gốc (chưa chia beat), [STYLE_REFERENCE] = phong cách hình ảnh,
+ * [CHANNEL_INFO], [WHISPER_TRANSCRIPT], [REFERENCE_TITLES], [PAST_PERFORMANCE].
  */
 export async function fetchYoutubePrompt(
     shortVideoId: number,
@@ -330,8 +332,8 @@ export type DeepseekYoutubeStatusResponse = {
 };
 
 /**
- * ĐƯA vào hàng đợi job DeepSeek sinh title/thumbnail (BE dựng prompt + gửi headless). Trả về ngay.
- * Dùng kèm fetchDeepseekYoutubeStatus để poll kết quả (DeepThink/Search có thể mất vài phút).
+ * ĐƯA vào hàng đợi job DeepSeek sinh nội dung YouTube gộp (BE dựng prompt + gửi headless).
+ * Trả về ngay. Dùng kèm fetchDeepseekYoutubeStatus để poll kết quả (DeepThink/Search có thể mất vài phút).
  */
 export async function deepseekYoutubeGenerate(
     shortVideoId: number,
@@ -373,9 +375,7 @@ export async function copyYoutubePromptToClipboard(
 
     return {
         ok: true,
-        message: kind === 'title'
-            ? 'Đã copy prompt tạo tiêu đề (YouTube)'
-            : 'Đã copy prompt tạo ảnh thu nhỏ (YouTube)',
+        message: 'Đã copy prompt tạo nội dung YouTube (tiêu đề + mô tả + ảnh thu nhỏ)',
     };
 }
 

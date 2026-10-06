@@ -60,6 +60,7 @@ import {
     fetchDeepseekVideoImageSessionStatus,
     openDeepseekVideoImageSession,
 } from 'helpers/marketingDeepseekVideoImage';
+import { AGENT_AUDIO_SCRIPT_SAVED_EVENT } from 'helpers/marketingAgentAudioScriptGeminiWorkflow';
 import MarketingWorkflowBreakdown from './MarketingWorkflowBreakdown';
 import {
     parseWorkflowAssetRegister,
@@ -168,6 +169,8 @@ export default function MarketingWorkflowDrawer({
     );
     const copiedTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
     const outputsLoadedRef = React.useRef<number>(-1);
+    /** Chữ ký trạng thái phiên DeepSeek lần poll trước — để chỉ reload khi có dữ liệu mới. */
+    const lastDeepseekSyncRef = React.useRef('');
 
     React.useEffect(() => {
         if (!open) {
@@ -183,6 +186,7 @@ export default function MarketingWorkflowDrawer({
             setDeepseekStates({});
             setOutputs({});
             outputsLoadedRef.current = -1;
+            lastDeepseekSyncRef.current = '';
             return;
         }
 
@@ -193,7 +197,13 @@ export default function MarketingWorkflowDrawer({
         outputsLoadedRef.current = sid;
         // Đổi short video → xoá trạng thái phiên DeepSeek cũ trước khi nạp lại.
         setDeepseekStates({});
+        lastDeepseekSyncRef.current = '';
         fetchWorkflowOutputs(sid).then((map) => setOutputs(map || {}));
+        // Audio script có thể vừa được cập nhật ở bước trước (chia beat) → báo video nạp lại
+        // để breakdown hiện đủ phần ngay khi mở drawer, không cần refresh trang.
+        document.dispatchEvent(new CustomEvent(AGENT_AUDIO_SCRIPT_SAVED_EVENT, {
+            detail: { shortVideoId: sid },
+        }));
     }, [open, shortVideoId]);
 
     // Đổi tab workflow → reset trạng thái tạm của workflow trước (outputs giữ nguyên, đã load theo short video).
@@ -621,6 +631,39 @@ export default function MarketingWorkflowDrawer({
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open, workflow?.key, shortVideoId, refreshDeepseekSession]);
+
+    /**
+     * Đồng bộ REALTIME: khi user thao tác trên browser DeepSeek (lưu beat / dịch / audio gốc / URL chat),
+     * poll trạng thái phiên phát hiện dữ liệu mới → tự tải lại workflow outputs + báo video nạp lại
+     * audio script. Nhờ vậy "danh sách các phần" (breakdown) và nút Mở DeepSeek của từng phần hiện ra
+     * ngay, không cần refresh/tải lại video.
+     */
+    React.useEffect(() => {
+        if (!open || !workflow || !shortVideoId) {
+            return;
+        }
+        const signature = Object.entries(deepseekStates)
+            .map(([key, s]) => (
+                `${key}:${s.sessionAlive ? 1 : 0}:${s.hasOriginalAudio ? 1 : 0}:`
+                + `${s.beatCount}:${s.translationCount}:${s.chatUrl}`
+            ))
+            .join('|');
+        if (!signature || lastDeepseekSyncRef.current === signature) {
+            return;
+        }
+        const previous = lastDeepseekSyncRef.current;
+        lastDeepseekSyncRef.current = signature;
+        // Lần poll đầu tiên chỉ ghi nhận trạng thái hiện có (tránh reload thừa khi vừa mở drawer).
+        if (!previous) {
+            return;
+        }
+        void refreshWorkflowOutputs();
+        // Báo useAgentVideoContent nạp lại audio_script (breakdown cần audio script theo beat).
+        document.dispatchEvent(new CustomEvent(AGENT_AUDIO_SCRIPT_SAVED_EVENT, {
+            detail: { shortVideoId: Number(shortVideoId) },
+        }));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [open, workflow?.key, shortVideoId, deepseekStates]);
 
     /**
      * Bước có cấu hình deepseekSession trong index.md — mở browser DeepSeek (GUI) và tự dán

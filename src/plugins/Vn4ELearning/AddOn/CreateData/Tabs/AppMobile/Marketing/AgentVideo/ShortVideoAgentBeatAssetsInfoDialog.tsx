@@ -31,6 +31,12 @@ export type BeatUsage = {
     id: string;
     label: string;
     hasVideo: boolean;
+    /** Beat đã có image prompt hợp lệ. */
+    hasImagePrompt: boolean;
+    /** Beat đã có ảnh (object/background). */
+    hasImage: boolean;
+    /** Beat có audio item nhưng chưa ready. */
+    hasPendingAudio: boolean;
 };
 
 type Props = {
@@ -41,6 +47,10 @@ type Props = {
     missingImagePromptCount: number;
     missingImageCount: number;
     pendingAudioCount: number;
+    /** Danh sách beat id còn thiếu từng loại (nêu RÕ beat nào thiếu). */
+    missingImagePromptIds?: string[];
+    missingImageIds?: string[];
+    pendingAudioIds?: string[];
     /** Số beat đang CÓ tài nguyên (để confirm số lượng sẽ bị xóa). */
     imagePromptHaveCount: number;
     imageHaveCount: number;
@@ -62,6 +72,8 @@ type StatRow = {
     hint: string;
     /** Số beat còn thiếu tài nguyên. */
     missing: number;
+    /** Danh sách beat id còn thiếu (để nêu rõ beat nào). */
+    missingIds: string[];
     /** Số beat đang có tài nguyên (sẽ bị xóa nếu bấm). */
     have: number;
     deleteLabel: string;
@@ -84,6 +96,9 @@ export default function ShortVideoAgentBeatAssetsInfoDialog({
     missingImagePromptCount,
     missingImageCount,
     pendingAudioCount,
+    missingImagePromptIds = [],
+    missingImageIds = [],
+    pendingAudioIds = [],
     imagePromptHaveCount,
     imageHaveCount,
     readyAudioCount,
@@ -109,6 +124,7 @@ export default function ShortVideoAgentBeatAssetsInfoDialog({
             label: 'Image prompt',
             hint: 'Prompt ảnh để sinh hình cho beat',
             missing: missingImagePromptCount,
+            missingIds: missingImagePromptIds,
             have: imagePromptHaveCount,
             deleteLabel: 'Xóa hết',
             confirmKeep: 'Ảnh beat và URL chatbot được giữ nguyên.',
@@ -120,6 +136,7 @@ export default function ShortVideoAgentBeatAssetsInfoDialog({
             label: 'Hình của beat',
             hint: 'Ảnh đã tải/tạo cho beat',
             missing: missingImageCount,
+            missingIds: missingImageIds,
             have: imageHaveCount,
             deleteLabel: 'Xóa hết',
             confirmKeep: 'Image prompt và URL chatbot được giữ nguyên.',
@@ -131,6 +148,7 @@ export default function ShortVideoAgentBeatAssetsInfoDialog({
             label: 'Audio của beat',
             hint: 'Audio TTS/upload riêng cho beat',
             missing: pendingAudioCount,
+            missingIds: pendingAudioIds,
             have: readyAudioCount,
             deleteLabel: 'Xóa hết',
             confirmKeep: 'File MP3 ghép (merged) được giữ nguyên.',
@@ -142,6 +160,13 @@ export default function ShortVideoAgentBeatAssetsInfoDialog({
     const confirmRow = rows.find((row) => row.target === confirmTarget) || null;
     const totalMissing = rows.reduce((sum, row) => sum + row.missing, 0);
     const videoCount = beats.filter((beat) => beat.hasVideo).length;
+    const beatLabelById = React.useMemo(() => {
+        const map: Record<string, string> = {};
+        beats.forEach((beat) => {
+            map[beat.id] = beat.label;
+        });
+        return map;
+    }, [beats]);
 
     const handleConfirm = async () => {
         if (!confirmTarget) {
@@ -284,6 +309,43 @@ export default function ShortVideoAgentBeatAssetsInfoDialog({
                                                     Đang có {row.have}/{totalBeats}
                                                 </Typography>
                                             </Stack>
+                                            {row.missing > 0 && row.missingIds.length > 0 ? (
+                                                <Box sx={{ mt: 0.6, display: 'flex', flexWrap: 'wrap', gap: 0.4 }}>
+                                                    <Typography sx={{ fontSize: 10.5, color: 'text.secondary', alignSelf: 'center' }}>
+                                                        Thiếu:
+                                                    </Typography>
+                                                    {row.missingIds.slice(0, 12).map((missingId) => (
+                                                        <Chip
+                                                            key={missingId}
+                                                            size="small"
+                                                            label={beatLabelById[missingId] || missingId}
+                                                            onClick={() => {
+                                                                onSelectBeat(missingId);
+                                                                onClose();
+                                                            }}
+                                                            sx={{
+                                                                height: 20,
+                                                                fontSize: 10.5,
+                                                                cursor: 'pointer',
+                                                                bgcolor: alpha(theme.palette.warning.main, 0.16),
+                                                                color: 'warning.dark',
+                                                                border: 1,
+                                                                borderColor: alpha(theme.palette.warning.main, 0.45),
+                                                            }}
+                                                        />
+                                                    ))}
+                                                    {row.missingIds.length > 12 ? (
+                                                        <Typography sx={{ fontSize: 10.5, color: 'text.secondary', alignSelf: 'center' }}>
+                                                            +{row.missingIds.length - 12}
+                                                        </Typography>
+                                                    ) : null}
+                                                </Box>
+                                            ) : row.missing > 0 ? (
+                                                <Typography sx={{ fontSize: 10.5, color: 'warning.dark', mt: 0.5 }}>
+                                                    Thiếu {row.missing} beat nhưng chưa xác định được beat nào
+                                                    (thiếu beat-map) — hãy chia beat lại.
+                                                </Typography>
+                                            ) : null}
                                         </Box>
 
                                         <Tooltip

@@ -94,6 +94,8 @@ export function startDeepseekStep2Chunk(payload: {
     index: number;
     startOrder: number;
     prompt: string;
+    /** Số beat kỳ vọng của phần — BE validate output chatbot trả đúng số beat. */
+    beatCount?: number;
     cookieId?: number;
     deepThink?: boolean;
     search?: boolean;
@@ -107,6 +109,7 @@ export function startDeepseekStep2Chunk(payload: {
             id: payload.shortVideoId,
             index: payload.index,
             start_order: payload.startOrder,
+            beat_count: payload.beatCount ?? 0,
             prompt: payload.prompt,
             cookie_id: payload.cookieId ?? 0,
             deep_think: payload.deepThink ?? true,

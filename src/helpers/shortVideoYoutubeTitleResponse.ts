@@ -203,7 +203,7 @@ function parseWhyPoint(raw: string): YoutubeTitleWhyPoint {
 /* ────────────────────────── JSON parsing ────────────────────────── */
 
 /** Extract JSON object từ response — có thể bọc trong ```json fence``` hoặc text trước/sau. */
-function extractJsonObject(text: string): unknown | null {
+export function extractJsonObject(text: string): unknown | null {
     const raw = String(text || '').trim();
     if (!raw || !raw.includes('{')) {
         return null;
@@ -529,7 +529,19 @@ function normalizeJsonResult(data: unknown): YoutubeTitleParseResult | null {
     const items = normalizeJsonTitles(obj.titles ?? obj.items);
     const audienceInsight = normalizeJsonAudience(obj.audience_insight ?? obj.audienceInsight);
     const winner = normalizeJsonWinner(obj.winner);
-    const packaging = normalizeJsonPackaging(obj.packaging);
+    // Prompt gộp đặt `title_refinements` ở cấp gốc (không nằm trong `packaging` như prompt cũ).
+    const topRefinements = normalizeStringArray(obj.title_refinements ?? obj.titleRefinements);
+    let packaging = normalizeJsonPackaging(obj.packaging);
+    if (topRefinements.length > 0) {
+        packaging = packaging ?? {
+            concepts: [],
+            textOptions: [],
+            combinations: [],
+            refinements: [],
+            other: [],
+        };
+        packaging = { ...packaging, refinements: [...packaging.refinements, ...topRefinements] };
+    }
     const description = pickString(obj.description);
     const chapters = normalizeJsonChapters(obj.chapters);
     const firstComment = pickString(obj.first_comment ?? obj.firstComment);

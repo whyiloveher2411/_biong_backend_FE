@@ -405,14 +405,23 @@ export default function ShortVideoAgentHeadlessPreview({
         }
         return `Ảnh beat · ${beatPart}`;
     })();
-    const isImageFillStep = (
-        (pipelineRunning && currentStep === 'beat_image_fill')
-        || isActiveJobStatus(geminiImageFillStatus)
-    );
-    const isVibesFillStep = (
-        (pipelineRunning && currentStep === 'beat_video_animate')
-        || isActiveJobStatus(vibesFillStatus)
-    );
+    const imageJobActive = isActiveJobStatus(geminiImageFillStatus);
+    const vibesJobActive = isActiveJobStatus(vibesFillStatus);
+    // `beat_image_fill` đã xong chưa? `current_step` có thể bị đẩy sang `beat_video_animate`
+    // (pipeline tự chuyển bước) trong khi ảnh beat CHƯA xong → preview báo nhầm «Animate ảnh».
+    const imageFillStatus = String(pipeline?.steps?.beat_image_fill?.status || 'pending');
+    const imageFillDone = imageFillStatus === 'done' || imageFillStatus === 'skipped';
+    // Ưu tiên JOB ĐANG CHẠY THẬT + trạng thái bước: nếu ảnh beat chưa xong thì luôn hiện
+    // «Ảnh beat», kể cả khi current_step đang là beat_video_animate.
+    const imageFillPending = pipelineRunning && !imageFillDone && !vibesJobActive;
+    const isImageFillStep = imageJobActive
+        || (!vibesJobActive && pipelineRunning && currentStep === 'beat_image_fill')
+        || (imageFillPending && currentStep === 'beat_video_animate');
+    const isVibesFillStep = vibesJobActive
+        || (!imageJobActive
+            && imageFillDone
+            && pipelineRunning
+            && currentStep === 'beat_video_animate');
     const vibesFillProgressLabel = (() => {
         const current = Number(vibesFillProgress?.current || 0);
         const total = Number(vibesFillProgress?.total || 0);

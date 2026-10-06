@@ -23,6 +23,8 @@
  * Vẫn hỗ trợ fallback markdown cũ (Step1/Step2/Step3/Winner/Packaging Advice).
  */
 
+import { extractJsonObject } from './shortVideoYoutubeTitleResponse';
+
 export type YoutubeThumbnailPoint = {
     label: string;
     text: string;
@@ -188,8 +190,14 @@ function normalizeJsonConcepts(data: unknown): YoutubeThumbnailConcept[] | null 
     let list: unknown[] | null = null;
     if (Array.isArray(data)) {
         list = data;
-    } else if (data && typeof data === 'object' && Array.isArray((data as Record<string, ANY>).concepts)) {
-        list = (data as Record<string, unknown>).concepts as unknown[];
+    } else if (data && typeof data === 'object') {
+        const obj = data as Record<string, ANY>;
+        // Prompt gộp đặt `thumbnails` ở cấp gốc; prompt thumbnail cũ dùng `concepts`.
+        if (Array.isArray(obj.thumbnails)) {
+            list = obj.thumbnails as unknown[];
+        } else if (Array.isArray(obj.concepts)) {
+            list = obj.concepts as unknown[];
+        }
     }
     if (!list) {
         return null;
@@ -251,7 +259,17 @@ export function parseYoutubeThumbnailResponse(raw: string): YoutubeThumbnailPars
         return EMPTY_RESULT;
     }
 
-    // Response chuẩn mới = JSON array — ưu tiên parse JSON, fallback về markdown cũ.
+    // Prompt gộp = JSON object (có `thumbnails` ở cấp gốc); prompt thumbnail cũ = JSON array.
+    // Ưu tiên object để không nhặt nhầm array `titles`/`hashtags` trong cùng object.
+    const jsonObjectConcepts = normalizeJsonConcepts(extractJsonObject(text));
+    if (jsonObjectConcepts) {
+        return {
+            ...EMPTY_RESULT,
+            concepts: jsonObjectConcepts,
+        };
+    }
+
+    // Fallback: JSON array (prompt thumbnail cũ) rồi markdown cũ.
     const jsonConcepts = normalizeJsonConcepts(extractJsonArray(text));
     if (jsonConcepts) {
         return {

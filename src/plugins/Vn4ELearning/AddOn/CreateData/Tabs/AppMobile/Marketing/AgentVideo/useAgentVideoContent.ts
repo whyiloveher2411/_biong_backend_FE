@@ -226,6 +226,7 @@ import {
     countMissingBeatImagePrompt,
     listBeatsWithPendingAudio,
     listMissingBeatImageIds,
+    listMissingBeatImagePromptIds,
     isBeatImageMissing,
     listBeatIdsWithHtml,
     listMissingBeatIds,
@@ -9604,9 +9605,15 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     /** Số beat thiếu image prompt (section không có prompt hợp lệ). */
     const missingBeatImagePromptCount = React.useMemo(() => {
         if (isVideo2sMode) {
-            // Video 2s: prompt nằm ở marks (plain string), KHÔNG dùng section beat_map
-            // (BE bơm placeholder vào section khi beat chưa có prompt → dễ đếm sai).
-            // Marks là nguồn chuẩn: đếm trực tiếp theo order để con số luôn khớp.
+            // Video 2s: prompt nằm ở marks (plain string) — marks là NGUỒN CHUẨN.
+            // Trước đây đếm theo beat_map.sections nên khi beat_map chưa sync/mất → 0 sai
+            // (dù beat vẫn thiếu prompt). Đếm trực tiếp từ marks để luôn khớp BE.
+            if (manualBeatMarks.length > 0) {
+                return manualBeatMarks.filter(
+                    (mark) => String(mark.imagePrompt || '').trim() === '',
+                ).length;
+            }
+            // Chưa có marks: fallback theo beat_map (nếu có).
             const totalBeats = beatMap?.sections?.length ?? 0;
             if (totalBeats > 0) {
                 let missing = 0;
@@ -9630,6 +9637,44 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     /** Số beat có audio item nhưng chưa ready (chỉ tính beat đã từng tạo audio). */
     const pendingBeatAudioCount = React.useMemo(
         () => listBeatsWithPendingAudio(beatAudio?.items as Record<string, { status?: string }> | undefined).length,
+        [beatAudio],
+    );
+
+    /** Id beat thiếu prompt ảnh — panel "Tài nguyên beat" nêu rõ beat nào. */
+    const missingBeatImagePromptIds = React.useMemo(() => {
+        if (isVideo2sMode && manualBeatMarks.length > 0) {
+            const out: string[] = [];
+            manualBeatMarks.forEach((mark, index) => {
+                if (String(mark.imagePrompt || '').trim() === '') {
+                    out.push(`beat_${Number(mark.order || index + 1)}`);
+                }
+            });
+            return out;
+        }
+        return listMissingBeatImagePromptIds(
+            beatMap,
+            beatImage,
+            isVideo2sMode
+                ? (beatId: string) => resolveVideo2sPlainImagePrompt(manualBeatMarks, beatId)
+                : undefined,
+        );
+    }, [beatMap, beatImage, isVideo2sMode, manualBeatMarks]);
+
+    /** Id beat thiếu ảnh (dùng beat_map hiệu lực cho video 2s). */
+    const missingBeatImageIds = React.useMemo(
+        () => listMissingBeatImageIds(
+            isVideo2sMode && effectiveBeatMap ? effectiveBeatMap : beatMap,
+            beatImage,
+            beatBackgroundImageUrls,
+        ),
+        [beatMap, beatImage, beatBackgroundImageUrls, isVideo2sMode, effectiveBeatMap],
+    );
+
+    /** Id beat có audio item nhưng chưa ready. */
+    const pendingBeatAudioIds = React.useMemo(
+        () => listBeatsWithPendingAudio(
+            beatAudio?.items as Record<string, { status?: string }> | undefined,
+        ),
         [beatAudio],
     );
 
@@ -10125,6 +10170,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         bulkDeletingBeatAsset,
         handleBulkDeleteBeatAssets,
         missingBeatImagePromptCount,
+        missingBeatImagePromptIds,
+        missingBeatImageIds,
+        pendingBeatAudioIds,
         pendingBeatAudioCount,
         openingBeatGeminiBeatIds,
         openingBeatGeminiHeadlessBeatIds,

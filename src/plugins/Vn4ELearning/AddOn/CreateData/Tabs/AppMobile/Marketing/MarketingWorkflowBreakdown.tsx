@@ -369,6 +369,7 @@ export default function MarketingWorkflowBreakdown({
             shortVideoId: sid,
             index,
             startOrder: chunk.beatStart,
+            beatCount: chunk.beatCount,
             prompt: prompt.text,
         });
         if (!res?.success) {
