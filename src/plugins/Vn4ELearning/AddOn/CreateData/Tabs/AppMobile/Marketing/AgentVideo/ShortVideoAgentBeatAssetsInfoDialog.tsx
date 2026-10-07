@@ -37,6 +37,8 @@ export type BeatUsage = {
     hasImage: boolean;
     /** Beat có audio item nhưng chưa ready. */
     hasPendingAudio: boolean;
+    /** Beat có hiệu ứng chuyển cảnh ở cuối beat. */
+    hasTransition?: boolean;
 };
 
 type Props = {
@@ -390,7 +392,33 @@ export default function ShortVideoAgentBeatAssetsInfoDialog({
                                         <Chip
                                             key={beat.id}
                                             size="small"
-                                            label={beat.label}
+                                            label={(
+                                                <Box
+                                                    component="span"
+                                                    sx={{
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: 0.5,
+                                                        minWidth: 0,
+                                                    }}
+                                                >
+                                                    <Box component="span">{beat.label}</Box>
+                                                    {beat.hasTransition ? (
+                                                        <Box
+                                                            component="span"
+                                                            title="Có hiệu ứng chuyển cảnh"
+                                                            sx={{
+                                                                width: 6,
+                                                                height: 6,
+                                                                borderRadius: '50%',
+                                                                bgcolor: 'success.main',
+                                                                boxShadow: `0 0 0 1px ${alpha(theme.palette.success.main, 0.45)}`,
+                                                                flexShrink: 0,
+                                                            }}
+                                                        />
+                                                    ) : null}
+                                                </Box>
+                                            )}
                                             onClick={() => {
                                                 onSelectBeat(beat.id);
                                                 onClose();

@@ -89,6 +89,52 @@ export function resolveAgentVideoBeatTransitionDurationSec(input: {
     return clampTransitionDurationSec(fallback);
 }
 
+/** Tham số plan chuyển cảnh ngẫu nhiên — mirror PHP marketing_image_to_whiteboard_plan_random_transitions. */
+const RANDOM_TRANSITION_MIN_SCENE_SEC = 2.0;
+const RANDOM_TRANSITION_MIN_GAP = 2;
+
+/**
+ * Map beatId → beat có hiệu ứng chuyển cảnh ở CUỐI beat không.
+ * Mirror PHP marketing_image_to_whiteboard_plan_random_transitions:
+ *  - transition 'none' → không beat nào.
+ *  - transition 'random' → plan ngẫu nhiên: chỉ slot mà CẢ 2 beat kề đều > 2s và
+ *    cách transition trước >= 2 slot (các slot còn lại cắt thẳng).
+ *  - transition cụ thể (hoặc rỗng) → mọi beat trừ beat cuối.
+ */
+export function resolveAgentVideoBeatTransitionFlags(input: {
+    sections: { id: string; durationSec: number }[];
+    config?: AgentWhiteboardConfig | null;
+}): Record<string, boolean> {
+    const flags: Record<string, boolean> = {};
+    const sections = input.sections || [];
+    if (sections.length <= 1) {
+        return flags;
+    }
+    const clipTx = String(input.config?.transition || '').trim();
+    if (clipTx === 'none') {
+        return flags;
+    }
+    if (clipTx === 'random') {
+        let lastTxSlot = -RANDOM_TRANSITION_MIN_GAP;
+        for (let i = 0; i < sections.length - 1; i += 1) {
+            const prevSec = Number(sections[i]?.durationSec) || 0;
+            const nextSec = Number(sections[i + 1]?.durationSec) || 0;
+            const eligible = prevSec > RANDOM_TRANSITION_MIN_SCENE_SEC
+                && nextSec > RANDOM_TRANSITION_MIN_SCENE_SEC
+                && (i - lastTxSlot) >= RANDOM_TRANSITION_MIN_GAP;
+            if (eligible) {
+                flags[sections[i].id] = true;
+                lastTxSlot = i;
+            }
+        }
+        return flags;
+    }
+    for (let i = 0; i < sections.length - 1; i += 1) {
+        flags[sections[i].id] = true;
+    }
+    return flags;
+}
+
 export function buildAgentVideoTimelineRows(
     durationSec: number,
 ): TimelineRow[] {

@@ -26,6 +26,7 @@ import {
     AGENT_VIDEO_TIMELINE_EFFECTS,
     AGENT_VIDEO_TRACK_ROW_HEIGHT,
     buildAgentVideoTimelineRows,
+    resolveAgentVideoBeatTransitionFlags,
     resolveAgentVideoDurationSec,
     timeSecToTimelineLeftPx,
 } from './agentVideoTimelineModel';
@@ -700,6 +701,24 @@ export default function ShortVideoAgentVideoTimeline({
         [agentState?.pendingBeatAudioIds],
     );
 
+    /** beatId → beat có hiệu ứng chuyển cảnh ở cuối beat (chỉ mode whiteboard). */
+    const beatTransitionFlags = React.useMemo<Record<string, boolean>>(
+        () => (isWhiteboardMode
+            ? resolveAgentVideoBeatTransitionFlags({
+                sections: (assetsBeatMap?.sections ?? []).map((section) => ({
+                    id: section.id,
+                    durationSec: section.durationSec,
+                })),
+                config: agentState?.agentWhiteboardConfig ?? null,
+            })
+            : {}),
+        [
+            assetsBeatMap?.sections,
+            isWhiteboardMode,
+            agentState?.agentWhiteboardConfig,
+        ],
+    );
+
     /** Toàn bộ beat kèm cờ tài nguyên — hiển thị ở panel tài nguyên beat. */
     const beatUsage = React.useMemo<BeatUsage[]>(
         () => (assetsBeatMap?.sections ?? []).map((section, index) => ({
@@ -709,8 +728,16 @@ export default function ShortVideoAgentVideoTimeline({
             hasImagePrompt: !missingPromptIdSet.has(section.id),
             hasImage: !missingImageIdSet.has(section.id),
             hasPendingAudio: pendingAudioIdSet.has(section.id),
+            hasTransition: Boolean(beatTransitionFlags[section.id]),
         })),
-        [assetsBeatMap?.sections, beatImage, missingPromptIdSet, missingImageIdSet, pendingAudioIdSet],
+        [
+            assetsBeatMap?.sections,
+            beatImage,
+            missingPromptIdSet,
+            missingImageIdSet,
+            pendingAudioIdSet,
+            beatTransitionFlags,
+        ],
     );
     const beatQaCounts = React.useMemo(() => {
         if (isWhiteboardMode) {
@@ -1815,6 +1842,7 @@ export default function ShortVideoAgentVideoTimeline({
                                 beatMap={beatMap}
                                 beatHtml={beatHtml}
                                 beatImage={beatImage}
+                                beatHasTransition={beatTransitionFlags}
                                 isWhiteboardMode={isWhiteboardMode}
                                 activeBeatId={activeBeatId}
                                 copyingBeatHtmlPromptBeatId={copyingBeatHtmlPromptBeatId}

@@ -10,6 +10,7 @@ import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import CheckBoxIcon from '@mui/icons-material/CheckBox';
 import CheckBoxOutlineBlankIcon from '@mui/icons-material/CheckBoxOutlineBlank';
+import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import AddIcon from '@mui/icons-material/Add';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import VideocamOutlinedIcon from '@mui/icons-material/VideocamOutlined';
@@ -48,6 +49,8 @@ type Props = {
     beatMap: BeatMap | null;
     beatHtml: Record<string, BeatHtmlEntry>;
     beatImage?: Record<string, BeatImageEntry>;
+    /** beatId → beat có hiệu ứng chuyển cảnh ở cuối beat (hiện icon đỏ). */
+    beatHasTransition?: Record<string, boolean>;
     /** Beat override (image_layers/regions/…) — nhận diện đúng trạng thái có ảnh của beat. */
     agentWhiteboardBeatOverrides?: Record<string, { image_layers?: unknown } | null>;
     isWhiteboardMode?: boolean;
@@ -110,6 +113,7 @@ export default function AgentVideoBeatBoundaryOverlay({
     beatMap,
     beatHtml,
     beatImage = {},
+    beatHasTransition = {},
     agentWhiteboardBeatOverrides = {},
     isWhiteboardMode = false,
     activeBeatId,
@@ -666,6 +670,23 @@ export default function AgentVideoBeatBoundaryOverlay({
                                         )}
                                     </IconButton>
                                 </span>
+                                {beatHasTransition[segment.beatId] ? (
+                                    <Box
+                                        component="span"
+                                        sx={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            ml: 0.25,
+                                            flexShrink: 0,
+                                            lineHeight: 0,
+                                            color: '#ef4444',
+                                            filter: 'drop-shadow(0 0 2px rgba(0,0,0,0.45))',
+                                        }}
+                                    >
+                                        <SwapHorizIcon sx={{ fontSize: 17 }} />
+                                    </Box>
+                                ) : null}
                                 <IconButton
                                     size="small"
                                     disabled={isBusy && !isMenuOpen}
