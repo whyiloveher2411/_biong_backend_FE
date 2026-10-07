@@ -4,8 +4,10 @@ import CookieOutlinedIcon from '@mui/icons-material/CookieOutlined';
 import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 import RecordVoiceOverOutlinedIcon from '@mui/icons-material/RecordVoiceOverOutlined';
 import MovieFilterOutlinedIcon from '@mui/icons-material/MovieFilterOutlined';
+import ShuffleOutlinedIcon from '@mui/icons-material/ShuffleOutlined';
 import DrawerCustom from 'components/molecules/DrawerCustom';
 import { ShortVideoCookieManageContent } from '../ShortVideoCookieManageDrawer';
+import { WhiteboardRandomTransitionContent } from '../WhiteboardRandomTransitionContent';
 import { QwenAccountsContent } from './QwenAccountsDrawer';
 import { SaydiAccountsContent } from './SaydiAccountsDrawer';
 import { BeatVideoPlatformsContent } from './BeatVideoPlatformsDrawer';
@@ -84,6 +86,12 @@ const ACCOUNT_TABS: AccountTab[] = [
         label: 'Saydi',
         icon: <RecordVoiceOverOutlinedIcon fontSize="small" />,
         render: ({ active }) => <SaydiAccountsContent active={active} />,
+    },
+    {
+        key: 'random_transition',
+        label: 'Hiệu ứng ngẫu nhiên',
+        icon: <ShuffleOutlinedIcon fontSize="small" />,
+        render: ({ active }) => <WhiteboardRandomTransitionContent active={active} />,
     },
 ];
 

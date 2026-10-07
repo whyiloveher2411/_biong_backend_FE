@@ -24,6 +24,7 @@ import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import GraphicEqOutlinedIcon from '@mui/icons-material/GraphicEqOutlined';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
+import DoneAllOutlinedIcon from '@mui/icons-material/DoneAllOutlined';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import StopOutlinedIcon from '@mui/icons-material/StopOutlined';
 import UploadFileOutlinedIcon from '@mui/icons-material/UploadFileOutlined';
@@ -32,6 +33,7 @@ import { AgentOptionToggleGroup } from './AgentOptionToggleGroup';
 import { convertToURL, validURL } from 'helpers/url';
 import {
     DEFAULT_WHITEBOARD_TRANSITIONS,
+    applyWhiteboardTransitionToAllVideos,
     fetchWhiteboardTransitions,
     type AgentVisualMode,
     type WhiteboardTransitionOption,
@@ -350,6 +352,12 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
     const transitionSfxPlayingRef = React.useRef<string | null>(null);
     const [transitionSfxPlaying, setTransitionSfxPlaying] = React.useState(false);
 
+    // Áp hiệu ứng chuyển cảnh hiện tại cho TẤT CẢ video.
+    const [applyingAllTransition, setApplyingAllTransition] = React.useState(false);
+    const [applyAllTransitionNotice, setApplyAllTransitionNotice] = React.useState<
+        { type: 'success' | 'error' | 'info'; text: string } | null
+    >(null);
+
     const toggleTransitionSfxPreview = React.useCallback((t: WhiteboardTransitionOption | undefined) => {
         if (!t?.sfx_url) {
             return;
@@ -399,6 +407,45 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
             transitionSfxAudioRef.current = null;
         }
     }, []);
+
+    const handleApplyTransitionToAll = React.useCallback(async () => {
+        const target = String(whiteboardTransitionId || '').trim();
+        if (!target) {
+            return;
+        }
+        const label = whiteboardTransitions.find((t) => t.id === target)?.label || target;
+        const confirmed = window.confirm(
+            `Áp hiệu ứng "${label}" cho TẤT CẢ short video (không loại trừ video nào)?\n\nHành động này ghi đè hiệu ứng chuyển cảnh hiện tại của mọi video.`,
+        );
+        if (!confirmed) {
+            return;
+        }
+        setApplyingAllTransition(true);
+        setApplyAllTransitionNotice(null);
+        try {
+            const res = await applyWhiteboardTransitionToAllVideos(target);
+            const updated = Number(res?.updated ?? 0);
+            const total = Number(res?.total ?? 0);
+            const failures = Array.isArray(res?.errors) ? res.errors : [];
+            if (res?.success) {
+                setApplyAllTransitionNotice({
+                    type: 'success',
+                    text: `Đã cập nhật ${updated}/${total} video sang "${label}".`,
+                });
+            } else {
+                setApplyAllTransitionNotice({
+                    type: 'error',
+                    text: `Cập nhật ${updated}/${total} video.${
+                        failures.length > 0 ? ` Lỗi: ${failures.slice(0, 3).join('; ')}` : ''
+                    }`,
+                });
+            }
+        } catch {
+            setApplyAllTransitionNotice({ type: 'error', text: 'Cập nhật thất bại, vui lòng thử lại.' });
+        } finally {
+            setApplyingAllTransition(false);
+        }
+    }, [whiteboardTransitionId, whiteboardTransitions]);
 
     const whiteboardPhotoPlaceMode = React.useMemo(() => {
         const raw = String(state.agentWhiteboardConfig?.photo_place_mode || 'drag').trim().toLowerCase();
@@ -959,6 +1006,26 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                                             </IconButton>
                                         )}
                                     </Stack>
+                                    <Button
+                                        size="small"
+                                        variant="outlined"
+                                        color="warning"
+                                        startIcon={applyingAllTransition ? <CircularProgress size={14} /> : <DoneAllOutlinedIcon fontSize="small" />}
+                                        disabled={applyingAllTransition || !whiteboardTransitionId}
+                                        onClick={() => void handleApplyTransitionToAll()}
+                                        sx={{ mt: 0.75, textTransform: 'none' }}
+                                    >
+                                        Áp dụng cho tất cả video
+                                    </Button>
+                                    {applyAllTransitionNotice && (
+                                        <Alert
+                                            severity={applyAllTransitionNotice.type}
+                                            sx={{ mt: 0.75, py: 0.25 }}
+                                            onClose={() => setApplyAllTransitionNotice(null)}
+                                        >
+                                            {applyAllTransitionNotice.text}
+                                        </Alert>
+                                    )}
                                     <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.75, lineHeight: 1.35 }}>
                                         {whiteboardPhotoPlaceMode === 'instant'
                                             ? (

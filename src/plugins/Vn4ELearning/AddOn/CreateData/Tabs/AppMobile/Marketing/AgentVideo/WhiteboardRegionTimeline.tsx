@@ -18,7 +18,7 @@ import {
 } from '@mui/material';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import PauseIcon from '@mui/icons-material/Pause';
-import ReplayIcon from '@mui/icons-material/Replay';
+// import ReplayIcon from '@mui/icons-material/Replay';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import CallSplitIcon from '@mui/icons-material/CallSplit';
@@ -1326,14 +1326,15 @@ export default function WhiteboardRegionTimeline({
                                 </Tooltip>
                             ) : null}
                             <Tooltip title={playing ? 'Dừng' : 'Phát audio beat'}>
-                                <IconButton size="small" onClick={togglePlay} disabled={!audioUrl} sx={{ p: 0.4 }}>
+                                <IconButton size="small" onClick={togglePlay} disabled={!audioUrl} sx={{display: 'none', p: 0.4 }}>
                                     {playing ? <PauseIcon sx={{ fontSize: 18 }} /> : <PlayArrowIcon sx={{ fontSize: 18 }} />}
                                 </IconButton>
                             </Tooltip>
                             {timelineViewMode !== 'group' ? (
                                 <Tooltip title="Phát lại từ đầu beat">
                                     <IconButton size="small" onClick={replay} disabled={!audioUrl} sx={{ p: 0.4 }}>
-                                        <ReplayIcon sx={{ fontSize: 16 }} />
+                                        {playing ? <PauseIcon sx={{ fontSize: 18 }} /> : <PlayArrowIcon sx={{ fontSize: 18 }} />}
+                                        {/* <ReplayIcon sx={{ fontSize: 16 }} /> */}
                                     </IconButton>
                                 </Tooltip>
                             ) : null}

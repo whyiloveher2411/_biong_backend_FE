@@ -2178,6 +2178,10 @@ export type ActiveFullAutoPipelineItem = {
         at?: string;
     } | null;
     steps?: Record<string, FullAutoPipelineStep>;
+    /** Video đã kết thúc pipeline VÀ có file final.mp4 (dock hiển thị chấm xanh). */
+    has_final_video?: boolean;
+    /** Item không còn job active — trả về do FE yêu cầu (pinned) và đã có final. */
+    finished_only?: boolean;
 };
 
 /**
@@ -3200,6 +3204,21 @@ export async function fetchWhiteboardTransitions(): Promise<{
         transitions: DEFAULT_WHITEBOARD_TRANSITIONS,
         default_transition: 'page_flip',
     };
+}
+
+/**
+ * Áp hiệu ứng chuyển cảnh hiện tại cho TẤT CẢ short video (không loại trừ video nào).
+ * Chỉ đổi `agent_whiteboard_config.transition`, không đụng override khác.
+ */
+export async function applyWhiteboardTransitionToAllVideos(
+    transition: string,
+): Promise<JsonResponse & { transition?: string; total?: number; updated?: number; failed?: number; errors?: string[] }> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/apply-whiteboard-transition-all',
+        { transition: String(transition || '').trim() },
+    ) as Promise<
+        JsonResponse & { transition?: string; total?: number; updated?: number; failed?: number; errors?: string[] }
+    >;
 }
 
 export async function saveAgentWhiteboardConfig(
@@ -4780,14 +4799,78 @@ export async function cancelFullAutoPipeline(
 
 /**
  * Danh sách pipeline A→Z đang chạy trên toàn hệ thống — dùng cho dock toàn admin.
+ * `ids`: id video user ghim — backend trả thêm trạng thái (đã xong + có final.mp4
+ * hay chưa) cho các video này dù chúng không còn chạy pipeline.
  */
-export async function listActiveFullAutoPipelines(): Promise<
-    JsonResponse & { pipelines?: ActiveFullAutoPipelineItem[]; total?: number }
-> {
+export async function listActiveFullAutoPipelines(
+    ids?: number[],
+): Promise<JsonResponse & { pipelines?: ActiveFullAutoPipelineItem[]; total?: number }> {
+    const normalizedIds = Array.isArray(ids)
+        ? ids.map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0)
+        : [];
     return postJson(
         'plugin/vn4-e-learning/app-mobile/marketing/short-video/list-active-pipelines',
-        {},
+        normalizedIds.length > 0 ? { ids: normalizedIds } : {},
     ) as Promise<JsonResponse & { pipelines?: ActiveFullAutoPipelineItem[]; total?: number }>;
+}
+
+/** 1 hiệu ứng chuyển cảnh trong cài đặt chung "Hiệu ứng ngẫu nhiên". */
+export type RandomTransitionOption = {
+    id: string;
+    label: string;
+    /** Đã có video preview (uploads/whiteboard-preview/{id}.mp4) hay chưa. */
+    has_preview: boolean;
+    preview_url: string;
+};
+
+/**
+ * Đọc cài đặt chung "Hiệu ứng ngẫu nhiên": danh sách hiệu ứng + pool đang chọn +
+ * các hiệu ứng thiếu video preview (đã bị xoá / chưa render).
+ */
+export async function getRandomTransitionSettings(): Promise<
+    JsonResponse & {
+        transitions?: RandomTransitionOption[];
+        pool_ids?: string[];
+        all_ids?: string[];
+        missing_preview_ids?: string[];
+        missing_total?: number;
+    }
+> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/get-random-transition-settings',
+        {},
+    ) as Promise<
+        JsonResponse & {
+            transitions?: RandomTransitionOption[];
+            pool_ids?: string[];
+            all_ids?: string[];
+            missing_preview_ids?: string[];
+            missing_total?: number;
+        }
+    >;
+}
+
+/** Lưu pool hiệu ứng được phép xuất hiện khi transition = random (setting chung). */
+export async function saveRandomTransitionSettings(
+    ids: string[],
+): Promise<JsonResponse & { ids?: string[] }> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/save-random-transition-settings',
+        { ids: Array.isArray(ids) ? ids : [] },
+    ) as Promise<JsonResponse & { ids?: string[] }>;
+}
+
+/**
+ * Render video preview cho các hiệu ứng chuyển cảnh.
+ * force=false → chỉ render cái còn thiếu (đã bị xoá); force=true → render lại tất cả.
+ */
+export async function generateAllTransitionPreviews(
+    force = false,
+): Promise<JsonResponse & { generated?: string[]; cached?: string[]; errors?: string[] }> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/whiteboard/generate-all-transition-previews',
+        { force: force ? 1 : 0 },
+    ) as Promise<JsonResponse & { generated?: string[]; cached?: string[]; errors?: string[] }>;
 }
 
 export async function markBeatDivisionDone(

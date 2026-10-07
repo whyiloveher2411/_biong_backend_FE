@@ -1,7 +1,6 @@
 import React from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Box, CircularProgress, Paper, Tooltip, Typography } from '@mui/material';
-import AccountTreeOutlinedIcon from '@mui/icons-material/AccountTreeOutlined';
 import {
     openShortVideoAgentInSearchParams,
     parseShortVideoAgentIdFromSearch,
@@ -40,27 +39,34 @@ function isWorkerProcessing(item: ActiveFullAutoPipelineItem): boolean {
 }
 
 function statusDotColor(item: DockItem): string {
-    if (item.pinnedOnly) {
-        return '#90a4ae';
-    }
     if (isWorkerProcessing(item)) {
         return '#29b6f6';
     }
     if (String(item.status || '') === 'failed') {
         return '#ef5350';
     }
+    // Xanh: pipeline đã kết thúc và có video final.
+    if (item.has_final_video) {
+        return '#66bb6a';
+    }
+    if (item.pinnedOnly) {
+        return '#90a4ae';
+    }
     return '#ffb74d';
 }
 
 function itemStatusLabel(item: DockItem): string {
-    if (item.pinnedOnly) {
-        return 'Video ghim · không chạy pipeline';
-    }
     if (isWorkerProcessing(item)) {
         return `Đang chạy · ${stepLabel(item, item.current_step)}`;
     }
     if (String(item.status || '') === 'failed') {
         return `Lỗi · ${stepLabel(item, item.current_step)}`;
+    }
+    if (item.has_final_video) {
+        return 'Đã xong · có video final';
+    }
+    if (item.pinnedOnly) {
+        return 'Video ghim · không chạy pipeline';
     }
     return `Đang đợi · ${stepLabel(item, item.current_step)}`;
 }
@@ -150,9 +156,9 @@ function DockItemChip({ item, active, onView }: DockItemChipProps) {
 }
 
 /**
- * Dock "Pipeline short video" — 1 HÀNG item gọn: mỗi item là ID + trạng thái
- * (loading khi worker đang chạy, chấm màu khi đang đợi). Click item → mở đúng video.
- * Không có mở rộng/thu gọn.
+ * Dock "Pipeline short video" — 1 HÀNG item gọn: mỗi item là ID + chấm trạng thái
+ * (xám = không chạy pipeline, vàng = đang chạy, xanh = đã xong + có video final,
+ * xanh dương = worker đang chạy). Click item → mở đúng video. Không mở rộng/thu gọn.
  */
 export default function ShortVideoPipelineDock() {
     const navigate = useNavigate();
@@ -167,7 +173,10 @@ export default function ShortVideoPipelineDock() {
 
     const load = React.useCallback(async () => {
         try {
-            const res = await listActiveFullAutoPipelines();
+            // Gửi kèm id video ghim — backend trả thêm trạng thái "đã xong + có final"
+            // để dock tô chấm xanh dù video không còn chạy pipeline.
+            const pinnedIds = readQuickPreviewList().map((item) => item.id);
+            const res = await listActiveFullAutoPipelines(pinnedIds);
             const list = Array.isArray(res?.pipelines) ? res.pipelines : [];
             if (list.length > 0) {
                 emptyStreakRef.current = 0;
@@ -255,7 +264,6 @@ export default function ShortVideoPipelineDock() {
                     py: 0.5,
                 }}
             >
-                <AccountTreeOutlinedIcon sx={{ fontSize: 16, color: '#29b6f6', flex: '0 0 auto' }} />
                 <Box
                     sx={{
                         display: 'flex',

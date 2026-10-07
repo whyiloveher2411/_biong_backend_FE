@@ -7501,7 +7501,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             if (res.full_auto_pipeline) {
                 setFullAutoPipeline(res.full_auto_pipeline);
             }
-            showMessage(parseApiMessage(res?.message) || 'Đã dừng pipeline A→Z', 'success');
+            // showMessage(parseApiMessage(res?.message) || 'Đã dừng pipeline A→Z', 'success');
             await loadRow();
         } catch (e) {
             showMessage(e instanceof Error ? e.message : String(e), 'error');

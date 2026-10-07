@@ -666,76 +666,71 @@ export default function AgentVideoBeatBoundaryOverlay({
                                         )}
                                     </IconButton>
                                 </span>
-
-                                <Tooltip title="Thao tác beat" placement="top">
-                                    <IconButton
-                                        size="small"
-                                        disabled={isBusy && !isMenuOpen}
-                                        onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
-                                            event.stopPropagation();
-                                            onBeatClick?.(segment.beatId);
-                                            setMenuBeatId(segment.beatId);
-                                            setMenuAnchorEl(event.currentTarget);
-                                        }}
-                                        sx={{
-                                            position: 'absolute',
-                                            top: 1,
-                                            right: 1,
-                                            width: 22,
-                                            height: 22,
-                                            p: 0,
-                                            color: 'common.white',
-                                            bgcolor: isMenuOpen ? 'rgba(0,0,0,0.42)' : 'rgba(0,0,0,0.28)',
-                                            borderRadius: 0.75,
-                                            '&:hover': {
-                                                bgcolor: 'rgba(0,0,0,0.46)',
-                                            },
-                                            '&.Mui-disabled': {
-                                                color: 'rgba(255,255,255,0.55)',
-                                                bgcolor: 'rgba(0,0,0,0.18)',
-                                            },
-                                        }}
-                                    >
-                                        {isBusy && !isMenuOpen ? (
-                                            <CircularProgress size={12} sx={{ color: 'inherit' }} />
-                                        ) : (
-                                            <MoreVertIcon sx={{ fontSize: 16 }} />
-                                        )}
-                                    </IconButton>
-                                </Tooltip>
-                                <Tooltip title="Thông tin beat" placement="right">
-                                    <IconButton
-                                        size="small"
-                                        aria-label={`Thông tin ${segment.beatId}`}
-                                        onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
-                                            event.stopPropagation();
-                                            onBeatClick?.(segment.beatId);
-                                            onOpenInfo?.(segment.beatId);
-                                        }}
-                                        sx={{
-                                            position: 'absolute',
-                                            top: 25,
-                                            right: 1,
-                                            width: 22,
-                                            height: 22,
-                                            p: 0,
-                                            color: 'common.white',
-                                            bgcolor: 'rgba(0,0,0,0.22)',
-                                            border: '1px solid rgba(255,255,255,0.16)',
-                                            borderRadius: 0.75,
-                                            '&:hover': {
-                                                bgcolor: 'rgba(0,0,0,0.46)',
-                                                borderColor: 'rgba(255,255,255,0.38)',
-                                            },
-                                            '&:focus-visible': {
-                                                outline: '2px solid rgba(255,255,255,0.95)',
-                                                outlineOffset: -2,
-                                            },
-                                        }}
-                                    >
-                                        <InfoOutlinedIcon sx={{ fontSize: 15 }} />
-                                    </IconButton>
-                                </Tooltip>
+                                <IconButton
+                                    size="small"
+                                    disabled={isBusy && !isMenuOpen}
+                                    onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
+                                        event.stopPropagation();
+                                        onBeatClick?.(segment.beatId);
+                                        setMenuBeatId(segment.beatId);
+                                        setMenuAnchorEl(event.currentTarget);
+                                    }}
+                                    sx={{
+                                        position: 'absolute',
+                                        top: 1,
+                                        right: 1,
+                                        width: 22,
+                                        height: 22,
+                                        p: 0,
+                                        color: 'common.white',
+                                        bgcolor: isMenuOpen ? 'rgba(0,0,0,0.42)' : 'rgba(0,0,0,0.28)',
+                                        borderRadius: 0.75,
+                                        '&:hover': {
+                                            bgcolor: 'rgba(0,0,0,0.46)',
+                                        },
+                                        '&.Mui-disabled': {
+                                            color: 'rgba(255,255,255,0.55)',
+                                            bgcolor: 'rgba(0,0,0,0.18)',
+                                        },
+                                    }}
+                                >
+                                    {isBusy && !isMenuOpen ? (
+                                        <CircularProgress size={12} sx={{ color: 'inherit' }} />
+                                    ) : (
+                                        <MoreVertIcon sx={{ fontSize: 16 }} />
+                                    )}
+                                </IconButton>
+                                <IconButton
+                                    size="small"
+                                    aria-label={`Thông tin ${segment.beatId}`}
+                                    onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
+                                        event.stopPropagation();
+                                        onBeatClick?.(segment.beatId);
+                                        onOpenInfo?.(segment.beatId);
+                                    }}
+                                    sx={{
+                                        position: 'absolute',
+                                        top: 25,
+                                        right: 1,
+                                        width: 22,
+                                        height: 22,
+                                        p: 0,
+                                        color: 'common.white',
+                                        bgcolor: 'rgba(0,0,0,0.22)',
+                                        border: '1px solid rgba(255,255,255,0.16)',
+                                        borderRadius: 0.75,
+                                        '&:hover': {
+                                            bgcolor: 'rgba(0,0,0,0.46)',
+                                            borderColor: 'rgba(255,255,255,0.38)',
+                                        },
+                                        '&:focus-visible': {
+                                            outline: '2px solid rgba(255,255,255,0.95)',
+                                            outlineOffset: -2,
+                                        },
+                                    }}
+                                >
+                                    <InfoOutlinedIcon sx={{ fontSize: 15 }} />
+                                </IconButton>
                                 <Box
                                     sx={{
                                         position: 'absolute',
