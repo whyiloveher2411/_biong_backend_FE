@@ -7,6 +7,7 @@ import {
     CircularProgress,
     Divider,
     IconButton,
+    MenuItem,
     Stack,
     TextField,
     ToggleButton,
@@ -15,6 +16,7 @@ import {
     Typography,
 } from '@mui/material';
 import GraphicEqOutlinedIcon from '@mui/icons-material/GraphicEqOutlined';
+import MusicNoteOutlinedIcon from '@mui/icons-material/MusicNoteOutlined';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import DownloadIcon from '@mui/icons-material/Download';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -29,6 +31,8 @@ type Props = {
 
 type CommandMap = Record<string, string>;
 
+type SoundMode = 'sfx' | 'music';
+
 type StatusResponse = {
     success?: boolean;
     healthy?: boolean;
@@ -39,6 +43,15 @@ type StatusResponse = {
     prompt_suffix?: string;
     generation_params?: Record<string, number>;
     commands?: CommandMap;
+    modes?: string[];
+    sfx_model?: string;
+    music_model?: string;
+    music_default_duration?: number;
+    music_max_duration?: number;
+    defaults?: {
+        sfx?: { duration?: number; max_duration?: number };
+        music?: { duration?: number; max_duration?: number };
+    };
 };
 
 type GenerateResponse = {
@@ -46,12 +59,15 @@ type GenerateResponse = {
     message?: { content?: string } | string;
     file?: string;
     preview_url?: string;
+    download_url?: string;
     prompt?: string;
     final_prompt?: string;
+    mode?: SoundMode;
     single_event?: boolean;
     duration_sec?: number;
     seed?: number | null;
     engine?: string;
+    model?: string;
     started?: boolean;
     needs_install?: boolean;
     commands?: CommandMap;
@@ -67,10 +83,37 @@ function parseApiMessage(res: unknown): string {
     return 'Yêu cầu thất bại';
 }
 
-const DURATION_OPTIONS: Array<{ value: number; label: string }> = [
-    { value: 1.5, label: '1.5s' },
-    { value: 8, label: '8s' },
-];
+const DURATION_PRESETS: Record<SoundMode, Array<{ value: number; label: string }>> = {
+    sfx: [
+        { value: 1.5, label: '1.5s' },
+        { value: 8, label: '8s' },
+    ],
+    music: [
+        { value: 15, label: '15s' },
+        { value: 30, label: '30s' },
+        { value: 60, label: '60s' },
+    ],
+};
+
+const MODEL_OPTIONS: Record<SoundMode, Array<{ value: string; label: string }>> = {
+    sfx: [
+        { value: '', label: 'Mặc định (audiogen-medium)' },
+        { value: 'facebook/audiogen-medium', label: 'facebook/audiogen-medium' },
+    ],
+    music: [
+        { value: '', label: 'Mặc định (musicgen-large — tốt nhất)' },
+        { value: 'facebook/musicgen-large', label: 'musicgen-large (chất lượng cao)' },
+        { value: 'facebook/musicgen-medium', label: 'musicgen-medium (nhanh hơn)' },
+        { value: 'facebook/musicgen-small', label: 'musicgen-small (nhẹ nhất)' },
+    ],
+};
+
+function toNumber(value: string): number | undefined {
+    const trimmed = value.trim();
+    if (trimmed === '') return undefined;
+    const parsed = Number(trimmed);
+    return Number.isFinite(parsed) ? parsed : undefined;
+}
 
 function ServiceCommands({ commands }: { commands?: CommandMap }) {
     const { showMessage } = useFloatingMessages();
@@ -138,6 +181,7 @@ export default function MarketingSoundEffectDrawer({ open, onClose }: Props) {
     const apiAjaxRef = React.useRef(api.ajax);
     apiAjaxRef.current = api.ajax;
 
+    const [mode, setMode] = React.useState<SoundMode>('sfx');
     const [prompt, setPrompt] = React.useState('');
     const [generating, setGenerating] = React.useState(false);
     const [result, setResult] = React.useState<GenerateResponse | null>(null);
@@ -145,9 +189,24 @@ export default function MarketingSoundEffectDrawer({ open, onClose }: Props) {
     const [status, setStatus] = React.useState<StatusResponse | null>(null);
     const [statusLoading, setStatusLoading] = React.useState(false);
     const [commands, setCommands] = React.useState<CommandMap | undefined>(undefined);
-    const [duration, setDuration] = React.useState<number>(1.5);
+    const [durationInput, setDurationInput] = React.useState<string>('1.5');
     const [singleEvent, setSingleEvent] = React.useState<boolean>(true);
+    const [seedInput, setSeedInput] = React.useState<string>('');
+    const [temperatureInput, setTemperatureInput] = React.useState<string>('');
+    const [topKInput, setTopKInput] = React.useState<string>('');
+    const [topPInput, setTopPInput] = React.useState<string>('');
+    const [cfgCoefInput, setCfgCoefInput] = React.useState<string>('');
+    const [model, setModel] = React.useState<string>('');
     const defaultsAppliedRef = React.useRef(false);
+
+    const defaultDurationFor = React.useCallback((nextMode: SoundMode, res: StatusResponse | null): string => {
+        if (nextMode === 'music') {
+            const value = Number(res?.music_default_duration ?? res?.defaults?.music?.duration ?? 30);
+            return String(Number.isFinite(value) && value > 0 ? value : 30);
+        }
+        const value = Number(res?.defaults?.sfx?.duration ?? res?.default_duration ?? 1.5);
+        return String(Number.isFinite(value) && value > 0 ? value : 1.5);
+    }, []);
 
     const loadStatus = React.useCallback(() => {
         setStatusLoading(true);
@@ -161,8 +220,8 @@ export default function MarketingSoundEffectDrawer({ open, onClose }: Props) {
                 setStatus(res || null);
                 setCommands(res?.commands);
                 if (!defaultsAppliedRef.current) {
-                    const d = Number(res?.default_duration);
-                    setDuration(d === 8 ? 8 : 1.5);
+                    const d = defaultDurationFor('sfx', res || null);
+                    setDurationInput(d);
                     if (typeof res?.single_event === 'boolean') {
                         setSingleEvent(res.single_event);
                     }
@@ -174,28 +233,44 @@ export default function MarketingSoundEffectDrawer({ open, onClose }: Props) {
                 setStatus(null);
             },
         });
-    }, []);
+    }, [defaultDurationFor]);
 
     React.useEffect(() => {
         if (!open) {
+            setMode('sfx');
             setPrompt('');
             setGenerating(false);
             setResult(null);
             setError(null);
             setStatus(null);
             setCommands(undefined);
+            setDurationInput('1.5');
+            setSingleEvent(true);
+            setSeedInput('');
+            setTemperatureInput('');
+            setTopKInput('');
+            setTopPInput('');
+            setCfgCoefInput('');
+            setModel('');
             defaultsAppliedRef.current = false;
             return;
         }
         loadStatus();
     }, [open, loadStatus]);
 
+    const handleModeChange = (nextMode: SoundMode) => {
+        setMode(nextMode);
+        setResult(null);
+        setDurationInput(defaultDurationFor(nextMode, status));
+        setModel('');
+    };
+
     const canGenerate = prompt.trim() !== '' && !generating;
 
     const handleGenerate = () => {
         const trimmed = prompt.trim();
         if (trimmed === '') {
-            setError('Nhập mô tả sound effect trước khi generate');
+            setError(mode === 'music' ? 'Nhập mô tả nhạc nền trước khi generate' : 'Nhập mô tả sound effect trước khi generate');
             return;
         }
 
@@ -203,10 +278,32 @@ export default function MarketingSoundEffectDrawer({ open, onClose }: Props) {
         setError(null);
         setResult(null);
 
+        const data: Record<string, string | number> = {
+            mode,
+            prompt: trimmed,
+        };
+
+        const duration = toNumber(durationInput);
+        if (duration !== undefined) data.duration = duration;
+        const seed = toNumber(seedInput);
+        if (seed !== undefined) data.seed = Math.trunc(seed);
+        const temperature = toNumber(temperatureInput);
+        if (temperature !== undefined) data.temperature = temperature;
+        const topK = toNumber(topKInput);
+        if (topK !== undefined) data.top_k = Math.trunc(topK);
+        const topP = toNumber(topPInput);
+        if (topP !== undefined) data.top_p = topP;
+        const cfgCoef = toNumber(cfgCoefInput);
+        if (cfgCoef !== undefined) data.cfg_coef = cfgCoef;
+        if (model !== '') data.model = model;
+        if (mode === 'sfx') {
+            data.single_event = singleEvent ? 1 : 0;
+        }
+
         apiAjaxRef.current({
             url: 'plugin/vn4-e-learning/app-mobile/marketing/sound-effect/generate',
             method: 'POST',
-            data: { prompt: trimmed, duration, single_event: singleEvent },
+            data,
             loading: false,
             success: (res: GenerateResponse) => {
                 setGenerating(false);
@@ -247,12 +344,15 @@ export default function MarketingSoundEffectDrawer({ open, onClose }: Props) {
         return <Chip size="small" color="error" label="Chưa cài service" />;
     })();
 
+    const isMusic = mode === 'music';
+    const downloadUrl = result?.download_url || result?.preview_url;
+
     return (
         <DrawerCustom
             open={open}
             onClose={onClose}
-            title="Sound effect (AudioCraft)"
-            width={640}
+            title="Sound effect & nhạc nền (AudioCraft)"
+            width={680}
             restDialogContent={{
                 sx: {
                     pt: 2.5,
@@ -283,29 +383,68 @@ export default function MarketingSoundEffectDrawer({ open, onClose }: Props) {
                     </Button>
                 </Stack>
 
+                <Box>
+                    <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ fontWeight: 600, display: 'block', mb: 0.5 }}
+                    >
+                        Chế độ
+                    </Typography>
+                    <ToggleButtonGroup
+                        exclusive
+                        size="small"
+                        value={mode}
+                        onChange={(_event, next: SoundMode | null) => {
+                            if (next !== null) handleModeChange(next);
+                        }}
+                        disabled={generating}
+                    >
+                        <ToggleButton value="sfx" sx={{ textTransform: 'none', px: 2, gap: 0.75 }}>
+                            <GraphicEqOutlinedIcon fontSize="small" />
+                            Sound effect
+                        </ToggleButton>
+                        <ToggleButton value="music" sx={{ textTransform: 'none', px: 2, gap: 0.75 }}>
+                            <MusicNoteOutlinedIcon fontSize="small" />
+                            Nhạc nền
+                        </ToggleButton>
+                    </ToggleButtonGroup>
+                </Box>
+
                 <Alert severity="info">
-                    Sinh <b>sound effect</b> từ mô tả bằng model AudioGen (AudioCraft). Nhập mô tả
-                    bằng <b>tiếng Anh</b> để model hiểu tốt nhất, ví dụ:{' '}
-                    <i>&quot;heavy rain with thunder&quot;</i>,{' '}
-                    <i>&quot;footsteps on gravel&quot;</i>,{' '}
-                    <i>&quot;cinematic whoosh transition&quot;</i>.
-                    {singleEvent ? (
+                    {isMusic ? (
                         <>
-                            {' '}
-                            Chế độ <b>1 lần duy nhất</b> sẽ thêm &quot;
-                            {status?.prompt_suffix || 'single one-shot sound, happens only once, no repetition, no echo'}
-                            &quot; vào prompt.
+                            Sinh <b>nhạc nền</b> từ mô tả bằng model <b>MusicGen</b> (
+                            {status?.music_model || 'facebook/musicgen-large'}). Nhập mô tả bằng{' '}
+                            <b>tiếng Anh</b>, ví dụ: <i>&quot;upbeat corporate background music&quot;</i>,{' '}
+                            <i>&quot;calm lofi hip hop loop&quot;</i>,{' '}
+                            <i>&quot;cinematic emotional piano&quot;</i>.
                         </>
                     ) : (
-                        <> Chế độ <b>cho phép lặp lại</b> — model có thể sinh nhiều tiếng trong clip.</>
+                        <>
+                            Sinh <b>sound effect</b> từ mô tả bằng model <b>AudioGen</b>. Nhập mô tả bằng{' '}
+                            <b>tiếng Anh</b>, ví dụ: <i>&quot;heavy rain with thunder&quot;</i>,{' '}
+                            <i>&quot;footsteps on gravel&quot;</i>,{' '}
+                            <i>&quot;cinematic whoosh transition&quot;</i>.
+                            {singleEvent ? (
+                                <>
+                                    {' '}
+                                    Chế độ <b>1 lần duy nhất</b> sẽ thêm &quot;
+                                    {status?.prompt_suffix || 'single one-shot sound, happens only once, no repetition, no echo'}
+                                    &quot; vào prompt.
+                                </>
+                            ) : (
+                                <> Chế độ <b>cho phép lặp lại</b> — model có thể sinh nhiều tiếng trong clip.</>
+                            )}
+                        </>
                     )}
                 </Alert>
 
                 {status && status.healthy === false && (
                     <Alert severity={status.installed ? 'warning' : 'error'}>
                         {status.installed
-                            ? 'Service AudioCraft SFX chưa chạy. Bấm Generate sẽ tự khởi động; nếu không lên, chạy lệnh bên dưới.'
-                            : 'Service AudioCraft SFX chưa được cài đặt.'}
+                            ? 'Service AudioCraft chưa chạy. Bấm Generate sẽ tự khởi động; nếu không lên, chạy lệnh bên dưới.'
+                            : 'Service AudioCraft chưa được cài đặt.'}
                         <ServiceCommands commands={status.commands || commands} />
                     </Alert>
                 )}
@@ -316,8 +455,12 @@ export default function MarketingSoundEffectDrawer({ open, onClose }: Props) {
                     minRows={2}
                     maxRows={5}
                     size="small"
-                    label="Mô tả sound effect"
-                    placeholder="heavy rain with thunder and distant lightning"
+                    label={isMusic ? 'Mô tả nhạc nền' : 'Mô tả sound effect'}
+                    placeholder={
+                        isMusic
+                            ? 'upbeat corporate background music, positive, no vocals'
+                            : 'heavy rain with thunder and distant lightning'
+                    }
                     value={prompt}
                     onChange={(e) => setPrompt(e.target.value)}
                     disabled={generating}
@@ -326,7 +469,7 @@ export default function MarketingSoundEffectDrawer({ open, onClose }: Props) {
                             handleGenerate();
                         }
                     }}
-                    helperText={`Nhấn Ctrl/Cmd + Enter để generate${status?.default_duration ? ` · mặc định ${status.default_duration}s` : ''}`}
+                    helperText="Nhấn Ctrl/Cmd + Enter để generate"
                 />
 
                 <Stack
@@ -335,7 +478,7 @@ export default function MarketingSoundEffectDrawer({ open, onClose }: Props) {
                     useFlexGap
                     flexWrap="wrap"
                 >
-                    <Box>
+                    <Box sx={{ minWidth: 260 }}>
                         <Typography
                             variant="caption"
                             color="text.secondary"
@@ -343,53 +486,144 @@ export default function MarketingSoundEffectDrawer({ open, onClose }: Props) {
                         >
                             Thời lượng
                         </Typography>
-                        <ToggleButtonGroup
-                            exclusive
-                            size="small"
-                            value={duration}
-                            onChange={(_event, next: number | null) => {
-                                if (next !== null) setDuration(next);
-                            }}
-                            disabled={generating}
-                        >
-                            {DURATION_OPTIONS.map((opt) => (
-                                <ToggleButton
-                                    key={opt.value}
-                                    value={opt.value}
-                                    sx={{ textTransform: 'none', px: 1.5 }}
-                                >
-                                    {opt.label}
-                                </ToggleButton>
-                            ))}
-                        </ToggleButtonGroup>
+                        <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
+                            <ToggleButtonGroup
+                                exclusive
+                                size="small"
+                                value={toNumber(durationInput) ?? null}
+                                onChange={(_event, next: number | null) => {
+                                    if (next !== null) setDurationInput(String(next));
+                                }}
+                                disabled={generating}
+                            >
+                                {DURATION_PRESETS[mode].map((opt) => (
+                                    <ToggleButton
+                                        key={opt.value}
+                                        value={opt.value}
+                                        sx={{ textTransform: 'none', px: 1.5 }}
+                                    >
+                                        {opt.label}
+                                    </ToggleButton>
+                                ))}
+                            </ToggleButtonGroup>
+                            <TextField
+                                size="small"
+                                type="number"
+                                label="Giây"
+                                value={durationInput}
+                                onChange={(e) => setDurationInput(e.target.value)}
+                                disabled={generating}
+                                inputProps={{ min: 1, step: 0.5, style: { width: 72 } }}
+                            />
+                        </Stack>
                     </Box>
 
-                    <Box>
-                        <Typography
-                            variant="caption"
-                            color="text.secondary"
-                            sx={{ fontWeight: 600, display: 'block', mb: 0.5 }}
-                        >
-                            Lặp lại
-                        </Typography>
-                        <ToggleButtonGroup
-                            exclusive
-                            size="small"
-                            value={singleEvent ? 'single' : 'repeat'}
-                            onChange={(_event, next: string | null) => {
-                                if (next !== null) setSingleEvent(next === 'single');
-                            }}
-                            disabled={generating}
-                        >
-                            <ToggleButton value="single" sx={{ textTransform: 'none', px: 1.5 }}>
-                                1 lần duy nhất
-                            </ToggleButton>
-                            <ToggleButton value="repeat" sx={{ textTransform: 'none', px: 1.5 }}>
-                                Cho phép lặp lại
-                            </ToggleButton>
-                        </ToggleButtonGroup>
-                    </Box>
+                    {!isMusic && (
+                        <Box>
+                            <Typography
+                                variant="caption"
+                                color="text.secondary"
+                                sx={{ fontWeight: 600, display: 'block', mb: 0.5 }}
+                            >
+                                Lặp lại
+                            </Typography>
+                            <ToggleButtonGroup
+                                exclusive
+                                size="small"
+                                value={singleEvent ? 'single' : 'repeat'}
+                                onChange={(_event, next: string | null) => {
+                                    if (next !== null) setSingleEvent(next === 'single');
+                                }}
+                                disabled={generating}
+                            >
+                                <ToggleButton value="single" sx={{ textTransform: 'none', px: 1.5 }}>
+                                    1 lần duy nhất
+                                </ToggleButton>
+                                <ToggleButton value="repeat" sx={{ textTransform: 'none', px: 1.5 }}>
+                                    Cho phép lặp lại
+                                </ToggleButton>
+                            </ToggleButtonGroup>
+                        </Box>
+                    )}
+
+                    <TextField
+                        select
+                        size="small"
+                        label="Model"
+                        value={model}
+                        onChange={(e) => setModel(e.target.value)}
+                        disabled={generating}
+                        sx={{ minWidth: 260 }}
+                    >
+                        {MODEL_OPTIONS[mode].map((opt) => (
+                            <MenuItem key={opt.value || 'default'} value={opt.value}>
+                                {opt.label}
+                            </MenuItem>
+                        ))}
+                    </TextField>
                 </Stack>
+
+                <Box>
+                    <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ fontWeight: 600, display: 'block', mb: 0.5 }}
+                    >
+                        Tham số nâng cao (bỏ trống = mặc định model)
+                    </Typography>
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} useFlexGap flexWrap="wrap">
+                        <TextField
+                            size="small"
+                            label="Seed"
+                            placeholder="random"
+                            value={seedInput}
+                            onChange={(e) => setSeedInput(e.target.value)}
+                            disabled={generating}
+                            inputProps={{ inputMode: 'numeric' }}
+                            sx={{ width: 120 }}
+                        />
+                        <TextField
+                            size="small"
+                            label="Temperature"
+                            placeholder="1.0"
+                            value={temperatureInput}
+                            onChange={(e) => setTemperatureInput(e.target.value)}
+                            disabled={generating}
+                            inputProps={{ inputMode: 'decimal' }}
+                            sx={{ width: 130 }}
+                        />
+                        <TextField
+                            size="small"
+                            label="Top-k"
+                            placeholder="250"
+                            value={topKInput}
+                            onChange={(e) => setTopKInput(e.target.value)}
+                            disabled={generating}
+                            inputProps={{ inputMode: 'numeric' }}
+                            sx={{ width: 110 }}
+                        />
+                        <TextField
+                            size="small"
+                            label="Top-p"
+                            placeholder="0"
+                            value={topPInput}
+                            onChange={(e) => setTopPInput(e.target.value)}
+                            disabled={generating}
+                            inputProps={{ inputMode: 'decimal' }}
+                            sx={{ width: 110 }}
+                        />
+                        <TextField
+                            size="small"
+                            label="CFG coef"
+                            placeholder="3.0"
+                            value={cfgCoefInput}
+                            onChange={(e) => setCfgCoefInput(e.target.value)}
+                            disabled={generating}
+                            inputProps={{ inputMode: 'decimal' }}
+                            sx={{ width: 120 }}
+                        />
+                    </Stack>
+                </Box>
 
                 <Stack direction="row" justifyContent="flex-end">
                     <Button
@@ -398,6 +632,8 @@ export default function MarketingSoundEffectDrawer({ open, onClose }: Props) {
                         startIcon={
                             generating ? (
                                 <CircularProgress size={16} color="inherit" />
+                            ) : isMusic ? (
+                                <MusicNoteOutlinedIcon fontSize="small" />
                             ) : (
                                 <GraphicEqOutlinedIcon fontSize="small" />
                             )
@@ -412,8 +648,9 @@ export default function MarketingSoundEffectDrawer({ open, onClose }: Props) {
 
                 {generating && (
                     <Alert severity="info">
-                        Đang sinh sound effect. Lần đầu tiên có thể mất vài phút để tải model
-                        (~3GB) — đừng đóng tab.
+                        {isMusic
+                            ? 'Đang sinh nhạc nền. Lần đầu có thể mất vài phút để tải model MusicGen — đừng đóng tab.'
+                            : 'Đang sinh sound effect. Lần đầu tiên có thể mất vài phút để tải model (~3GB) — đừng đóng tab.'}
                     </Alert>
                 )}
 
@@ -442,7 +679,7 @@ export default function MarketingSoundEffectDrawer({ open, onClose }: Props) {
                                     variant="outlined"
                                     startIcon={<DownloadIcon fontSize="small" />}
                                     component="a"
-                                    href={`${result.preview_url}${result.preview_url.includes('?') ? '&' : '?'}download=1`}
+                                    href={downloadUrl ? `${downloadUrl}${downloadUrl.includes('?') ? '&' : '?'}download=1` : undefined}
                                     download
                                     sx={{ textTransform: 'none' }}
                                 >
@@ -459,6 +696,12 @@ export default function MarketingSoundEffectDrawer({ open, onClose }: Props) {
                             />
 
                             <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                                <Chip
+                                    size="small"
+                                    color={result.mode === 'music' ? 'secondary' : 'primary'}
+                                    variant="outlined"
+                                    label={result.mode === 'music' ? 'Nhạc nền' : 'Sound effect'}
+                                />
                                 {result.duration_sec ? (
                                     <Chip size="small" variant="outlined" label={`${result.duration_sec}s`} />
                                 ) : null}
@@ -467,6 +710,9 @@ export default function MarketingSoundEffectDrawer({ open, onClose }: Props) {
                                 ) : null}
                                 {result.engine ? (
                                     <Chip size="small" variant="outlined" label={result.engine} />
+                                ) : null}
+                                {result.model ? (
+                                    <Chip size="small" variant="outlined" label={result.model} />
                                 ) : null}
                                 {typeof result.seed === 'number' ? (
                                     <Chip size="small" variant="outlined" label={`seed ${result.seed}`} />

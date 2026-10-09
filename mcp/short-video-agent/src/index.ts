@@ -402,6 +402,51 @@ server.tool(
 );
 
 server.tool(
+  'short_video_generate_sound',
+  'Sinh âm thanh AI (AudioCraft) — 2 chế độ: mode="sfx" (AudioGen, mặc định) hoặc mode="bgm" (MusicGen nhạc nền). Trả file/file_path (WAV local) + download_url để tải về assets/audio/. Hỗ trợ đầy đủ tham số sampling.',
+  {
+    mode: z
+      .enum(['sfx', 'bgm'])
+      .optional()
+      .describe('sfx = sound effect (AudioGen, mặc định); bgm = background music (MusicGen)'),
+    prompt: z.string().min(1).describe('Mô tả âm thanh (tiếng Anh cho kết quả tốt nhất)'),
+    duration: z.number().positive().optional().describe('Giây — sfx mặc định 1.5; bgm mặc định 30'),
+    seed: z.number().int().optional().describe('Seed tái lập (bỏ trống = ngẫu nhiên)'),
+    top_k: z.number().int().positive().optional().describe('Sampling top-k (mặc định model ~250)'),
+    top_p: z.number().min(0).max(1).optional().describe('Sampling top-p (0 = tắt)'),
+    temperature: z.number().positive().optional().describe('Sampling temperature (mặc định ~1.0)'),
+    cfg_coef: z.number().positive().optional().describe('Classifier-free guidance (mặc định ~3.0)'),
+    single_event: z
+      .boolean()
+      .optional()
+      .describe('Chỉ mode sfx: true = 1 lần duy nhất, false = cho phép lặp lại'),
+    model: z
+      .string()
+      .optional()
+      .describe('Override model: facebook/audiogen-* (sfx) hoặc facebook/musicgen-* (bgm)'),
+  },
+  async (args) => {
+    const body: Record<string, string | number> = {
+      mode: args.mode ?? 'sfx',
+      prompt: args.prompt,
+    };
+    if (args.duration !== undefined) body.duration = args.duration;
+    if (args.seed !== undefined) body.seed = args.seed;
+    if (args.top_k !== undefined) body.top_k = args.top_k;
+    if (args.top_p !== undefined) body.top_p = args.top_p;
+    if (args.temperature !== undefined) body.temperature = args.temperature;
+    if (args.cfg_coef !== undefined) body.cfg_coef = args.cfg_coef;
+    if (args.single_event !== undefined) body.single_event = args.single_event ? 1 : 0;
+    if (args.model !== undefined && args.model.trim() !== '') body.model = args.model;
+
+    const result = await apiRequest('generate-sound', { body });
+    return {
+      content: [{ type: 'text', text: formatJson(result) }],
+    };
+  }
+);
+
+server.tool(
   'short_video_search_giphy',
   'Tìm GIF/sticker Giphy — accent visual (hook reaction, celebrate). Trả download_url — agent tải assets/images/.',
   {

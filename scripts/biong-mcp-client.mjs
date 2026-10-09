@@ -86,7 +86,7 @@ async function main() {
 
   if (!action) {
     console.error('Cách dùng: node biong-mcp-client.mjs <action> [arguments...]');
-    console.error('Các action: get-context, search-bgm, update-status, upload-video');
+    console.error('Các action: get-context, search-bgm, generate-sound, update-status, upload-video');
     process.exit(1);
   }
 
@@ -115,6 +115,22 @@ async function main() {
       const result = await apiRequest('search-bgm', {
         query: { query, limit }
       });
+      console.log(formatJson(result));
+    } 
+    else if (action === 'generate-sound') {
+      const modeArg = (args[1] || 'sfx').toLowerCase();
+      const mode = (modeArg === 'bgm' || modeArg === 'music') ? 'bgm' : 'sfx';
+      const prompt = args[2] || '';
+      if (!prompt) {
+        console.error('Thiếu prompt. Cách dùng: node biong-mcp-client.mjs generate-sound <sfx|bgm> "<prompt>" [duration]');
+        process.exit(1);
+      }
+      const body = { mode, prompt };
+      if (args[3] !== undefined && args[3] !== '' && !Number.isNaN(parseFloat(args[3]))) {
+        body.duration = parseFloat(args[3]);
+      }
+      console.log(`Đang sinh ${mode === 'bgm' ? 'nhạc nền (MusicGen)' : 'sound effect (AudioGen)'}: "${prompt}"...`);
+      const result = await apiRequest('generate-sound', { body });
       console.log(formatJson(result));
     } 
     else if (action === 'update-status') {
