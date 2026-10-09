@@ -397,6 +397,8 @@ type Props = {
     onBeatImageFillUploadPrevBeatsChange?: (checked: boolean) => void;
     beatAudioOnlyMissing?: boolean;
     onBeatAudioOnlyMissingChange?: (checked: boolean) => void;
+    sfxOnlyMissing?: boolean;
+    onSfxOnlyMissingChange?: (checked: boolean) => void;
     agentVisualMode?: string;
     startingFullAuto?: boolean;
     cancellingFullAuto?: boolean;
@@ -497,6 +499,8 @@ export default function ShortVideoAgentVideoTimeline({
     onBeatImageFillUploadPrevBeatsChange,
     beatAudioOnlyMissing = true,
     onBeatAudioOnlyMissingChange,
+    sfxOnlyMissing = true,
+    onSfxOnlyMissingChange,
     agentVisualMode = '',
     startingFullAuto = false,
     cancellingFullAuto = false,
@@ -729,6 +733,9 @@ export default function ShortVideoAgentVideoTimeline({
             hasImage: !missingImageIdSet.has(section.id),
             hasPendingAudio: pendingAudioIdSet.has(section.id),
             hasTransition: Boolean(beatTransitionFlags[section.id]),
+            hasSfx: Boolean(agentState?.sfxBeatIdSet?.has(section.id)),
+            sfxReady: Boolean(agentState?.sfxBeatReadySet?.has(section.id)),
+            sfxCount: agentState?.sfxBeatCountMap?.get(section.id) ?? 0,
         })),
         [
             assetsBeatMap?.sections,
@@ -737,6 +744,9 @@ export default function ShortVideoAgentVideoTimeline({
             missingImageIdSet,
             pendingAudioIdSet,
             beatTransitionFlags,
+            agentState?.sfxBeatIdSet,
+            agentState?.sfxBeatReadySet,
+            agentState?.sfxBeatCountMap,
         ],
     );
     const beatQaCounts = React.useMemo(() => {
@@ -1330,6 +1340,9 @@ export default function ShortVideoAgentVideoTimeline({
                                 }}
                                 beatAudioOnlyMissing={beatAudioOnlyMissing}
                                 beatAudioOnlyMissingDisabled={startingFullAuto}
+                                sfxOnlyMissing={sfxOnlyMissing}
+                                sfxOnlyMissingDisabled={startingFullAuto}
+                                onSfxOnlyMissingChange={onSfxOnlyMissingChange}
                                 onBeatAudioOnlyMissingChange={(checked) => {
                                     onBeatAudioOnlyMissingChange?.(checked);
                                 }}
@@ -1843,6 +1856,9 @@ export default function ShortVideoAgentVideoTimeline({
                                 beatHtml={beatHtml}
                                 beatImage={beatImage}
                                 beatHasTransition={beatTransitionFlags}
+                                beatHasSfx={agentState?.sfxBeatIdSet}
+                                beatSfxReady={agentState?.sfxBeatReadySet}
+                                beatSfxCount={agentState?.sfxBeatCountMap}
                                 isWhiteboardMode={isWhiteboardMode}
                                 activeBeatId={activeBeatId}
                                 copyingBeatHtmlPromptBeatId={copyingBeatHtmlPromptBeatId}

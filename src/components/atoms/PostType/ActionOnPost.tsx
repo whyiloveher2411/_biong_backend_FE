@@ -166,9 +166,37 @@ function ActionOnPost({
     const useAjaxAction = useAjax();
     const confirm = useConfirmDialog();
 
+    // Tab mở đồng bộ lúc click (tránh popup blocker) — điền URL sau khi API trả open_link.
+    const pendingOpenWindowRef = React.useRef<Window | null>(null);
+    const actionOpensTab = (item?: IActionPostType): boolean => Boolean(
+        item?.open_browser_tab || /preview-transition/i.test(String(item?.link_api || "")),
+    );
+
+    const closePendingOpenWindow = () => {
+        const w = pendingOpenWindowRef.current;
+        pendingOpenWindowRef.current = null;
+        if (w && !w.closed) {
+            try {
+                w.close();
+            } catch {
+                /* ignore */
+            }
+        }
+    };
+
     const openLinkFromResult = (result?: JsonFormat, item?: IActionPostType) => {
         const link = typeof result?.open_link === "string" ? result.open_link.trim() : "";
+        const placeholder = pendingOpenWindowRef.current;
+        pendingOpenWindowRef.current = null;
+
         if (!link) {
+            if (placeholder && !placeholder.closed) {
+                try {
+                    placeholder.close();
+                } catch {
+                    /* ignore */
+                }
+            }
             if (item?.open_browser_tab) {
                 window.alert(
                     result?.message ||
@@ -176,6 +204,16 @@ function ActionOnPost({
                 );
             }
             return;
+        }
+
+        // Ưu tiên điền vào tab đã mở đồng bộ (luôn mở được, không bị chặn).
+        if (placeholder && !placeholder.closed) {
+            try {
+                placeholder.location.href = link;
+                return;
+            } catch {
+                /* fallthrough */
+            }
         }
 
         openExternalTabViaExtension(link);
@@ -355,6 +393,29 @@ function ActionOnPost({
         };
 
         const runApi = () => {
+            // Mở tab trống ĐỒNG BỘ trong sự kiện click → tránh popup blocker khi API trả link sau (async).
+            if (actionOpensTab(item)) {
+                try {
+                    const w = window.open('', '_blank');
+                    if (w) {
+                        try {
+                            w.opener = null;
+                        } catch {
+                            /* ignore */
+                        }
+                        try {
+                            w.document.title = 'Đang tải video demo…';
+                            w.document.body.innerHTML = '<p style="font-family:sans-serif;padding:16px">Đang tải video demo…</p>';
+                        } catch {
+                            /* ignore */
+                        }
+                    }
+                    pendingOpenWindowRef.current = w;
+                } catch {
+                    pendingOpenWindowRef.current = null;
+                }
+            }
+
             setLoadingStateButton((prev) => ({
                 ...prev,
                 [index]: true,
@@ -391,6 +452,7 @@ function ActionOnPost({
                     }
                 },
                 error: () => {
+                    closePendingOpenWindow();
                     setLoadingStateButton((prev) => ({
                         ...prev,
                         [index]: false,

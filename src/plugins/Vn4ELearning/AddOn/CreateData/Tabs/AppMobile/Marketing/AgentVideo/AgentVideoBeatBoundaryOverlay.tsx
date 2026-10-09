@@ -13,6 +13,7 @@ import CheckBoxOutlineBlankIcon from '@mui/icons-material/CheckBoxOutlineBlank';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import AddIcon from '@mui/icons-material/Add';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import GraphicEqOutlinedIcon from '@mui/icons-material/GraphicEqOutlined';
 import VideocamOutlinedIcon from '@mui/icons-material/VideocamOutlined';
 import UploadFileOutlinedIcon from '@mui/icons-material/UploadFileOutlined';
 import {
@@ -51,6 +52,12 @@ type Props = {
     beatImage?: Record<string, BeatImageEntry>;
     /** beatId → beat có hiệu ứng chuyển cảnh ở cuối beat (hiện icon đỏ). */
     beatHasTransition?: Record<string, boolean>;
+    /** beatId → beat có cue SFX (hiện icon sound effect trước tên beat). */
+    beatHasSfx?: Record<string, boolean> | Set<string>;
+    /** beatId → beat đã sinh audio SFX (icon xanh); chưa có → đỏ. */
+    beatSfxReady?: Record<string, boolean> | Set<string>;
+    /** beatId → số SFX của beat — hiển thị số kèm icon khi > 1. */
+    beatSfxCount?: Record<string, number> | Map<string, number>;
     /** Beat override (image_layers/regions/…) — nhận diện đúng trạng thái có ảnh của beat. */
     agentWhiteboardBeatOverrides?: Record<string, { image_layers?: unknown } | null>;
     isWhiteboardMode?: boolean;
@@ -114,6 +121,9 @@ export default function AgentVideoBeatBoundaryOverlay({
     beatHtml,
     beatImage = {},
     beatHasTransition = {},
+    beatHasSfx,
+    beatSfxReady,
+    beatSfxCount,
     agentWhiteboardBeatOverrides = {},
     isWhiteboardMode = false,
     activeBeatId,
@@ -607,6 +617,29 @@ export default function AgentVideoBeatBoundaryOverlay({
                                                 />
                                             </Tooltip>
                                         ) : null}
+                                        {(beatHasSfx instanceof Set
+                                            ? beatHasSfx.has(segment.beatId)
+                                            : Boolean(beatHasSfx?.[segment.beatId])) ? (() => {
+                                            const sfxReady = beatSfxReady instanceof Set
+                                                ? beatSfxReady.has(segment.beatId)
+                                                : Boolean(beatSfxReady?.[segment.beatId]);
+                                            const sfxCount = beatSfxCount instanceof Map
+                                                ? (beatSfxCount.get(segment.beatId) ?? 0)
+                                                : Number(beatSfxCount?.[segment.beatId] ?? 0);
+                                            const sfxColor = sfxReady ? '#4ade80' : '#f87171';
+                                            return (
+                                                <Tooltip title={sfxReady ? 'Đã có sound effect' : 'Có SFX nhưng chưa tạo audio'} placement="top">
+                                                    <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: '1px', flexShrink: 0 }}>
+                                                        <GraphicEqOutlinedIcon sx={{ fontSize: 13, color: sfxColor }} />
+                                                        {sfxCount > 1 ? (
+                                                            <Box component="span" sx={{ fontSize: 9, fontWeight: 800, lineHeight: 1, color: sfxColor }}>
+                                                                {sfxCount}
+                                                            </Box>
+                                                        ) : null}
+                                                    </Box>
+                                                </Tooltip>
+                                            );
+                                        })() : null}
                                         <Tooltip
                                             title={isQuickIterating ? quickIterateTooltip : ''}
                                             placement="top"

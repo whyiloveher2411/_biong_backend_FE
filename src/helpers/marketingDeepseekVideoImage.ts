@@ -161,6 +161,10 @@ export type DeepseekSessionStatusResponse = {
     translation_count?: number;
     has_original_audio?: boolean;
     original_audio_length?: number;
+    has_character_sheet?: boolean;
+    character_sheet_length?: number;
+    has_sfx_json?: boolean;
+    sfx_json_length?: number;
 };
 
 /**

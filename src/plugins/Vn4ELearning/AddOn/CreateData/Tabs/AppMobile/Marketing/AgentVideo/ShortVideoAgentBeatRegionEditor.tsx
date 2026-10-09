@@ -46,6 +46,7 @@ import MyLocationIcon from '@mui/icons-material/MyLocation';
 import EditIcon from '@mui/icons-material/Edit';
 import AddPhotoAlternateIcon from '@mui/icons-material/AddPhotoAlternate';
 import VerifiedIcon from '@mui/icons-material/Verified';
+import GraphicEqOutlinedIcon from '@mui/icons-material/GraphicEqOutlined';
 import { LoadingButton } from '@mui/lab';
 import useAjax from 'hook/useApi';
 import { resolveAgentLocalVideoOpenUrl } from 'helpers/shortVideoVisualClips';
@@ -6135,6 +6136,93 @@ export default function ShortVideoAgentBeatRegionEditor({
                             headline="Prompt image"
                         />
                     ) : null}
+
+                    {!selectedEffect && !selectedOverlay && !selectedRegion ? (() => {
+                        const sfxCues = (state.sfxSummary?.items || []).filter((cue) => cue.beat_id === beatId);
+                        return (
+                            <Box sx={{ mt: 1.5 }}>
+                                <Stack direction="row" alignItems="center" spacing={0.75} sx={{ mb: 0.75 }}>
+                                    <GraphicEqOutlinedIcon fontSize="small" color="secondary" />
+                                    <Typography variant="subtitle2">Sound effect (SFX)</Typography>
+                                    {sfxCues.length > 0 ? (
+                                        <Chip size="small" variant="outlined" label={`${sfxCues.length} cue`} />
+                                    ) : null}
+                                </Stack>
+                                {sfxCues.length === 0 ? (
+                                    <Typography variant="caption" color="text.secondary">
+                                        Beat này chưa có SFX. Chạy bước Generate SFX (lưu SFX JSON) để có cue cho beat.
+                                    </Typography>
+                                ) : (
+                                    <Stack spacing={1}>
+                                        {sfxCues.map((cue) => {
+                                            const generating = state.generatingSfxCueId === cue.cue_id;
+                                            const ready = cue.status === 'ready' && Boolean(cue.url);
+                                            const statusColor = cue.status === 'ready'
+                                                ? 'success'
+                                                : (cue.status === 'error' ? 'error' : (cue.status === 'skipped' ? 'default' : 'warning'));
+                                            return (
+                                                <Box
+                                                    key={cue.cue_id}
+                                                    sx={{
+                                                        border: '1px solid',
+                                                        borderColor: 'divider',
+                                                        borderRadius: 1,
+                                                        p: 1,
+                                                        bgcolor: 'background.paper',
+                                                    }}
+                                                >
+                                                    <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap sx={{ mb: 0.5 }}>
+                                                        <Chip size="small" variant="outlined" label={cue.cue_id} />
+                                                        {cue.type ? <Chip size="small" variant="outlined" label={cue.type} /> : null}
+                                                        {cue.placement ? <Chip size="small" variant="outlined" label={cue.placement} /> : null}
+                                                        <Chip
+                                                            size="small"
+                                                            color={statusColor}
+                                                            label={cue.status === 'ready'
+                                                                ? 'đã có'
+                                                                : (cue.status === 'error' ? 'lỗi' : (cue.status === 'skipped' ? 'bỏ qua' : 'chưa tạo'))}
+                                                        />
+                                                        {typeof cue.start_sec === 'number' ? (
+                                                            <Chip size="small" variant="outlined" label={`@${cue.start_sec}s`} />
+                                                        ) : null}
+                                                    </Stack>
+                                                    {cue.ai_prompt ? (
+                                                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+                                                            {cue.ai_prompt}
+                                                        </Typography>
+                                                    ) : null}
+                                                    {ready ? (
+                                                        <Box
+                                                            component="audio"
+                                                            controls
+                                                            preload="none"
+                                                            src={cue.url}
+                                                            sx={{ width: '100%', mb: 0.5 }}
+                                                        />
+                                                    ) : null}
+                                                    {cue.error ? (
+                                                        <Typography variant="caption" color="error.main" sx={{ display: 'block', mb: 0.5 }}>
+                                                            {cue.error}
+                                                        </Typography>
+                                                    ) : null}
+                                                    <LoadingButton
+                                                        size="small"
+                                                        variant="outlined"
+                                                        loading={generating}
+                                                        disabled={generating}
+                                                        startIcon={<GraphicEqOutlinedIcon fontSize="small" />}
+                                                        onClick={() => { void state.handleGenerateSfxCue(cue.cue_id, true); }}
+                                                    >
+                                                        {ready ? 'Tạo lại SFX' : 'Generate SFX'}
+                                                    </LoadingButton>
+                                                </Box>
+                                            );
+                                        })}
+                                    </Stack>
+                                )}
+                            </Box>
+                        );
+                    })() : null}
                     {!selectedEffect && bgSampleMode ? (
                         <Typography variant="caption" color="secondary.main" display="block" sx={{ mb: 0.5 }}>
                             Đang chọn <strong>background</strong> cho vùng đang chọn: <strong>click 1 phát</strong>

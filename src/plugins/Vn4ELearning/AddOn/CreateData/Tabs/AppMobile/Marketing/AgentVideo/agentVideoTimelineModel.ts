@@ -28,12 +28,12 @@ export function timeSecToTimelineLeftPx(
     return layout.startLeft + (time * layout.scaleWidth) / layout.timelineScale;
 }
 
-/** Chuẩn hóa thời lượng chuyển cảnh — đồng bộ PHP normalize_transition_duration_sec (0.3–8s). */
+/** Chuẩn hóa thời lượng chuyển cảnh — đồng bộ PHP normalize_transition_duration_sec (1.5–8s). */
 function clampTransitionDurationSec(value: number): number {
     if (!Number.isFinite(value) || value <= 0) {
         return 0;
     }
-    return Math.max(0.3, Math.min(8, value));
+    return Math.max(1.5, Math.min(8, value));
 }
 
 /**

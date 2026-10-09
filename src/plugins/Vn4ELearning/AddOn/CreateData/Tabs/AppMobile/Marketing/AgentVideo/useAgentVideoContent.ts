@@ -98,6 +98,7 @@ import {
     type AgentImageTextLang,
     normalizeAgentImageTextLang,
     saveAgentWhiteboardConfig,
+    saveAgentWhiteboardDefault,
     saveAgentWhiteboardBeatOverride,
     listVerifiedAvatars,
     saveAgentAvatar,
@@ -161,6 +162,9 @@ import {
     DEFAULT_BEAT_IMAGE_FILL_UPLOAD_PREV_BEATS,
     normalizeBeatAudioOnlyMissing,
     DEFAULT_BEAT_AUDIO_ONLY_MISSING,
+    normalizeSfxOnlyMissing,
+    DEFAULT_SFX_ONLY_MISSING,
+    saveAgentSfxOnlyMissing,
     DEFAULT_BEAT_IMAGE_FILL_MODE,
     DEFAULT_FULL_AUTO_STEP_TOGGLES,
     type GithubTopEnrichSummary,
@@ -194,7 +198,9 @@ import {
     type TtsPhoneticDictEntry,
     type SocialAccountItem,
     type AgentVideoBeatAudioState,
+    type AgentVideoSfxSummary,
     saveAgentBeatAudio,
+    generateSfxCue,
     generateManualBeatAudio,
     mergeManualBeatAudio,
     uploadManualBeatAudio,
@@ -656,10 +662,15 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [agentBeatAudio, setAgentBeatAudio] = React.useState(false);
     const [savingBeatAudio, setSavingBeatAudio] = React.useState(false);
     const [beatAudio, setBeatAudio] = React.useState<AgentVideoBeatAudioState | null>(null);
+    /** Tóm tắt SFX (beat_ids có cue, đếm trạng thái) — dùng cho icon trên beat list/timeline. */
+    const [sfxSummary, setSfxSummary] = React.useState<AgentVideoSfxSummary | null>(null);
+    const [generatingSfxCueId, setGeneratingSfxCueId] = React.useState('');
     const [beatAudioOnlyMissing, setBeatAudioOnlyMissing] = React.useState<boolean>(
         DEFAULT_BEAT_AUDIO_ONLY_MISSING,
     );
     const [savingBeatAudioOnlyMissing, setSavingBeatAudioOnlyMissing] = React.useState(false);
+    const [sfxOnlyMissing, setSfxOnlyMissing] = React.useState<boolean>(DEFAULT_SFX_ONLY_MISSING);
+    const [savingSfxOnlyMissing, setSavingSfxOnlyMissing] = React.useState(false);
     const [generatingBeatAudio, setGeneratingBeatAudio] = React.useState<string | null>(null);
     const [mergingBeatAudio, setMergingBeatAudio] = React.useState(false);
     const [agentClipAspect, setAgentClipAspect] = React.useState<ClipAspect>('9:16');
@@ -676,6 +687,14 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [agentImageTextLang, setAgentImageTextLang] = React.useState<AgentImageTextLang>('vi');
     const [savingImageTextLang, setSavingImageTextLang] = React.useState(false);
     const [agentWhiteboardConfig, setAgentWhiteboardConfig] = React.useState<AgentWhiteboardConfig>({});
+    /** Cấu hình CHUNG render whiteboard (beats_per_job) — áp cho toàn bộ short video. */
+    const [agentWhiteboardDefault, setAgentWhiteboardDefault] = React.useState<{
+        has?: boolean;
+        beats_per_job?: number;
+        source_short_video_id?: number;
+        source_title?: string;
+        updated_at?: string;
+    }>({});
     // STYLE SNAPSHOT / NEGATIVE STYLE SNAPSHOT của phong cách ảnh video đang dùng —
     // chèn khi gửi prompt sinh ảnh (Meta.ai/Duck.ai), KHÔNG lưu vào beat_map.
     const [imageStyleSnapshot, setImageStyleSnapshot] = React.useState('');
@@ -748,6 +767,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [uploadingBeatVideoToCapcutIds, setUploadingBeatVideoToCapcutIds] = React.useState<string[]>([]);
     const [savingVisualMode, setSavingVisualMode] = React.useState(false);
     const [savingWhiteboardConfig, setSavingWhiteboardConfig] = React.useState(false);
+    const [savingWhiteboardDefault, setSavingWhiteboardDefault] = React.useState(false);
     const [avatarDrawerOpen, setAvatarDrawerOpen] = React.useState(false);
     const [geminiFillStatus, setGeminiFillStatus] = React.useState('none');
     const [geminiRefineVisualStatus, setGeminiRefineVisualStatus] = React.useState('none');
@@ -1259,7 +1279,14 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         setBeatAudio(
             res?.beat_audio && typeof res.beat_audio === 'object' ? res.beat_audio : null,
         );
+        setSfxSummary(
+            (res as { sfx?: AgentVideoSfxSummary } | null)?.sfx
+            && typeof (res as { sfx?: object }).sfx === 'object'
+                ? ((res as { sfx: AgentVideoSfxSummary }).sfx)
+                : null,
+        );
         setBeatAudioOnlyMissing(normalizeBeatAudioOnlyMissing(res?.beat_audio_only_missing));
+        setSfxOnlyMissing(normalizeSfxOnlyMissing((res as { sfx_only_missing?: boolean } | null)?.sfx_only_missing));
         setAgentClipAspect(normalizeClipAspect(res?.agent_clip_aspect));
         setAgentVisualMode(normalizeAgentVisualMode(res?.agent_visual_mode));
         const nextSettingFields = Array.isArray(res?.setting_fields)
@@ -1281,6 +1308,11 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         setAgentImageTextLang(normalizeAgentImageTextLang(res?.agent_image_text_lang));
         setAgentBeatFrequency(normalizeAgentBeatFrequency(res?.agent_beat_frequency));
         setAgentWhiteboardConfig(res?.agent_whiteboard_config ?? {});
+        setAgentWhiteboardDefault(
+            res?.agent_whiteboard_default && typeof res.agent_whiteboard_default === 'object'
+                ? res.agent_whiteboard_default
+                : {},
+        );
         setAgentWhiteboardBeatOverrides(
             res?.agent_whiteboard_beat_overrides && typeof res.agent_whiteboard_beat_overrides === 'object'
                 ? res.agent_whiteboard_beat_overrides
@@ -6472,9 +6504,36 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }
     };
 
-    const handleGeminiOpenBrowserChange = async (checked: boolean) => {
-        if (savingGeminiOpenBrowser) {
+    const handleSfxOnlyMissingChange = async (onlyMissing: boolean) => {
+        if (savingSfxOnlyMissing || onlyMissing === sfxOnlyMissing) {
             return;
+        }
+        const prev = sfxOnlyMissing;
+        setSfxOnlyMissing(onlyMissing);
+        setSavingSfxOnlyMissing(true);
+        try {
+            const res = await saveAgentSfxOnlyMissing(shortVideoId, onlyMissing);
+            if (!res?.success) {
+                setSfxOnlyMissing(prev);
+                showMessage(
+                    parseApiMessage(res?.message) || 'Không lưu được cài đặt Sound effect',
+                    'error',
+                );
+                return;
+            }
+            if (res.sfx_only_missing !== undefined) {
+                setSfxOnlyMissing(normalizeSfxOnlyMissing(res.sfx_only_missing));
+            }
+        } catch (e) {
+            setSfxOnlyMissing(prev);
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setSavingSfxOnlyMissing(false);
+        }
+    };
+
+    const handleGeminiOpenBrowserChange = async (checked: boolean) => {
+        if (savingGeminiOpenBrowser) {            return;
         }
         setSavingGeminiOpenBrowser(true);
         try {
@@ -7019,8 +7078,35 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }
     };
 
-    const handleGenerateBeatAudio = React.useCallback(async (markId: string, force = false) => {
-        if (!shortVideoId || generatingBeatAudio) {
+    /** Sinh / tạo lại SFX cho 1 cue (nút thủ công trong drawer ảnh beat). */
+    const handleGenerateSfxCue = React.useCallback(async (cueId: string, force = true): Promise<boolean> => {
+        const id = String(cueId || '').trim();
+        if (!shortVideoId || !id) {
+            return false;
+        }
+        setGeneratingSfxCueId(id);
+        try {
+            const res = await generateSfxCue(shortVideoId, id, force);
+            const sfx = (res as { sfx?: AgentVideoSfxSummary } | null)?.sfx;
+            if (sfx && typeof sfx === 'object') {
+                setSfxSummary(sfx);
+            }
+            const ok = (res as { success?: boolean } | null)?.success === true;
+            showMessage(
+                parseApiMessage((res as { message?: unknown } | null)?.message)
+                    || (ok ? 'Đã sinh SFX' : 'Sinh SFX thất bại'),
+                ok ? 'success' : 'error',
+            );
+            return ok;
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+            return false;
+        } finally {
+            setGeneratingSfxCueId('');
+        }
+    }, [shortVideoId, showMessage]);
+
+    const handleGenerateBeatAudio = React.useCallback(async (markId: string, force = false) => {        if (!shortVideoId || generatingBeatAudio) {
             return;
         }
         setGeneratingBeatAudio(markId || 'all');
@@ -7356,11 +7442,42 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }
     };
 
+    /** Lưu cấu hình CHUNG: số beat/job render (áp cho toàn bộ short video). */
+    const handleSaveWhiteboardDefaultBeats = async (beatsPerJob: number): Promise<boolean> => {
+        const bpj = Math.max(1, Math.min(6, Math.round(Number(beatsPerJob) || 3)));
+        if (savingWhiteboardDefault) {
+            return false;
+        }
+        setSavingWhiteboardDefault(true);
+        try {
+            const res = await saveAgentWhiteboardDefault(shortVideoId, bpj);
+            if (!res?.success) {
+                showMessage(
+                    parseApiMessage(res?.message) || 'Không lưu được cấu hình chung',
+                    'error',
+                );
+                return false;
+            }
+            setAgentWhiteboardDefault({
+                has: true,
+                beats_per_job: res.beats_per_job ?? bpj,
+                source_short_video_id: shortVideoId,
+                updated_at: new Date().toISOString(),
+            });
+            showMessage(parseApiMessage(res?.message) || 'Đã lưu cấu hình chung', 'success');
+            return true;
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+            return false;
+        } finally {
+            setSavingWhiteboardDefault(false);
+        }
+    };
+
     const handleSaveWhiteboardBeatOverride = async (
         beatId: string,
         override: Partial<AgentWhiteboardBeatOverride>,
-    ) => {
-        const id = String(beatId || '').trim();
+    ) => {        const id = String(beatId || '').trim();
         if (!id || savingWhiteboardBeatOverride) {
             return false;
         }
@@ -9678,6 +9795,37 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         [beatAudio],
     );
 
+    /** Id beat có cue SFX (từ SFX JSON) — hiển thị icon ở beat list/timeline. */
+    const sfxBeatIdSet = React.useMemo(
+        () => new Set((sfxSummary?.beat_ids ?? []).map((id) => String(id))),
+        [sfxSummary],
+    );
+
+    /** Id beat có ít nhất 1 cue SFX đã sinh audio (ready) — icon xanh; chưa có → đỏ. */
+    const sfxBeatReadySet = React.useMemo(() => {
+        const set = new Set<string>();
+        (sfxSummary?.items ?? []).forEach((item) => {
+            const beatId = String(item?.beat_id ?? '').trim();
+            if (beatId && String(item?.status ?? '') === 'ready') {
+                set.add(beatId);
+            }
+        });
+        return set;
+    }, [sfxSummary]);
+
+    /** beatId → số SFX (cue) của beat (bỏ cue silence/skipped) — hiển thị badge khi > 1. */
+    const sfxBeatCountMap = React.useMemo(() => {
+        const map = new Map<string, number>();
+        (sfxSummary?.items ?? []).forEach((item) => {
+            const beatId = String(item?.beat_id ?? '').trim();
+            if (!beatId || String(item?.status ?? '') === 'skipped') {
+                return;
+            }
+            map.set(beatId, (map.get(beatId) ?? 0) + 1);
+        });
+        return map;
+    }, [sfxSummary]);
+
     const beatRenderErrorIds = React.useMemo(
         () => listBeatRenderErrorIds(beatHtml),
         [beatHtml],
@@ -9787,6 +9935,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         beatAudioOnlyMissing,
         savingBeatAudioOnlyMissing,
         handleBeatAudioOnlyMissingChange,
+        sfxOnlyMissing,
+        savingSfxOnlyMissing,
+        handleSfxOnlyMissingChange,
         agentGeminiOpenBrowser,
         savingGeminiOpenBrowser,
         agentGithubScreenshotHomepage,
@@ -9858,6 +10009,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         savingVideoSettingKeys,
         handleSaveVideoSetting,
         agentWhiteboardConfig,
+        agentWhiteboardDefault,
+        savingWhiteboardDefault,
+        handleSaveWhiteboardDefaultBeats,
         agentWhiteboardBeatOverrides,
         savingVisualMode,
         savingWhiteboardConfig,
@@ -10174,6 +10328,12 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         missingBeatImageIds,
         pendingBeatAudioIds,
         pendingBeatAudioCount,
+        sfxBeatIdSet,
+        sfxBeatReadySet,
+        sfxBeatCountMap,
+        sfxSummary,
+        generatingSfxCueId,
+        handleGenerateSfxCue,
         openingBeatGeminiBeatIds,
         openingBeatGeminiHeadlessBeatIds,
         openingBeatMetaAiBrowserBeatIds,

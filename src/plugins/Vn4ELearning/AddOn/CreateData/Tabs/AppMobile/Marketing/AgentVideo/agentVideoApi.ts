@@ -1175,7 +1175,7 @@ export type BeatZoomEffect = BeatTimelineEffectBase & {
 
 export type BeatTimelineEffect = BeatZoomEffect;
 
-export const BEAT_TIMELINE_EFFECT_MIN_DUR_SEC = 1.0;
+export const BEAT_TIMELINE_EFFECT_MIN_DUR_SEC = 1.5;
 export const BEAT_TIMELINE_EFFECT_MAX_ZOOM = 2.0;
 
 export {
@@ -1718,6 +1718,13 @@ export function normalizeBeatAudioOnlyMissing(raw?: boolean | string | number | 
     return DEFAULT_BEAT_AUDIO_ONLY_MISSING;
 }
 
+/** Chỉ sinh SFX cho beat còn thiếu khi chạy bước Sound effect — agent_video_json.sfx_only_missing. */
+export const DEFAULT_SFX_ONLY_MISSING = true;
+
+export function normalizeSfxOnlyMissing(raw?: boolean | string | number | null): boolean {
+    return normalizeBeatAudioOnlyMissing(raw);
+}
+
 export type AgentVideoBeatAudioItem = {
     mark_id: string;
     order: number;
@@ -1806,6 +1813,7 @@ export type AgentVideoContentResponse = {
     agent_beat_audio?: boolean;
     beat_audio?: AgentVideoBeatAudioState;
     beat_audio_only_missing?: boolean;
+    sfx_only_missing?: boolean;
     agent_clip_aspect?: '9:16' | '16:9';
     clip_render_spec?: import('./agentVideoClipAspect').ClipRenderSpec;
     agent_visual_mode?: AgentVisualMode | string;
@@ -1816,6 +1824,15 @@ export type AgentVideoContentResponse = {
     agent_image_text_lang?: AgentImageTextLang | string;
     agent_beat_frequency?: import('./agentVideoBeatFrequency').AgentBeatFrequency | string;
     agent_whiteboard_config?: AgentWhiteboardConfig;
+    /** Cấu hình CHUNG render whiteboard (beats_per_job áp cho toàn bộ short video). */
+    agent_whiteboard_default?: {
+        success?: boolean;
+        has?: boolean;
+        beats_per_job?: number;
+        source_short_video_id?: number;
+        source_title?: string;
+        updated_at?: string;
+    };
     agent_whiteboard_beat_overrides?: Record<string, AgentWhiteboardBeatOverride>;
     whiteboard_beat_renders?: Record<string, WhiteboardBeatRenderEntry>;
     agent_avatar?: {
@@ -2042,6 +2059,7 @@ export const FULL_AUTO_PIPELINE_STEP_ORDER = [
     'beat_refine_visual',
     'beat_refine_html',
     'beat_audio',
+    'sfx',
     'bgm',
     'render',
     'whiteboard_mux',
@@ -2252,6 +2270,7 @@ export const FULL_AUTO_PIPELINE_STEP_LABELS: Record<FullAutoPipelineStepKey, str
     approve_tts: 'Duyệt / TTS',
     whisper: 'Whisper',
     beat_audio: 'Audio từng beat',
+    sfx: 'Sound effect',
     beat_division: 'Chia beat',
     resource_image_render: 'Render ảnh resource',
     beat_fill: 'Fill HTML beat',
@@ -2297,7 +2316,7 @@ export const FULL_AUTO_PIPELINE_STEP_GROUPS = [
     {
         key: 'audio',
         label: 'Audio',
-        steps: ['beat_audio'],
+        steps: ['beat_audio', 'sfx'],
     },
     {
         key: 'audio_background',
@@ -3046,6 +3065,63 @@ export async function saveBeatAudioOnlyMissing(
     ) as Promise<JsonResponse & { beat_audio_only_missing?: boolean }>;
 }
 
+/** Chỉ sinh SFX cho beat còn thiếu khi chạy bước Sound effect. */
+export async function saveAgentSfxOnlyMissing(
+    shortVideoId: number,
+    onlyMissing: boolean,
+): Promise<JsonResponse & { sfx_only_missing?: boolean }> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/save-agent-sfx-only-missing',
+        shortVideoBody(shortVideoId, {
+            sfx_only_missing: onlyMissing ? '1' : '0',
+        }),
+    ) as Promise<JsonResponse & { sfx_only_missing?: boolean }>;
+}
+
+export type AgentVideoSfxCue = {    cue_id: string;
+    beat_id: string;
+    type?: string;
+    placement?: string;
+    priority?: string;
+    ai_prompt?: string;
+    covers_text?: string;
+    status?: string;
+    error?: string;
+    file?: string;
+    url?: string;
+    start_sec?: number;
+    end_sec?: number;
+    computed_duration_sec?: number;
+};
+
+export type AgentVideoSfxSummary = {
+    enabled?: boolean;
+    has_json?: boolean;
+    source?: string;
+    cue_count?: number;
+    ready_count?: number;
+    pending_count?: number;
+    error_count?: number;
+    skipped_count?: number;
+    beat_ids?: string[];
+    items?: AgentVideoSfxCue[];
+};
+
+/** Sinh / tạo lại SFX cho 1 cue (AudioCraft) — nút thủ công trong drawer ảnh beat. */
+export async function generateSfxCue(
+    shortVideoId: number,
+    cueId: string,
+    force = false,
+): Promise<JsonResponse & { cue_id?: string; url?: string; file?: string; sfx?: AgentVideoSfxSummary }> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/sfx-generate-cue',
+        shortVideoBody(shortVideoId, {
+            cue_id: cueId,
+            force: force ? '1' : '0',
+        }),
+    ) as Promise<JsonResponse & { cue_id?: string; url?: string; file?: string; sfx?: AgentVideoSfxSummary }>;
+}
+
 export async function saveAgentRenderDebug(
     shortVideoId: number,
     enabled: boolean,
@@ -3231,9 +3307,19 @@ export async function saveAgentWhiteboardConfig(
     ) as Promise<JsonResponse & { agent_whiteboard_config?: AgentWhiteboardConfig }>;
 }
 
-export async function saveAgentWhiteboardBeatOverride(
+/** Lưu cấu hình CHUNG render whiteboard (beats_per_job áp cho toàn bộ short video). */
+export async function saveAgentWhiteboardDefault(
     shortVideoId: number,
-    beatId: string,
+    beatsPerJob: number,
+): Promise<JsonResponse & { beats_per_job?: number }> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/save-agent-whiteboard-default',
+        shortVideoBody(shortVideoId, { beats_per_job: String(beatsPerJob) }),
+    ) as Promise<JsonResponse & { beats_per_job?: number }>;
+}
+
+export async function saveAgentWhiteboardBeatOverride(
+    shortVideoId: number,    beatId: string,
     override: Partial<AgentWhiteboardBeatOverride>,
 ): Promise<JsonResponse & {
     beat_id?: string;

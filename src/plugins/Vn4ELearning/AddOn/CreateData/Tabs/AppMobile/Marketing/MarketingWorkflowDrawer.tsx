@@ -133,9 +133,13 @@ export default function MarketingWorkflowDrawer({
     audioScript,
 }: Props) {
     const api = useAjax();
+    const apiAjaxRef = React.useRef(api.ajax);
+    apiAjaxRef.current = api.ajax;
     const [copyingStep, setCopyingStep] = React.useState('');
     const [copiedStep, setCopiedStep] = React.useState('');
     const [outputs, setOutputs] = React.useState<WorkflowOutputsMap>({});
+    /** Context SFX (PROJECT_INFO / FULL_BEATS / TARGET_RANGE / PREVIOUS_CUES) — thay placeholder generate-sfx.md. */
+    const [sfxContext, setSfxContext] = React.useState<Record<string, string>>({});
     const [updatingItem, setUpdatingItem] = React.useState<UpdateDialogState | null>(null);
     const [updateValue, setUpdateValue] = React.useState('');
     const [savingUpdate, setSavingUpdate] = React.useState(false);
@@ -187,6 +191,7 @@ export default function MarketingWorkflowDrawer({
             setOutputs({});
             outputsLoadedRef.current = -1;
             lastDeepseekSyncRef.current = '';
+            setSfxContext({});
             return;
         }
 
@@ -213,6 +218,39 @@ export default function MarketingWorkflowDrawer({
         setUpdatingItem(null);
         setUpdateValue('');
     }, [workflow?.key]);
+
+    // Nạp context SFX (PROJECT_INFO / FULL_BEATS / TARGET_RANGE / PREVIOUS_CUES) để thay
+    // placeholder [PROJECT_INFO]... trong generate-sfx.md khi copy/gửi prompt.
+    React.useEffect(() => {
+        if (!open) {
+            return undefined;
+        }
+        const sid = Number(shortVideoId || 0);
+        if (!sid) {
+            setSfxContext({});
+            return undefined;
+        }
+        let cancelled = false;
+        apiAjaxRef.current({
+            url: 'plugin/vn4-e-learning/app-mobile/marketing/short-video/sfx-prompt-context',
+            method: 'POST',
+            data: { short_video_id: sid },
+            loading: false,
+            success: (res: { success?: boolean; context?: Record<string, string> }) => {
+                if (!cancelled) {
+                    setSfxContext(res?.success && res.context ? res.context : {});
+                }
+            },
+            error: () => {
+                if (!cancelled) {
+                    setSfxContext({});
+                }
+            },
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [open, shortVideoId]);
 
 
 
@@ -447,6 +485,7 @@ export default function MarketingWorkflowDrawer({
             });
         }
         return {
+            ...sfxContext,
             ...currentBucket,
             ...variableValues,
             ...(promptContext || {}),
@@ -460,7 +499,7 @@ export default function MarketingWorkflowDrawer({
                 ? { 'PASTE CHARACTER SHEET DESCRIPTION HERE': characterSheet }
                 : {}),
         };
-    }, [workflow, workflow?.steps, draftInputs, inputValues, promptContext, audioScript]);
+    }, [workflow, workflow?.steps, draftInputs, inputValues, promptContext, audioScript, sfxContext]);
 
     const mergedPromptContext = React.useMemo<WorkflowPromptContext>(
         () => buildBaseContext(outputs),

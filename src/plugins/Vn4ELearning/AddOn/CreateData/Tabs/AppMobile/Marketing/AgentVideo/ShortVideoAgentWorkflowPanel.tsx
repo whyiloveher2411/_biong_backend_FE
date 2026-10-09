@@ -258,6 +258,58 @@ function MetaRow({
     );
 }
 
+/** Ô "Số beat mỗi job render" — CẤU HÌNH CHUNG, Save áp cho toàn bộ short video. */
+function WhiteboardBeatsPerJobGlobalControl({ state }: { state: AgentVideoState }) {
+    const current = Number(
+        state.agentWhiteboardDefault?.beats_per_job
+        ?? state.agentWhiteboardConfig?.beats_per_job
+        ?? 3,
+    );
+    const safeCurrent = Number.isFinite(current) ? current : 3;
+    const [value, setValue] = React.useState<number>(safeCurrent);
+    React.useEffect(() => {
+        setValue(safeCurrent);
+    }, [safeCurrent]);
+    const saving = Boolean(state.savingWhiteboardDefault);
+    const dirty = value !== safeCurrent;
+    return (
+        <Box sx={{ px: 1.25, pt: 1, pb: 0.5 }}>
+            <Typography variant="caption" color="text.primary" display="block" fontWeight={600} sx={{ mb: 0.5 }}>
+                Số beat mỗi job render (cấu hình chung)
+            </Typography>
+            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+                <TextField
+                    size="small"
+                    type="number"
+                    value={String(value)}
+                    disabled={saving}
+                    onChange={(e) => setValue(Math.max(1, Math.min(6, parseInt(e.target.value, 10) || 1)))}
+                    inputProps={{ min: 1, max: 6, style: { width: 64 } }}
+                />
+                <Button
+                    size="small"
+                    variant="contained"
+                    disabled={saving || !dirty}
+                    onClick={() => { void state.handleSaveWhiteboardDefaultBeats(value); }}
+                >
+                    {saving ? 'Đang lưu…' : 'Lưu'}
+                </Button>
+                <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.35 }}>
+                    Áp cho <b>toàn bộ</b> short video: gom N beat vào 1 job và render song song (1–6).
+                </Typography>
+            </Stack>
+            {state.agentWhiteboardDefault?.has ? (
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5, lineHeight: 1.3 }}>
+                    Đang dùng chung: {safeCurrent} beat/job
+                    {state.agentWhiteboardDefault.source_title
+                        ? ` (lưu từ: ${state.agentWhiteboardDefault.source_title})`
+                        : ''}
+                </Typography>
+            ) : null}
+        </Box>
+    );
+}
+
 export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
     const { openCreateScriptGemini, openImproveScriptGemini } = useAgentVideoOpenGeminiScriptActions();
     const [openingCreateScriptGemini, setOpeningCreateScriptGemini] = React.useState(false);
@@ -1053,27 +1105,7 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                                             )
                                             : 'Áp dụng cuối beat 1…n−1 (thường sang bảng trống). Beat cuối không có transition. Chọn Không hiệu ứng để cắt thẳng; Ngẫu nhiên không bao gồm Không hiệu ứng.'}
                                     </Typography>
-                                    <Box sx={{ px: 1.25, pt: 1, pb: 0.5 }}>
-                                        <Typography variant="caption" color="text.primary" display="block" fontWeight={600} sx={{ mb: 0.5 }}>
-                                            Số beat mỗi job render
-                                        </Typography>
-                                        <Stack direction="row" spacing={1} alignItems="center">
-                                            <TextField
-                                                size="small"
-                                                type="number"
-                                                value={String(state.agentWhiteboardConfig?.beats_per_job ?? 3)}
-                                                disabled={state.savingWhiteboardConfig}
-                                                onChange={(e) => {
-                                                    const num = Math.max(1, Math.min(6, parseInt(e.target.value, 10) || 1));
-                                                    void state.handleAgentWhiteboardConfigChange({ beats_per_job: num });
-                                                }}
-                                                inputProps={{ min: 1, max: 6, style: { width: 64 } }}
-                                            />
-                                            <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.35 }}>
-                                                Gom N beat vào 1 job và render song song để nhanh hơn (1 = mỗi beat 1 job như cũ).
-                                            </Typography>
-                                        </Stack>
-                                    </Box>
+                                    <WhiteboardBeatsPerJobGlobalControl state={state} />
                                     <FormControlLabel
                                         sx={{
                                             m: 0,

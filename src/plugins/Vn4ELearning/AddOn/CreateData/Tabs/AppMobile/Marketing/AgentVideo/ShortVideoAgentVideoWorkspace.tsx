@@ -1067,6 +1067,10 @@ export default function ShortVideoAgentVideoWorkspace({
                     onBeatAudioOnlyMissingChange={(checked) => {
                         void state.handleBeatAudioOnlyMissingChange(checked);
                     }}
+                    sfxOnlyMissing={state.sfxOnlyMissing}
+                    onSfxOnlyMissingChange={(checked) => {
+                        void state.handleSfxOnlyMissingChange(checked);
+                    }}
                     agentVisualMode={state.agentVisualMode}
                     startingFullAuto={state.startingFullAuto}
                     cancellingFullAuto={state.cancellingFullAuto}

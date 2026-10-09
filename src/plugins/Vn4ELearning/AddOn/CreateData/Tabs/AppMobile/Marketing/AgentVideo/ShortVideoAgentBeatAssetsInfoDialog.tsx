@@ -39,6 +39,12 @@ export type BeatUsage = {
     hasPendingAudio: boolean;
     /** Beat có hiệu ứng chuyển cảnh ở cuối beat. */
     hasTransition?: boolean;
+    /** Beat có cue SFX (từ SFX JSON). */
+    hasSfx?: boolean;
+    /** Beat đã sinh audio SFX (ready) — icon xanh; chưa có → đỏ. */
+    sfxReady?: boolean;
+    /** Số SFX (cue) của beat — hiển thị số kèm icon khi > 1. */
+    sfxCount?: number;
 };
 
 type Props = {
@@ -402,6 +408,39 @@ export default function ShortVideoAgentBeatAssetsInfoDialog({
                                                         minWidth: 0,
                                                     }}
                                                 >
+                                                    {beat.hasSfx ? (
+                                                        <Tooltip title={beat.sfxReady ? 'Đã có sound effect' : 'Có SFX nhưng chưa tạo audio'}>
+                                                            <Box
+                                                                component="span"
+                                                                sx={{
+                                                                    display: 'inline-flex',
+                                                                    alignItems: 'center',
+                                                                    gap: 0.1,
+                                                                    flexShrink: 0,
+                                                                }}
+                                                            >
+                                                                <GraphicEqOutlinedIcon
+                                                                    sx={{
+                                                                        fontSize: 14,
+                                                                        color: beat.sfxReady ? 'success.main' : 'error.main',
+                                                                    }}
+                                                                />
+                                                                {(beat.sfxCount ?? 0) > 1 ? (
+                                                                    <Box
+                                                                        component="span"
+                                                                        sx={{
+                                                                            fontSize: 10,
+                                                                            fontWeight: 800,
+                                                                            lineHeight: 1,
+                                                                            color: beat.sfxReady ? 'success.main' : 'error.main',
+                                                                        }}
+                                                                    >
+                                                                        {beat.sfxCount}
+                                                                    </Box>
+                                                                ) : null}
+                                                            </Box>
+                                                        </Tooltip>
+                                                    ) : null}
                                                     <Box component="span">{beat.label}</Box>
                                                     {beat.hasTransition ? (
                                                         <Box

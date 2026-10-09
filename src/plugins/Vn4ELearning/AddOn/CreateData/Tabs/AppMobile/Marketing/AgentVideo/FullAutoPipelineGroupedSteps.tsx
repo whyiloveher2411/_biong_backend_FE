@@ -65,6 +65,7 @@ function resolveStepToggleChecked(
 }
 import { PipelineBeatImageFillModeToggle } from './PipelineBeatImageFillModeToggle';
 import { PipelineBeatAudioOnlyMissingToggle } from './PipelineBeatAudioOnlyMissingToggle';
+import { PipelineSfxOnlyMissingToggle } from './PipelineSfxOnlyMissingToggle';
 import {
     getVisibleFullAutoPipelineStepGroups,
     getVisibleFullAutoPipelineStepIndex,
@@ -442,6 +443,10 @@ type PipelineGroupedCommonProps = {
     beatAudioOnlyMissing?: boolean;
     beatAudioOnlyMissingDisabled?: boolean;
     onBeatAudioOnlyMissingChange?: (checked: boolean) => void;
+    /** Chỉ sinh SFX cho beat còn thiếu khi chạy bước Sound effect. */
+    sfxOnlyMissing?: boolean;
+    sfxOnlyMissingDisabled?: boolean;
+    onSfxOnlyMissingChange?: (checked: boolean) => void;
 };
 
 type PipelineGroupedMenuItemsProps = PipelineGroupedCommonProps & {
@@ -496,6 +501,9 @@ export function PipelineGroupedMenuItems({
     beatAudioOnlyMissing = true,
     beatAudioOnlyMissingDisabled = false,
     onBeatAudioOnlyMissingChange,
+    sfxOnlyMissing = true,
+    sfxOnlyMissingDisabled = false,
+    onSfxOnlyMissingChange,
     restartableSet,
     disabled = false,
     onSelectStep,
@@ -715,6 +723,13 @@ export function PipelineGroupedMenuItems({
                             onlyMissing={beatAudioOnlyMissing}
                             disabled={disabled || beatAudioOnlyMissingDisabled}
                             onChange={onBeatAudioOnlyMissingChange}
+                        />
+                    ) : null}
+                    {key === 'sfx' ? (
+                        <PipelineSfxOnlyMissingToggle
+                            onlyMissing={sfxOnlyMissing}
+                            disabled={disabled || sfxOnlyMissingDisabled}
+                            onChange={onSfxOnlyMissingChange}
                         />
                     ) : null}
                 </Box>
@@ -1085,6 +1100,9 @@ export function PipelineGroupedWorkflowListV3({
     beatAudioOnlyMissing = true,
     beatAudioOnlyMissingDisabled = false,
     onBeatAudioOnlyMissingChange,
+    sfxOnlyMissing = true,
+    sfxOnlyMissingDisabled = false,
+    onSfxOnlyMissingChange,
     onRerunRenderUpload,
     rerunRenderUploadDisabled = false,
     rerunningRenderUpload = false,
@@ -1304,6 +1322,13 @@ export function PipelineGroupedWorkflowListV3({
                             onlyMissing={beatAudioOnlyMissing}
                             disabled={selectStepDisabled || beatAudioOnlyMissingDisabled}
                             onChange={onBeatAudioOnlyMissingChange}
+                        />
+                    ) : null}
+                    {key === 'sfx' ? (
+                        <PipelineSfxOnlyMissingToggle
+                            onlyMissing={sfxOnlyMissing}
+                            disabled={selectStepDisabled || sfxOnlyMissingDisabled}
+                            onChange={onSfxOnlyMissingChange}
                         />
                     ) : null}
                 </Box>

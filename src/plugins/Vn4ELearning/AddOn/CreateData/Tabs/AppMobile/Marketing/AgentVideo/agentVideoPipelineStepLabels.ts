@@ -84,6 +84,10 @@ export function isFullAutoPipelineStepRelevantForMode(
     if (!beatAudioMode && key === 'beat_audio') {
         return false;
     }
+    // SFX dựa trên timing audio từng beat (whisper) → ẩn khi tắt audio từng beat.
+    if (!beatAudioMode && key === 'sfx') {
+        return false;
+    }
     // Render ảnh resource chỉ thuộc video 2s — whiteboard/hyperframes auto-skip, ẩn khỏi UI.
     if (key === 'resource_image_render') {
         return isAgentVideo2sMode(agentVisualMode);

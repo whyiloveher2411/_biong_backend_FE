@@ -32,7 +32,7 @@ type ChipKey =
 const DRAW_PRESETS = [5, 8, 10, 15, 30, 45, 60];
 const HOLD_PRESETS = [0, 1, 2, 5, 10, 20];
 const COLOR_PRESETS = [0, 2, 5, 10, 15, 20];
-const TRANSITION_PRESETS = [0.8, 1.2, 2, 3];
+const TRANSITION_PRESETS = [1.5, 2, 3, 4];
 
 const BORDER = 'rgba(255,255,255,0.08)';
 const TEXT_MUTED = 'rgba(255,255,255,0.48)';
@@ -60,7 +60,7 @@ export function seedWhiteboardBeatOverrideDraft(
     const intro = 0.3;
     const txDefault = isLastBeat
         ? 0
-        : clamp(Number(clip.transition_duration_sec ?? 1.2) || 1.2, 0.3, 8);
+        : clamp(Number(clip.transition_duration_sec ?? 1.5) || 1.5, 1.5, 8);
     const beatWindow = Math.max(0.1, Number(beatDurationSec) || 8);
     const sceneBudget = Math.max(3.3, beatWindow - (isLastBeat ? 0 : txDefault));
     const holdRatio = Math.max(0, Number(clip.hold_ratio ?? 0.12) || 0.12);
@@ -85,8 +85,8 @@ export function seedWhiteboardBeatOverrideDraft(
     }
     const transitionSec = saved?.transition_duration_sec != null
         && Number.isFinite(Number(saved.transition_duration_sec))
-        ? clamp(Number(saved.transition_duration_sec), 0.3, 8)
-        : txDefault || 1.2;
+        ? clamp(Number(saved.transition_duration_sec), 1.5, 8)
+        : txDefault || 1.5;
 
     return {
         hand: String(saved?.hand || clip.hand || 'but_chi').trim() || 'but_chi',
@@ -249,7 +249,7 @@ export default function ShortVideoAgentWhiteboardBeatSettings({
         } else if (customKey === 'color_sec') {
             patchDraft({ color_sec: clamp(num, 0, 120) });
         } else if (customKey === 'transition_duration_sec') {
-            patchDraft({ transition_duration_sec: clamp(num, 0.3, 8) });
+            patchDraft({ transition_duration_sec: clamp(num, 1.5, 8) });
         }
         closeMenu();
     };
@@ -277,7 +277,7 @@ export default function ShortVideoAgentWhiteboardBeatSettings({
             case 'color_sec':
                 return isDrag ? 'Tô · tắt (kéo)' : `Tô · ${Number(draft.color_sec ?? 0)}s`;
             case 'transition_duration_sec':
-                return `Transition · ${Number(draft.transition_duration_sec ?? 1.2)}s`;
+                return `Transition · ${Number(draft.transition_duration_sec ?? 1.5)}s`;
             default:
                 return key;
         }
@@ -337,7 +337,7 @@ export default function ShortVideoAgentWhiteboardBeatSettings({
         } else if (menuKey === 'color_sec') {
             patchDraft({ color_sec: clamp(Number(value), 0, 120) });
         } else if (menuKey === 'transition_duration_sec') {
-            patchDraft({ transition_duration_sec: clamp(Number(value), 0.3, 8) });
+            patchDraft({ transition_duration_sec: clamp(Number(value), 1.5, 8) });
         }
         closeMenu();
     };
@@ -356,7 +356,7 @@ export default function ShortVideoAgentWhiteboardBeatSettings({
             duration_sec: clamp(Number(draft.duration_sec ?? 8), 3, 120),
             hold_sec: clamp(Number(draft.hold_sec ?? 0), 0, 120),
             color_sec: isDrag ? 0 : clamp(Number(draft.color_sec ?? 0), 0, 120),
-            transition_duration_sec: clamp(Number(draft.transition_duration_sec ?? 1.2), 0.3, 8),
+            transition_duration_sec: clamp(Number(draft.transition_duration_sec ?? 1.5), 1.5, 8),
         };
         await onSave(payload);
     };
