@@ -125,6 +125,9 @@ export default function MarketingGetScriptDrawer({ open, onClose }: Props) {
     const [platform, setPlatform] = React.useState<PlatformId>('tiktok');
     const [url, setUrl] = React.useState('');
     const [openBrowser, setOpenBrowser] = React.useState(false);
+    const [curl, setCurl] = React.useState('');
+    const [curlLoading, setCurlLoading] = React.useState(false);
+    const [curlError, setCurlError] = React.useState<string | null>(null);
     const [loading, setLoading] = React.useState(false);
     const [progressStep, setProgressStep] = React.useState(0);
     const [error, setError] = React.useState<string | null>(null);
@@ -211,6 +214,49 @@ export default function MarketingGetScriptDrawer({ open, onClose }: Props) {
                 setLoading(false);
                 setProgressStep(0);
                 setError('Yêu cầu thất bại');
+            },
+        });
+    };
+
+    const canSubmitCurl = curl.trim() !== '' && !curlLoading;
+
+    const handleExtractCurl = () => {
+        const raw = curl.trim();
+        if (!raw) {
+            setCurlError('Dán cURL get_transcript từ browser');
+            return;
+        }
+        setCurlLoading(true);
+        setCurlError(null);
+        setInfo(null);
+        setCopied(false);
+        setResult(null);
+
+        api.ajax({
+            url: 'plugin/vn4-e-learning/app-mobile/marketing/short-video/extract-video-script',
+            method: 'POST',
+            data: {
+                curl: raw,
+            },
+            loading: false,
+            success: (res) => {
+                setCurlLoading(false);
+                const data = res as ExtractResponse;
+                if (!data?.success) {
+                    setCurlError(parseApiMessage(data));
+                    return;
+                }
+                setResult({
+                    platform: String(data.platform || 'youtube'),
+                    meta: data.meta || {},
+                    raw_transcript: String(data.raw_transcript || ''),
+                    cleaned_script: String(data.cleaned_script || ''),
+                });
+                setInfo(parseApiMessage(data) || 'Đã lấy transcript thành công');
+            },
+            error: () => {
+                setCurlLoading(false);
+                setCurlError('Yêu cầu thất bại');
             },
         });
     };
@@ -515,6 +561,64 @@ export default function MarketingGetScriptDrawer({ open, onClose }: Props) {
                         ) : null}
                     </Box>
                 )}
+
+                <Accordion
+                    disableGutters
+                    elevation={0}
+                    sx={{
+                        border: '1px solid',
+                        borderColor: 'divider',
+                        borderRadius: 1,
+                        '&:before': { display: 'none' },
+                    }}
+                >
+                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                        <Typography variant="body2" color="text.secondary">
+                            Nâng cao: dán cURL get_transcript (YouTube)
+                        </Typography>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                        <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            sx={{ display: 'block', mb: 1 }}
+                        >
+                            Trên browser thật: mở video → tab Network → lọc <b>get_transcript</b> →
+                            chuột phải → Copy as cURL (bash) → dán vào đây → Lấy transcript.
+                        </Typography>
+                        <TextField
+                            fullWidth
+                            multiline
+                            minRows={4}
+                            maxRows={10}
+                            size="small"
+                            placeholder="curl --url 'https://www.youtube.com/youtubei/v1/get_transcript?prettyPrint=false' ..."
+                            value={curl}
+                            onChange={(e) => setCurl(e.target.value)}
+                            disabled={curlLoading}
+                        />
+                        {curlError && (
+                            <Alert
+                                severity="error"
+                                sx={{ mt: 1 }}
+                                onClose={() => setCurlError(null)}
+                            >
+                                {curlError}
+                            </Alert>
+                        )}
+                        <Stack direction="row" justifyContent="flex-end" sx={{ mt: 1.5 }}>
+                            <Button
+                                variant="contained"
+                                size="small"
+                                onClick={handleExtractCurl}
+                                disabled={!canSubmitCurl}
+                                sx={{ textTransform: 'none' }}
+                            >
+                                Lấy transcript từ cURL
+                            </Button>
+                        </Stack>
+                    </AccordionDetails>
+                </Accordion>
             </Stack>
         </DrawerCustom>
     );
