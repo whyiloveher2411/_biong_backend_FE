@@ -857,7 +857,7 @@ export default function Marketing({ data }: { data: CreatePostTypeData }) {
                     {viewMode === 'short_video' && (
                         <>
                             <Divider />
-                            <Stack direction="row" justifyContent="flex-end" spacing={1}>
+                            <Stack direction="row" justifyContent="flex-end" flexWrap={'wrap'} gap={1} spacing={1}>
                                 <Button
                                     size="small"
                                     variant="outlined"

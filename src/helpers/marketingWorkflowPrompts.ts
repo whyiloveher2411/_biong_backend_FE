@@ -27,6 +27,12 @@ export type WorkflowPromptItem = {
      * - ''    → tắt.
      */
     deepseekSession: '' | 'generate' | 'beat' | 'translate';
+    /**
+     * Bật UI "mở browser ChatGPT" cho item (từ dòng chatgptSession trong index.md):
+     * giống deepseekSession nhưng mở ChatGPT thay vì DeepSeek.
+     * - true  → prompt GENERATE. 'beat'/'translate' → prompt chia beat / dịch. '' → tắt.
+     */
+    chatgptSession: '' | 'generate' | 'beat' | 'translate';
     /** Ghi chú của prompt (từ dòng note trong index.md) — hiển thị nhỏ dưới button. */
     note: string;
     /**
@@ -160,6 +166,7 @@ function normalizeStep(raw: ANY): WorkflowPromptStep | null {
                 buttonUpdate: String(item?.button_update || '').trim(),
                 scriptBreakdown: Math.max(0, parseInt(String(item?.script_breakdown ?? ''), 10) || 0),
                 deepseekSession: normalizeDeepseekSession(String(item?.deepseek_session ?? '')),
+                chatgptSession: normalizeDeepseekSession(String(item?.chatgpt_session ?? '')),
                 note: String(item?.note || '').trim(),
                 choice: String(item?.choice || '').trim(),
                 choiceLabel: String(item?.choice_label || '').trim(),

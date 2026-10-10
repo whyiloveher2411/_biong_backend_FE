@@ -4568,12 +4568,14 @@ export function isYouTubeUrl(raw: string): boolean {
 export async function extractVideoScript(
     url: string,
     platform: 'tiktok' | 'youtube' = 'tiktok',
+    options?: { openBrowser?: boolean },
 ): Promise<ExtractVideoScriptResponse> {
     return postJson(
         'plugin/vn4-e-learning/app-mobile/marketing/short-video/extract-video-script',
         {
             url: url.trim(),
             platform,
+            open_browser: options?.openBrowser ? 1 : 0,
         },
     ) as Promise<ExtractVideoScriptResponse>;
 }

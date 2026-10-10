@@ -606,10 +606,16 @@ export default function MarketingWorkflowDrawer({
             return;
         }
         const sessionKeys = workflow.steps
-            .map((step, index) => (
-                step.prompts.some((p) => Boolean(p.deepseekSession)) ? `${workflow.key}#${index}` : ''
-            ))
-            .filter(Boolean);
+            .flatMap((step, index) => {
+                const keys: string[] = [];
+                if (step.prompts.some((p) => Boolean(p.deepseekSession))) {
+                    keys.push(`${workflow.key}#${index}`);
+                }
+                if (step.prompts.some((p) => Boolean(p.chatgptSession))) {
+                    keys.push(`${workflow.key}#${index}::chatgpt`);
+                }
+                return keys;
+            });
         if (sessionKeys.length === 0) {
             return;
         }
@@ -720,23 +726,25 @@ export default function MarketingWorkflowDrawer({
         },
         sessionKey: string,
         resume = false,
+        provider: 'deepseek' | 'chatgpt' = 'deepseek',
     ) => {
+        const providerLabel = provider === 'chatgpt' ? 'ChatGPT' : 'DeepSeek';
         if (!workflow || deepseekAction) {
             return;
         }
         const sid = Number(shortVideoId || 0);
         if (!sid) {
-            api.showMessage('Thiếu short video — không mở được DeepSeek', 'warning');
+            api.showMessage('Thiếu short video — không mở được ' + providerLabel, 'warning');
             return;
         }
         if (!resume && !prompts.generate) {
-            api.showMessage('Thiếu file prompt generate (gắn deepseekSession: true cho prompt mở phiên)', 'error');
+            api.showMessage('Thiếu file prompt generate (gắn deepseekSession/chatgptSession: true cho prompt mở phiên)', 'error');
             return;
         }
 
         setDeepseekAction(sessionKey);
         patchDeepseekState(sessionKey, {
-            message: resume ? 'Đang mở lại luồng chat cũ…' : 'Đang mở browser DeepSeek…',
+            message: resume ? 'Đang mở lại luồng chat cũ…' : 'Đang mở browser ' + providerLabel + '…',
         });
         try {
             const fresh = await refreshWorkflowOutputs();
@@ -763,9 +771,10 @@ export default function MarketingWorkflowDrawer({
                 promptTranslate: t.text,
                 resume,
                 workflowKey: sessionKey,
+                provider,
             });
             if (!res?.success) {
-                api.showMessage(parseShortVideoResourceApiMessage(res, 'Không mở được phiên DeepSeek'), 'error');
+                api.showMessage(parseShortVideoResourceApiMessage(res, 'Không mở được phiên ' + providerLabel), 'error');
                 patchDeepseekState(sessionKey, { message: '' });
                 return;
             }
@@ -781,7 +790,7 @@ export default function MarketingWorkflowDrawer({
             });
             api.showMessage(responseMessage, hasWarning ? 'warning' : 'success');
         } catch (err) {
-            api.showMessage(err instanceof Error ? err.message : 'Không mở được phiên DeepSeek', 'error');
+            api.showMessage(err instanceof Error ? err.message : 'Không mở được phiên ' + providerLabel, 'error');
             patchDeepseekState(sessionKey, { message: '' });
         } finally {
             setDeepseekAction('');
@@ -1076,11 +1085,22 @@ export default function MarketingWorkflowDrawer({
                             const stepKey = String(index);
                             const isCopying = copyingStep === stepKey;
                             const isCopied = copiedStep === stepKey;
-                            // Bước có cấu hình deepseekSession trong index.md → hiện nút mở browser DeepSeek.
-                            const deepseekPrompts = step.prompts.filter((p) => Boolean(p.deepseekSession));
-                            const hasDeepseekSession = deepseekPrompts.length > 0;
-                            const sessionKey = `${workflow.key}#${index}`;
-                            const dsState = deepseekStates[sessionKey] || EMPTY_DEEPSEEK_STATE;
+                            // Bước có deepseekSession/chatgptSession trong index.md → hiện nút mở
+                            // browser tương ứng (DeepSeek và/hoặc ChatGPT), mỗi provider 1 phiên riêng.
+                            const chatSessionProviders = ([
+                                {
+                                    provider: 'deepseek' as const,
+                                    label: 'DeepSeek',
+                                    keySuffix: '',
+                                    prompts: step.prompts.filter((p) => Boolean(p.deepseekSession)),
+                                },
+                                {
+                                    provider: 'chatgpt' as const,
+                                    label: 'ChatGPT',
+                                    keySuffix: '::chatgpt',
+                                    prompts: step.prompts.filter((p) => Boolean(p.chatgptSession)),
+                                },
+                            ]).filter((entry) => entry.prompts.length > 0);
 
                             return (
                                 <Box
@@ -1441,11 +1461,15 @@ export default function MarketingWorkflowDrawer({
                                         )}
 
 
-                                        {hasDeepseekSession ? (() => {
+                                        {chatSessionProviders.map(({ provider, label, keySuffix, prompts: providerPrompts }) => {
                                             // Khớp ĐÚNG vai trò — không fallback sang prompt khác
                                             // (tránh gửi nhầm prompt beat/translate thành generate).
+                                            const sessionKey = `${workflow.key}#${index}${keySuffix}`;
+                                            const dsState = deepseekStates[sessionKey] || EMPTY_DEEPSEEK_STATE;
                                             const findPrompt = (role: '' | 'generate' | 'beat' | 'translate') => (
-                                                deepseekPrompts.find((p) => p.deepseekSession === role)
+                                                providerPrompts.find((p) => (
+                                                    (provider === 'chatgpt' ? p.chatgptSession : p.deepseekSession) === role
+                                                ))
                                             );
                                             const generatePrompt = findPrompt('generate');
                                             const beatPrompt = findPrompt('beat');
@@ -1470,6 +1494,7 @@ export default function MarketingWorkflowDrawer({
 
                                             return (
                                                 <Box
+                                                    key={provider}
                                                     sx={{
                                                         mt: 1.25,
                                                         p: 1.25,
@@ -1482,7 +1507,7 @@ export default function MarketingWorkflowDrawer({
                                                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap' }}>
                                                         <SmartToyOutlinedIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
                                                         <Typography variant="caption" sx={{ fontWeight: 700 }}>
-                                                            DeepSeek (browser)
+                                                            {label} (browser)
                                                         </Typography>
                                                         <Chip
                                                             size="small"
@@ -1531,10 +1556,10 @@ export default function MarketingWorkflowDrawer({
                                                                     ? <CircularProgress size={12} color="inherit" />
                                                                     : <SmartToyOutlinedIcon fontSize="small" />
                                                             }
-                                                            onClick={() => { void runOpenDeepseekSession(cb, sessionKey, false); }}
+                                                            onClick={() => { void runOpenDeepseekSession(cb, sessionKey, false, provider); }}
                                                             sx={{ textTransform: 'none' }}
                                                         >
-                                                            {deepseekAction === sessionKey ? 'Đang mở browser…' : 'Mở DeepSeek'}
+                                                            {deepseekAction === sessionKey ? 'Đang mở browser…' : `Mở ${label}`}
                                                         </Button>
                                                         {dsState.chatUrl ? (
                                                             <Tooltip title={dsState.chatUrl} placement="top">
@@ -1545,7 +1570,7 @@ export default function MarketingWorkflowDrawer({
                                                                         color="secondary"
                                                                         disabled={busy}
                                                                         startIcon={<OpenInNewOutlinedIcon fontSize="small" />}
-                                                                        onClick={() => { void runOpenDeepseekSession(cb, sessionKey, true); }}
+                                                                        onClick={() => { void runOpenDeepseekSession(cb, sessionKey, true, provider); }}
                                                                         sx={{ textTransform: 'none' }}
                                                                     >
                                                                         Mở lại luồng chat cũ
@@ -1574,13 +1599,13 @@ export default function MarketingWorkflowDrawer({
                                                     ) : null}
 
                                                     <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                                                        Bấm mở browser DeepSeek ở cửa sổ riêng — prompt đầu tiên được dán sẵn vào ô chat
+                                                        Bấm mở browser {label} ở cửa sổ riêng — prompt đầu tiên được dán sẵn vào ô chat
                                                         (bạn tự bấm Enter để gửi). Các nút thao tác nằm NGAY TRÊN browser. Mỗi bước là một
                                                         luồng chat riêng; nhớ bấm "Lưu URL luồng chat" sau khi chat xong.
                                                     </Typography>
                                                 </Box>
                                             );
-                                        })() : null}
+                                        })}
 
 {step.note && (
                                             <Box

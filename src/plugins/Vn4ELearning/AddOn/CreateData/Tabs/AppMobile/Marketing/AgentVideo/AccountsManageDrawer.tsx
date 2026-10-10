@@ -76,6 +76,14 @@ const ACCOUNT_TABS: AccountTab[] = [
         ),
     },
     {
+        key: 'chatgpt',
+        label: 'ChatGPT Cookie',
+        icon: <CookieOutlinedIcon fontSize="small" />,
+        render: ({ active, shortVideoId }) => (
+            <ShortVideoCookieManageContent active={active} website="chatgpt.com" shortVideoId={shortVideoId} />
+        ),
+    },
+    {
         key: 'qwen',
         label: 'Qwen',
         icon: <SmartToyOutlinedIcon fontSize="small" />,

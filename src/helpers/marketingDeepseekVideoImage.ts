@@ -181,6 +181,8 @@ export function openDeepseekVideoImageSession(payload: {
     resume?: boolean;
     /** Key workflow (video-image | stickman) — mỗi bước lưu phiên chat riêng. */
     workflowKey: string;
+    /** Provider phiên chat: deepseek (mặc định) | chatgpt. */
+    provider?: 'deepseek' | 'chatgpt';
 }): Promise<DeepseekSessionResponse> {
     return ajax({
         url: `${BASE_PATH}/deepseek-video-image-session-open`,
@@ -194,6 +196,7 @@ export function openDeepseekVideoImageSession(payload: {
             prompt_translate: payload.promptTranslate,
             resume: payload.resume ? 1 : 0,
             workflow_key: payload.workflowKey,
+            provider: payload.provider || 'deepseek',
         },
     }) as Promise<DeepseekSessionResponse>;
 }

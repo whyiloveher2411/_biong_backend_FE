@@ -7,9 +7,11 @@ import {
     Box,
     Button,
     Chip,
+    FormControlLabel,
     IconButton,
     LinearProgress,
     Stack,
+    Switch,
     TextField,
     Tooltip,
     Typography,
@@ -122,6 +124,7 @@ export default function MarketingGetScriptDrawer({ open, onClose }: Props) {
 
     const [platform, setPlatform] = React.useState<PlatformId>('tiktok');
     const [url, setUrl] = React.useState('');
+    const [openBrowser, setOpenBrowser] = React.useState(false);
     const [loading, setLoading] = React.useState(false);
     const [progressStep, setProgressStep] = React.useState(0);
     const [error, setError] = React.useState<string | null>(null);
@@ -185,6 +188,7 @@ export default function MarketingGetScriptDrawer({ open, onClose }: Props) {
             data: {
                 url: trimmed,
                 platform,
+                open_browser: openBrowser ? 1 : 0,
             },
             loading: false,
             success: (res) => {
@@ -281,7 +285,26 @@ export default function MarketingGetScriptDrawer({ open, onClose }: Props) {
                             }
                         }}
                     />
-                    <Stack direction="row" justifyContent="flex-end" sx={{ mt: 1.5 }}>
+                    <Stack
+                        direction="row"
+                        alignItems="center"
+                        justifyContent="space-between"
+                        sx={{ mt: 1.5 }}
+                    >
+                        <Tooltip title="Bật để chạy trên browser thật (hiện cửa sổ), tắt để chạy ẩn dưới background">
+                            <FormControlLabel
+                                control={
+                                    <Switch
+                                        size="small"
+                                        checked={openBrowser}
+                                        onChange={(e) => setOpenBrowser(e.target.checked)}
+                                        disabled={loading}
+                                    />
+                                }
+                                label="Mở browser"
+                                sx={{ m: 0 }}
+                            />
+                        </Tooltip>
                         <Button
                             variant="contained"
                             size="small"

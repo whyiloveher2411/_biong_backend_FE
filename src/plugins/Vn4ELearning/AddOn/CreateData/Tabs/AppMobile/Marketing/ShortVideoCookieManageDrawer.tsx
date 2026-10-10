@@ -130,7 +130,7 @@ function CookieForm({
                 disabled
                 size="small"
                 fullWidth
-                helperText="Domain cố định theo tab — meta.ai (render ảnh beat), vibes.ai, www.canva.com, app.leonardo.ai (convert ảnh beat → video) hoặc chat.deepseek.com (sinh title/thumbnail)"
+                helperText="Domain cố định theo tab — meta.ai (render ảnh beat), vibes.ai, www.canva.com, app.leonardo.ai (convert ảnh beat → video), chat.deepseek.com hoặc chatgpt.com (sinh title/thumbnail)"
             />
             <TextField
                 label="Mô tả"
@@ -156,7 +156,7 @@ function CookieForm({
                 helperText={
                     form.cookie_value.trim() && !validation.ok
                         ? validation.error || 'Cookie không hợp lệ'
-                        : 'Dán cookie export từ extension Cookie-Editor (JSON) — hoặc copy bảng cookie từ Chrome DevTools (dùng cho site chặn export cookie httpOnly như chat.deepseek.com).'
+                        : 'Dán cookie export từ extension Cookie-Editor (JSON) — hoặc copy bảng cookie từ Chrome DevTools (dùng cho site chặn export cookie httpOnly như chat.deepseek.com, chatgpt.com).'
                 }
             />
             {showLocalStorage ? (
@@ -174,7 +174,7 @@ function CookieForm({
                     helperText={
                         form.local_storage.trim() && !localStorageValidation.ok
                             ? localStorageValidation.error || 'LocalStorage không hợp lệ'
-                            : 'DeepSeek lưu token đăng nhập ở localStorage key "userToken" (giá trị dạng {"value":"<token>","__version":"0"}). Dán JSON {"key":"value"} hoặc bảng Key/Value từ DevTools (Application → Local Storage). Token thô cũng được — hệ thống tự bọc lại.'
+                            : 'Site chat (DeepSeek/ChatGPT) có thể lưu token đăng nhập ở localStorage (DeepSeek: key "userToken", giá trị dạng {"value":"<token>","__version":"0"}). Dán JSON {"key":"value"} hoặc bảng Key/Value từ DevTools (Application → Local Storage). Token thô cũng được — hệ thống tự bọc lại.'
                     }
                 />
             ) : null}
@@ -235,17 +235,20 @@ export function ShortVideoCookieManageContent({
         website === 'vibes.ai' ||
         website.includes('canva.com') ||
         website.includes('leonardo.ai') ||
-        website.includes('deepseek.com');
+        website.includes('deepseek.com') ||
+        website.includes('chatgpt.com');
     // Recorder chỉ có cho Canva (học flow image → video thủ công).
     const canRecordCanva = website.includes('canva.com');
     // Recorder Leonardo (DEV) — học flow image → video trên app.leonardo.ai.
     const canRecordLeonardo = website.includes('leonardo.ai');
     // Recorder DeepSeek (DEV) — học flow chat (gõ prompt → gửi → đợi phản hồi) trên chat.deepseek.com.
     const canRecordDeepseek = website.includes('deepseek.com');
+    // ChatGPT cũng là site chat dạng cookie (domain chatgpt.com).
+    const isChatgpt = website.includes('chatgpt.com');
     // Probe đăng nhập headless (dò trạng thái + localStorage) — dùng cho mọi site cookie.
     const canProbeLogin = canTestLogin;
-    // Field localStorage chỉ hiện với DeepSeek (nơi token login nằm ở localStorage).
-    const showLocalStorage = canRecordDeepseek;
+    // Field localStorage chỉ hiện với DeepSeek (token login nằm ở localStorage) và ChatGPT.
+    const showLocalStorage = canRecordDeepseek || isChatgpt;
 
     const emptyForm = React.useMemo<CookieFormState>(() => ({
         ...EMPTY_FORM,
@@ -769,8 +772,10 @@ export function ShortVideoCookieManageContent({
                                 : website.includes('leonardo.ai')
                                     ? 'Cookie pool app.leonardo.ai dùng convert ảnh beat → video (xoay vòng, cookie bị giới hạn sẽ tạm nghỉ).'
                                     : website.includes('deepseek.com')
-                                        ? 'Cookie pool chat.deepseek.com dùng sinh tiêu đề / nội dung thumbnail YouTube qua headless browser (xoay vòng).'
-                                        : 'Cookie pool meta.ai dùng render ảnh beat (xoay vòng) và extension tự set cookie để mở Meta.ai.'}
+                                        ? 'Cookie pool chat.deepseek.com dùng mở phiên viết nội dung + sinh tiêu đề / nội dung thumbnail YouTube qua browser (xoay vòng).'
+                                        : website.includes('chatgpt.com')
+                                            ? 'Cookie pool chatgpt.com dùng mở phiên viết nội dung ChatGPT + sinh tiêu đề / nội dung thumbnail qua browser (xoay vòng).'
+                                            : 'Cookie pool meta.ai dùng render ảnh beat (xoay vòng) và extension tự set cookie để mở Meta.ai.'}
                     </Typography>
                     <Button
                         variant="contained"
