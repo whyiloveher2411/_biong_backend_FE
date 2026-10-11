@@ -981,8 +981,25 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
         || parsedThumbnail.videoAnalysis.length > 0
         || parsedThumbnail.strategyTriggers.length > 0
         || parsedThumbnail.winner !== null
-        || parsedThumbnail.packagingAdvice.length > 0
+            || parsedThumbnail.packagingAdvice.length > 0
     );
+
+    /**
+     * Ideal thumbnail đã lưu từ box "Update short video Headless" (workflow_outputs key
+     * `ideal-thumbnail`) — lưu ở bucket workflow gốc nên quét mọi bucket để tìm.
+     */
+    const idealThumbnail = React.useMemo(() => {
+        const buckets = Object.values(outputs || {});
+        for (const bucket of buckets) {
+            const candidate = bucket && typeof bucket === 'object'
+                ? (bucket as Record<string, string>)['ideal-thumbnail']
+                : '';
+            if (typeof candidate === 'string' && candidate.trim()) {
+                return candidate.trim();
+            }
+        }
+        return '';
+    }, [outputs]);
 
     return (
         <Box sx={{ height: '100%', overflow: 'auto', p: 2 }}>
@@ -1132,6 +1149,29 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
                         />
                     </Stack>
                 </WorkflowSection>
+
+                {idealThumbnail ? (
+                    <WorkflowSection
+                        collapsible
+                        defaultExpanded
+                        title="Ideal thumbnail"
+                        tone="neutral"
+                        description="Ý tưởng thumbnail đã lưu từ box Update short video Headless — tham khảo khi tạo thumbnail YouTube."
+                    >
+                        <Box
+                            component="pre"
+                            sx={{
+                                m: 0,
+                                whiteSpace: 'pre-wrap',
+                                wordBreak: 'break-word',
+                                fontSize: 13,
+                                lineHeight: 1.5,
+                            }}
+                        >
+                            {idealThumbnail}
+                        </Box>
+                    </WorkflowSection>
+                ) : null}
 
                 {hasParsedTitle ? (
                     <WorkflowSection

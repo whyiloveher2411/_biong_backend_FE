@@ -68,6 +68,12 @@ export type WorkflowPromptStep = {
     prompts: WorkflowPromptItem[];
     /** Biến cho phép user nhập — lưu DB và thay [name] khi copy prompt. */
     inputPrompt: WorkflowInputPrompt[];
+    /**
+     * Danh sách field update hiển thị trong overlay browser "Update short video Headless" của bước
+     * (từ dòng updateBox trong index.md — áp dụng cho cả DeepSeek lẫn ChatGPT):
+     * title | audio | idea-thumbnail | character | sfx. Rỗng = hiện tất cả field.
+     */
+    updateBox: string[];
 };
 
 /** Outputs đã lưu theo workflow: {workflow: {KEY: value}} — key/value của updateField. */
@@ -114,6 +120,7 @@ const WORKFLOW_OUTPUTS_PATH = 'plugin/vn4-e-learning/app-mobile/marketing/workfl
 const WORKFLOW_OUTPUTS_SAVE_PATH = 'plugin/vn4-e-learning/app-mobile/marketing/workflow-outputs-save';
 const WORKFLOW_ACTIVE_PATH = 'plugin/vn4-e-learning/app-mobile/marketing/workflow-active';
 const WORKFLOW_ACTIVE_SAVE_PATH = 'plugin/vn4-e-learning/app-mobile/marketing/workflow-active-save';
+const SFX_PROMPT_CONTEXT_PATH = 'plugin/vn4-e-learning/app-mobile/marketing/short-video/sfx-prompt-context';
 
 let workflowListCache: WorkflowDefinition[] | null = null;
 let workflowListPromise: Promise<WorkflowDefinition[]> | null = null;
@@ -203,6 +210,10 @@ function normalizeStep(raw: ANY): WorkflowPromptStep | null {
         })
         .filter(Boolean) as WorkflowInputPrompt[];
 
+    const updateBox = (Array.isArray(raw?.update_box) ? raw.update_box : [])
+        .map((key: ANY) => String(key || '').trim().toLowerCase())
+        .filter(Boolean) as string[];
+
     if (!title && !prompt && description.length === 0 && !result && !note && prompts.length === 0 && inputPrompt.length === 0) {
         return null;
     }
@@ -216,6 +227,7 @@ function normalizeStep(raw: ANY): WorkflowPromptStep | null {
         note,
         prompts,
         inputPrompt,
+        updateBox,
     };
 }
 
@@ -372,6 +384,33 @@ export async function fetchWorkflowOutputs(shortVideoId: number): Promise<Workfl
             return {};
         }
         return outputs as WorkflowOutputsMap;
+    } catch {
+        return {};
+    }
+}
+
+/**
+ * Đọc context SFX (PROJECT_INFO / FULL_BEATS / TARGET_RANGE / PREVIOUS_CUES) để thay
+ * placeholder trong generate-sfx.md. Gọi lại mỗi khi copy/mở phiên để FULL_BEATS luôn
+ * phản ánh các beat MỚI NHẤT (beat có thể vừa được tạo ở bước trước trong cùng phiên).
+ * Trả về {} khi lỗi/thiếu id — không throw để UI vẫn dùng được drawer.
+ */
+export async function fetchSfxPromptContext(shortVideoId: number): Promise<Record<string, string>> {
+    if (!shortVideoId || shortVideoId <= 0) {
+        return {};
+    }
+
+    try {
+        const res: ANY = await ajax({
+            url: SFX_PROMPT_CONTEXT_PATH,
+            method: 'POST',
+            data: { short_video_id: shortVideoId, id: shortVideoId },
+        });
+        const context = res?.context;
+        if (!context || typeof context !== 'object' || Array.isArray(context)) {
+            return {};
+        }
+        return context as Record<string, string>;
     } catch {
         return {};
     }

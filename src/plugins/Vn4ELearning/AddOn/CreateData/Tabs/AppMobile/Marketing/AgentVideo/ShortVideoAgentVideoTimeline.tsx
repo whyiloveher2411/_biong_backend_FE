@@ -1488,7 +1488,10 @@ export default function ShortVideoAgentVideoTimeline({
                         topic: promptTopic,
                         'script-style': scriptStylePrompt.trim() || SCRIPT_STYLE_DEFAULT_GUIDE,
                         ...(imageStylePrompt.trim()
-                            ? { 'prompt-style': imageStylePrompt.trim() }
+                            ? {
+                                'prompt-style': imageStylePrompt.trim(),
+                                STYLE_REFERENCE: imageStylePrompt.trim(),
+                            }
                             : {}),
                     }}
                     shortVideoId={shortVideoId}

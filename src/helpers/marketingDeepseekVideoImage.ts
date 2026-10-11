@@ -183,6 +183,12 @@ export function openDeepseekVideoImageSession(payload: {
     workflowKey: string;
     /** Provider phiên chat: deepseek (mặc định) | chatgpt. */
     provider?: 'deepseek' | 'chatgpt';
+    /**
+     * Field update hiển thị trong overlay browser "Update short video Headless" (từ dòng
+     * updateBox trong index.md): title | audio | idea-thumbnail | character | sfx.
+     * Bỏ trống → overlay hiện tất cả field.
+     */
+    updateBox?: string[];
 }): Promise<DeepseekSessionResponse> {
     return ajax({
         url: `${BASE_PATH}/deepseek-video-image-session-open`,
@@ -197,6 +203,7 @@ export function openDeepseekVideoImageSession(payload: {
             resume: payload.resume ? 1 : 0,
             workflow_key: payload.workflowKey,
             provider: payload.provider || 'deepseek',
+            update_box: Array.isArray(payload.updateBox) ? payload.updateBox.join(',') : '',
         },
     }) as Promise<DeepseekSessionResponse>;
 }

@@ -41,6 +41,7 @@ import {
     fetchWorkflowOutputs,
     fetchWorkflowPromptContent,
     fetchWorkflowPromptText,
+    fetchSfxPromptContext,
     getWorkflowContrastTextColor,
     MANUAL_BEAT_PROMPTS_SAVED_EVENT,
     parseWorkflowPromptChoiceValues,
@@ -122,6 +123,12 @@ const EMPTY_DEEPSEEK_STATE: DeepseekStepState = {
 const DEEPSEEK_POLL_INTERVAL_MS = 4000;
 const DEEPSEEK_POLL_HIDDEN_INTERVAL_MS = 8000;
 
+/**
+ * TẠM THỜI ẨN nút "Mở ChatGPT" (đặt false để bật lại). Khi false: không render box phiên
+ * ChatGPT và không poll trạng thái phiên ChatGPT; DeepSeek giữ nguyên.
+ */
+const ENABLE_CHATGPT_SESSION = false;
+
 export default function MarketingWorkflowDrawer({
     open,
     onClose,
@@ -133,8 +140,6 @@ export default function MarketingWorkflowDrawer({
     audioScript,
 }: Props) {
     const api = useAjax();
-    const apiAjaxRef = React.useRef(api.ajax);
-    apiAjaxRef.current = api.ajax;
     const [copyingStep, setCopyingStep] = React.useState('');
     const [copiedStep, setCopiedStep] = React.useState('');
     const [outputs, setOutputs] = React.useState<WorkflowOutputsMap>({});
@@ -173,6 +178,8 @@ export default function MarketingWorkflowDrawer({
     );
     const copiedTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
     const outputsLoadedRef = React.useRef<number>(-1);
+    /** Chống lưu lặp lựa chọn mặc định (guard theo video#workflow#giá trị). */
+    const persistedDefaultChoiceRef = React.useRef('');
     /** Chữ ký trạng thái phiên DeepSeek lần poll trước — để chỉ reload khi có dữ liệu mới. */
     const lastDeepseekSyncRef = React.useRef('');
 
@@ -221,36 +228,26 @@ export default function MarketingWorkflowDrawer({
 
     // Nạp context SFX (PROJECT_INFO / FULL_BEATS / TARGET_RANGE / PREVIOUS_CUES) để thay
     // placeholder [PROJECT_INFO]... trong generate-sfx.md khi copy/gửi prompt.
+    // Beat có thể được tạo SAU khi mở drawer (bước chia beat) → phải nạp lại mỗi lần copy/mở
+    // phiên, không chỉ 1 lần lúc mở drawer (nếu không FULL_BEATS sẽ cũ).
+    const loadSfxContext = React.useCallback(async (): Promise<Record<string, string>> => {
+        const sid = Number(shortVideoId || 0);
+        if (!sid) {
+            setSfxContext({});
+            return {};
+        }
+        const context = await fetchSfxPromptContext(sid);
+        setSfxContext(context);
+        return context;
+    }, [shortVideoId]);
+
     React.useEffect(() => {
         if (!open) {
             return undefined;
         }
-        const sid = Number(shortVideoId || 0);
-        if (!sid) {
-            setSfxContext({});
-            return undefined;
-        }
-        let cancelled = false;
-        apiAjaxRef.current({
-            url: 'plugin/vn4-e-learning/app-mobile/marketing/short-video/sfx-prompt-context',
-            method: 'POST',
-            data: { short_video_id: sid },
-            loading: false,
-            success: (res: { success?: boolean; context?: Record<string, string> }) => {
-                if (!cancelled) {
-                    setSfxContext(res?.success && res.context ? res.context : {});
-                }
-            },
-            error: () => {
-                if (!cancelled) {
-                    setSfxContext({});
-                }
-            },
-        });
-        return () => {
-            cancelled = true;
-        };
-    }, [open, shortVideoId]);
+        void loadSfxContext();
+        return undefined;
+    }, [open, loadSfxContext]);
 
 
 
@@ -432,12 +429,81 @@ export default function MarketingWorkflowDrawer({
     }, [workflow, savingChoice, shortVideoId, draftChoiceValues, savedChoiceValues, api]);
 
     /**
+     * Lưu lựa chọn MẶC ĐỊNH cho nhóm choice chưa có giá trị (vd nhom-chu-de = Business).
+     * UI vốn hiển thị option đầu làm mặc định nhưng không ghi vào DB → video "không thuộc
+     * nhóm chủ đề nào". Effect này tự lưu mặc định để mọi video đều có nhóm chủ đề thật,
+     * khớp đúng những gì người dùng đang thấy (và dùng cho lọc/feature sau này).
+     */
+    React.useEffect(() => {
+        if (!open || !workflow) {
+            return;
+        }
+        const sid = Number(shortVideoId || 0);
+        if (!sid) {
+            return;
+        }
+        const defaults: Record<string, string> = {};
+        (workflow.steps || []).forEach((step) => {
+            (step.prompts || []).forEach((item) => {
+                const choiceName = item.choice;
+                if (!choiceName || item.choiceOptions.length === 0) {
+                    return;
+                }
+                if (savedChoiceValues[choiceName]) {
+                    return;
+                }
+                const option = item.choiceOptions.find((entry) => entry.exists) || item.choiceOptions[0];
+                if (option?.label) {
+                    defaults[choiceName] = option.label;
+                }
+            });
+        });
+        const names = Object.keys(defaults);
+        if (names.length === 0) {
+            return;
+        }
+        const guardKey = `${sid}#${workflow.key}#${names.map((name) => `${name}:${defaults[name]}`).join(',')}`;
+        if (persistedDefaultChoiceRef.current === guardKey) {
+            return;
+        }
+        persistedDefaultChoiceRef.current = guardKey;
+        const next = { ...savedChoiceValues, ...defaults };
+        setDraftChoiceValues((prev) => ({ ...prev, ...defaults }));
+        void saveWorkflowOutput(sid, workflow.key, WORKFLOW_PROMPT_CHOICE_KEY, JSON.stringify(next))
+            .then((result) => {
+                if (!result.ok) {
+                    // Cho phép thử lại lần sau nếu lưu lỗi.
+                    persistedDefaultChoiceRef.current = '';
+                    return;
+                }
+                if (result.outputs) {
+                    setOutputs(result.outputs);
+                } else {
+                    setOutputs((prev) => ({
+                        ...prev,
+                        [workflow.key]: {
+                            ...(prev[workflow.key] || {}),
+                            [WORKFLOW_PROMPT_CHOICE_KEY]: JSON.stringify(next),
+                        },
+                    }));
+                }
+            })
+            .catch(() => {
+                persistedDefaultChoiceRef.current = '';
+            });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [open, workflow?.key, shortVideoId, storedChoicesJson]);
+
+    /**
      * Context thay key khi copy prompt = outputs đã lưu + biến inputPrompt + promptContext (topic...)
      * + audio script hiện tại. Nhận outputs map qua tham số để caller có thể dùng bản fresh
      * vừa fetch (overlay DeepSeek lưu character sheet / audio gốc trực tiếp vào DB, không qua
      * state của drawer nên bản state có thể cũ).
      */
-    const buildBaseContext = React.useCallback((allOutputs: WorkflowOutputsMap): WorkflowPromptContext => {
+    const buildBaseContext = React.useCallback((
+        allOutputs: WorkflowOutputsMap,
+        sfxContextOverride?: Record<string, string>,
+    ): WorkflowPromptContext => {
         const currentBucket = (workflow && allOutputs[workflow.key]) || {};
         const audioScriptText = String(audioScript || '');
         // Biến input: default của định nghĩa, ghi đè bởi giá trị đã lưu (hoặc draft đang sửa).
@@ -485,7 +551,7 @@ export default function MarketingWorkflowDrawer({
             });
         }
         return {
-            ...sfxContext,
+            ...(sfxContextOverride ?? sfxContext),
             ...currentBucket,
             ...variableValues,
             ...(promptContext || {}),
@@ -507,25 +573,41 @@ export default function MarketingWorkflowDrawer({
     );
 
     /**
-     * Tải lại workflow outputs từ server (overlay DeepSeek có thể đã lưu character sheet /
-     * audio gốc / beat sau lần tải trước). Trả về bản mới nhất, đồng thời cập nhật state.
+     * Tải lại workflow outputs + context SFX từ server (overlay DeepSeek có thể đã lưu
+     * character sheet / audio gốc / beat sau lần tải trước). Trả về bản mới nhất của CẢ HAI,
+     * đồng thời cập nhật state — nhờ vậy FULL_BEATS của generate-sfx.md luôn khớp beat mới nhất
+     * mà không cần refresh trang.
      */
-    const refreshWorkflowOutputs = React.useCallback(async (): Promise<WorkflowOutputsMap> => {
+    const refreshWorkflowOutputs = React.useCallback(async (): Promise<{
+        outputs: WorkflowOutputsMap;
+        sfxContext: Record<string, string>;
+    }> => {
         const sid = Number(shortVideoId || 0);
         if (!sid) {
-            return outputs;
+            return { outputs, sfxContext };
         }
+        let nextOutputs = outputs;
         try {
             const fresh = await fetchWorkflowOutputs(sid);
             if (fresh && typeof fresh === 'object' && Object.keys(fresh).length > 0) {
+                nextOutputs = fresh;
                 setOutputs(fresh);
-                return fresh;
             }
         } catch {
             // Lỗi mạng → dùng bản state hiện tại.
         }
-        return outputs;
-    }, [shortVideoId, outputs]);
+        let nextSfxContext = sfxContext;
+        try {
+            const freshSfx = await fetchSfxPromptContext(sid);
+            if (freshSfx && Object.keys(freshSfx).length > 0) {
+                nextSfxContext = freshSfx;
+                setSfxContext(freshSfx);
+            }
+        } catch {
+            // Lỗi mạng → dùng bản state hiện tại.
+        }
+        return { outputs: nextOutputs, sfxContext: nextSfxContext };
+    }, [shortVideoId, outputs, sfxContext]);
 
     /**
      * Context tươi cho 1 phần breakdown (mirror buildWorkflowBreakdownPlan): base mới nhất +
@@ -536,7 +618,7 @@ export default function MarketingWorkflowDrawer({
         totalBeats: number,
     ): Promise<WorkflowPromptContext> => {
         const fresh = await refreshWorkflowOutputs();
-        const base = buildBaseContext(fresh);
+        const base = buildBaseContext(fresh.outputs, fresh.sfxContext);
         const context: WorkflowPromptContext = {
             ...base,
             [WORKFLOW_AUDIO_SCRIPT_KEY]: chunk.audioScript,
@@ -563,7 +645,11 @@ export default function MarketingWorkflowDrawer({
             // Tải lại outputs trước khi copy — character sheet / audio gốc có thể vừa
             // được lưu từ overlay DeepSeek sau lần tải trước của drawer.
             const fresh = await refreshWorkflowOutputs();
-            result = await copyWorkflowPromptToClipboard(workflow.key, file, buildBaseContext(fresh));
+            result = await copyWorkflowPromptToClipboard(
+                workflow.key,
+                file,
+                buildBaseContext(fresh.outputs, fresh.sfxContext),
+            );
         } catch {
             result = { ok: false, message: 'Không copy được prompt' };
         }
@@ -611,7 +697,7 @@ export default function MarketingWorkflowDrawer({
                 if (step.prompts.some((p) => Boolean(p.deepseekSession))) {
                     keys.push(`${workflow.key}#${index}`);
                 }
-                if (step.prompts.some((p) => Boolean(p.chatgptSession))) {
+                if (ENABLE_CHATGPT_SESSION && step.prompts.some((p) => Boolean(p.chatgptSession))) {
                     keys.push(`${workflow.key}#${index}::chatgpt`);
                 }
                 return keys;
@@ -727,6 +813,7 @@ export default function MarketingWorkflowDrawer({
         sessionKey: string,
         resume = false,
         provider: 'deepseek' | 'chatgpt' = 'deepseek',
+        updateBox: string[] = [],
     ) => {
         const providerLabel = provider === 'chatgpt' ? 'ChatGPT' : 'DeepSeek';
         if (!workflow || deepseekAction) {
@@ -748,7 +835,7 @@ export default function MarketingWorkflowDrawer({
         });
         try {
             const fresh = await refreshWorkflowOutputs();
-            const freshContext = buildBaseContext(fresh);
+            const freshContext = buildBaseContext(fresh.outputs, fresh.sfxContext);
             const load = (file?: string) => (
                 file
                     ? fetchWorkflowPromptText(workflow.key, file, freshContext)
@@ -772,6 +859,7 @@ export default function MarketingWorkflowDrawer({
                 resume,
                 workflowKey: sessionKey,
                 provider,
+                updateBox,
             });
             if (!res?.success) {
                 api.showMessage(parseShortVideoResourceApiMessage(res, 'Không mở được phiên ' + providerLabel), 'error');
@@ -1094,12 +1182,12 @@ export default function MarketingWorkflowDrawer({
                                     keySuffix: '',
                                     prompts: step.prompts.filter((p) => Boolean(p.deepseekSession)),
                                 },
-                                {
+                                ...(ENABLE_CHATGPT_SESSION ? [{
                                     provider: 'chatgpt' as const,
                                     label: 'ChatGPT',
                                     keySuffix: '::chatgpt',
                                     prompts: step.prompts.filter((p) => Boolean(p.chatgptSession)),
-                                },
+                                }] : []),
                             ]).filter((entry) => entry.prompts.length > 0);
 
                             return (
@@ -1549,14 +1637,14 @@ export default function MarketingWorkflowDrawer({
                                                         <Button
                                                             size="small"
                                                             variant="contained"
-                                                            color="primary"
+                                                            color={provider === 'chatgpt' ? 'success' : 'primary'}
                                                             disabled={busy || !generateExists}
                                                             startIcon={
                                                                 deepseekAction === sessionKey
                                                                     ? <CircularProgress size={12} color="inherit" />
                                                                     : <SmartToyOutlinedIcon fontSize="small" />
                                                             }
-                                                            onClick={() => { void runOpenDeepseekSession(cb, sessionKey, false, provider); }}
+                                                            onClick={() => { void runOpenDeepseekSession(cb, sessionKey, false, provider, step.updateBox); }}
                                                             sx={{ textTransform: 'none' }}
                                                         >
                                                             {deepseekAction === sessionKey ? 'Đang mở browser…' : `Mở ${label}`}
@@ -1567,10 +1655,10 @@ export default function MarketingWorkflowDrawer({
                                                                     <Button
                                                                         size="small"
                                                                         variant="outlined"
-                                                                        color="secondary"
+                                                                        color={provider === 'chatgpt' ? 'success' : 'secondary'}
                                                                         disabled={busy}
                                                                         startIcon={<OpenInNewOutlinedIcon fontSize="small" />}
-                                                                        onClick={() => { void runOpenDeepseekSession(cb, sessionKey, true, provider); }}
+                                                                        onClick={() => { void runOpenDeepseekSession(cb, sessionKey, true, provider, step.updateBox); }}
                                                                         sx={{ textTransform: 'none' }}
                                                                     >
                                                                         Mở lại luồng chat cũ
@@ -1597,12 +1685,6 @@ export default function MarketingWorkflowDrawer({
                                                             </a>
                                                         </Typography>
                                                     ) : null}
-
-                                                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                                                        Bấm mở browser {label} ở cửa sổ riêng — prompt đầu tiên được dán sẵn vào ô chat
-                                                        (bạn tự bấm Enter để gửi). Các nút thao tác nằm NGAY TRÊN browser. Mỗi bước là một
-                                                        luồng chat riêng; nhớ bấm "Lưu URL luồng chat" sau khi chat xong.
-                                                    </Typography>
                                                 </Box>
                                             );
                                         })}

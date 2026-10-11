@@ -32,6 +32,9 @@ type AccountTab = {
     render: (ctx: AccountTabContext) => React.ReactNode;
 };
 
+/** TẠM THỜI ẨN tab "ChatGPT Cookie" (đặt true để hiện lại). */
+const SHOW_CHATGPT_COOKIE_TAB = false;
+
 const ACCOUNT_TABS: AccountTab[] = [
     {
         key: 'convert',
@@ -75,14 +78,14 @@ const ACCOUNT_TABS: AccountTab[] = [
             <ShortVideoCookieManageContent active={active} website="chat.deepseek.com" shortVideoId={shortVideoId} />
         ),
     },
-    {
+    ...(SHOW_CHATGPT_COOKIE_TAB ? [{
         key: 'chatgpt',
         label: 'ChatGPT Cookie',
         icon: <CookieOutlinedIcon fontSize="small" />,
-        render: ({ active, shortVideoId }) => (
+        render: ({ active, shortVideoId }: AccountTabContext) => (
             <ShortVideoCookieManageContent active={active} website="chatgpt.com" shortVideoId={shortVideoId} />
         ),
-    },
+    }] : []),
     {
         key: 'qwen',
         label: 'Qwen',
