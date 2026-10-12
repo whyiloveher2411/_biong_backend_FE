@@ -72,6 +72,18 @@ import {
     parseShortVideoResourceApiMessage,
 } from 'helpers/marketingShortVideoResourceApi';
 
+/** 1 mục cấu hình (Kênh / Phong cách script / Phong cách hình ảnh) — luôn hiện kèm nút "Cấu hình". */
+export type WorkflowConfigItem = {
+    /** 'channel' | 'script-style' | 'image-style' — dùng để mở đúng drawer cấu hình. */
+    key: string;
+    /** Nhãn hiển thị (VD "Kênh", "Phong cách script", "Phong cách hình ảnh"). */
+    label: string;
+    /** Màu alert khi CHƯA cấu hình — khớp màu button cấu hình ở video timeline. */
+    severity: 'info' | 'warning' | 'error' | 'success';
+    /** Đã cấu hình: alert chuyển success + nút cấu hình thêm icon check. */
+    configured: boolean;
+};
+
 type Props = {
     open: boolean;
     onClose: () => void;
@@ -86,6 +98,13 @@ type Props = {
     shortVideoId?: number;
     /** Audio script hiện tại — thay key [audio-script] khi copy prompt. */
     audioScript?: string;
+    /**
+     * Danh sách cấu hình Kênh / Phong cách script / Phong cách hình ảnh — LUÔN hiển thị đủ,
+     * mỗi mục 1 alert kèm nút "Cấu hình". Khi còn mục chưa cấu hình: chặn mở phiên DeepSeek/ChatGPT.
+     */
+    configItems?: WorkflowConfigItem[];
+    /** Mở drawer cấu hình tương ứng khi user bấm "Cấu hình" trên alert. */
+    onConfigureConfig?: (key: string) => void;
 };
 
 type UpdateDialogState = {
@@ -129,6 +148,94 @@ const DEEPSEEK_POLL_HIDDEN_INTERVAL_MS = 8000;
  */
 const ENABLE_CHATGPT_SESSION = false;
 
+/**
+ * Keyword cần thay trong prompt:
+ * - ready   → có định nghĩa + có data (xanh)
+ * - empty   → có định nghĩa nhưng chưa có data (đỏ)
+ * - unknown → không có định nghĩa, không xuất hiện trong data (xám)
+ */
+export type PromptKeywordState = 'ready' | 'empty' | 'unknown';
+
+/**
+ * Các key đặc biệt do FE tự inject khi copy prompt (không khai báo trong index.md).
+ * Dùng để nhận biết keyword "có định nghĩa".
+ */
+const SPECIAL_PROMPT_KEYS = [
+    'topic',
+    'script-style',
+    'prompt-style',
+    'STYLE_REFERENCE',
+    'THUMBNAIL_FORMAT',
+    WORKFLOW_AUDIO_SCRIPT_KEY,
+    'PASTE ORIGINAL AUDIO HERE',
+    'PASTE CHARACTER SHEET DESCRIPTION HERE',
+    'PROJECT_INFO',
+    'FULL_BEATS',
+    'TARGET_RANGE',
+    'PREVIOUS_CUES',
+    'deepseek_original_audio',
+    'character_sheet_description',
+];
+
+/** Tách các keyword dạng [key] trong nội dung prompt (giữ thứ tự, bỏ trùng). */
+function extractPromptKeywords(content: string): string[] {
+    const text = String(content || '');
+    const regex = /\[([^[\]\n]{1,60})\]/g;
+    const seen = new Set<string>();
+    const out: string[] = [];
+    let match: RegExpExecArray | null = regex.exec(text);
+    while (match) {
+        const token = match[1].trim();
+        const norm = token.toLowerCase();
+        if (token && !seen.has(norm)) {
+            seen.add(norm);
+            out.push(token);
+        }
+        match = regex.exec(text);
+    }
+    return out;
+}
+
+/**
+ * Danh sách keyword của prompt: xanh = có data (sẽ được thay), đỏ = có định nghĩa nhưng chưa
+ * có data, vàng = không có định nghĩa (chỉ là text trong prompt).
+ */
+function PromptKeywordChips({
+    keywords,
+    getState,
+}: {
+    keywords: string[];
+    getState: (keyword: string) => PromptKeywordState;
+}) {
+    if (keywords.length === 0) {
+        return null;
+    }
+    return (
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5, mb: 0.25 }}>
+            {keywords.map((keyword) => {
+                const state = getState(keyword);
+                const color = state === 'ready' ? 'success' : state === 'empty' ? 'error' : 'default';
+                const title = state === 'ready'
+                    ? 'Có định nghĩa + có data — sẽ được thay khi copy'
+                    : state === 'empty'
+                        ? 'Có định nghĩa nhưng chưa có data'
+                        : 'Không có định nghĩa — không xuất hiện trong data, giữ nguyên trong prompt';
+                return (
+                    <Tooltip key={keyword} title={title} placement="top">
+                        <Chip
+                            size="small"
+                            variant="contained"
+                            color={color}
+                            label={`[${keyword}]`}
+                            sx={{ height: 20, fontSize: 10.5, '& .MuiChip-label': { px: 0.75 } }}
+                        />
+                    </Tooltip>
+                );
+            })}
+        </Box>
+    );
+}
+
 export default function MarketingWorkflowDrawer({
     open,
     onClose,
@@ -138,11 +245,22 @@ export default function MarketingWorkflowDrawer({
     promptContext,
     shortVideoId,
     audioScript,
+    configItems = [],
+    onConfigureConfig,
 }: Props) {
     const api = useAjax();
+    /** Các mục còn thiếu — dùng để chặn mở phiên DeepSeek/ChatGPT. */
+    const unconfiguredConfigs = React.useMemo(
+        () => configItems.filter((item) => !item.configured),
+        [configItems],
+    );
+    const configBlocked = unconfiguredConfigs.length > 0;
     const [copyingStep, setCopyingStep] = React.useState('');
     const [copiedStep, setCopiedStep] = React.useState('');
     const [outputs, setOutputs] = React.useState<WorkflowOutputsMap>({});
+    /** Keyword [key] tách từ từng file prompt — key cache: `${workflow}::${file}`. */
+    const [promptKeywordMap, setPromptKeywordMap] = React.useState<Record<string, string[]>>({});
+    const promptKeywordCacheRef = React.useRef<Record<string, string[]>>({});
     /** Context SFX (PROJECT_INFO / FULL_BEATS / TARGET_RANGE / PREVIOUS_CUES) — thay placeholder generate-sfx.md. */
     const [sfxContext, setSfxContext] = React.useState<Record<string, string>>({});
     const [updatingItem, setUpdatingItem] = React.useState<UpdateDialogState | null>(null);
@@ -573,6 +691,103 @@ export default function MarketingWorkflowDrawer({
     );
 
     /**
+     * Nạp nội dung các file prompt của workflow đang mở để tách danh sách keyword [key].
+     * Cache theo `${workflow}::${file}` — không fetch lại khi mở lại drawer / đổi lựa chọn.
+     */
+    React.useEffect(() => {
+        if (!open || !workflow) {
+            return;
+        }
+        let cancelled = false;
+        const files = new Set<string>();
+        (workflow.steps || []).forEach((step) => {
+            if (step.prompt) {
+                files.add(step.prompt);
+            }
+            (step.prompts || []).forEach((item) => {
+                const info = resolveWorkflowPromptChoiceFile(item, effectiveChoiceValues);
+                if (info.file) {
+                    files.add(info.file);
+                }
+                (item.choiceOptions || []).forEach((option) => {
+                    if (option.file) {
+                        files.add(option.file);
+                    }
+                });
+            });
+        });
+
+        const pending = Array.from(files).filter((file) => !(promptKeywordCacheRef.current[`${workflow.key}::${file}`]));
+        if (pending.length === 0) {
+            setPromptKeywordMap({ ...promptKeywordCacheRef.current });
+            return undefined;
+        }
+
+        Promise.all(pending.map(async (file) => {
+            try {
+                const res = await fetchWorkflowPromptContent(workflow.key, file);
+                if (res.ok) {
+                    promptKeywordCacheRef.current[`${workflow.key}::${file}`] = extractPromptKeywords(res.content);
+                }
+            } catch {
+                // Bỏ qua — file lỗi thì không hiện keyword.
+            }
+        })).then(() => {
+            if (!cancelled) {
+                setPromptKeywordMap({ ...promptKeywordCacheRef.current });
+            }
+        });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [open, workflow, effectiveChoiceValues]);
+
+    /**
+     * Tập key "có định nghĩa": biến inputPrompt + updateField của workflow + các key đặc biệt
+     * (FE tự inject) + mọi key đang có trong context.
+     */
+    const promptDefinedKeys = React.useMemo(() => {
+        const set = new Set<string>();
+        const add = (raw?: string) => {
+            const key = String(raw || '').trim().toLowerCase();
+            if (key) {
+                set.add(key);
+            }
+        };
+        (workflow?.steps || []).forEach((step) => {
+            (step.inputPrompt || []).forEach((def) => add(def.name));
+            (step.prompts || []).forEach((item) => add(item.updateField));
+        });
+        SPECIAL_PROMPT_KEYS.forEach(add);
+        Object.keys(mergedPromptContext).forEach(add);
+        return set;
+    }, [workflow, mergedPromptContext]);
+
+    /** Trạng thái keyword: ready (có data) / empty (có định nghĩa, chưa data) / unknown. */
+    const promptKeywordGetState = React.useCallback((keyword: string): PromptKeywordState => {
+        const key = String(keyword || '').trim().toLowerCase();
+        if (!key) {
+            return 'unknown';
+        }
+        const entry = Object.entries(mergedPromptContext).find(
+            ([contextKey]) => contextKey.trim().toLowerCase() === key,
+        );
+        if (entry && String(entry[1] ?? '').trim().length > 0) {
+            return 'ready';
+        }
+        return (promptDefinedKeys.has(key) || Boolean(entry)) ? 'empty' : 'unknown';
+    }, [mergedPromptContext, promptDefinedKeys]);
+
+    /** Danh sách keyword của 1 file prompt (rỗng nếu chưa nạp xong / không có file). */
+    const keywordsForFile = React.useCallback((file: string): string[] => {
+        if (!file || !workflow) {
+            return [];
+        }
+        return promptKeywordMap[`${workflow.key}::${file}`] || [];
+    }, [workflow, promptKeywordMap]);
+
+    /**
      * Tải lại workflow outputs + context SFX từ server (overlay DeepSeek có thể đã lưu
      * character sheet / audio gốc / beat sau lần tải trước). Trả về bản mới nhất của CẢ HAI,
      * đồng thời cập nhật state — nhờ vậy FULL_BEATS của generate-sfx.md luôn khớp beat mới nhất
@@ -819,6 +1034,13 @@ export default function MarketingWorkflowDrawer({
         if (!workflow || deepseekAction) {
             return;
         }
+        if (configBlocked) {
+            api.showMessage(
+                `Cần cấu hình ${unconfiguredConfigs.map((item) => item.label).join(', ')} trước khi mở ${providerLabel}`,
+                'warning',
+            );
+            return;
+        }
         const sid = Number(shortVideoId || 0);
         if (!sid) {
             api.showMessage('Thiếu short video — không mở được ' + providerLabel, 'warning');
@@ -883,7 +1105,7 @@ export default function MarketingWorkflowDrawer({
         } finally {
             setDeepseekAction('');
         }
-    }, [workflow, deepseekAction, shortVideoId, refreshWorkflowOutputs, buildBaseContext, api, patchDeepseekState]);
+    }, [workflow, deepseekAction, shortVideoId, configBlocked, unconfiguredConfigs, refreshWorkflowOutputs, buildBaseContext, api, patchDeepseekState]);
 
     const openUpdateDialog = React.useCallback((
         itemKey: string,
@@ -1162,6 +1384,28 @@ export default function MarketingWorkflowDrawer({
                             </Tooltip>
                         </Box>
                     ) : null}
+
+                    {configItems.map((item) => (
+                        <Alert
+                            key={item.key}
+                            severity={item.configured ? 'success' : item.severity}
+                            sx={{ mb: 1.5 }}
+                            action={onConfigureConfig ? (
+                                <Button
+                                    color="inherit"
+                                    size="small"
+                                    variant="outlined"
+                                    startIcon={item.configured ? <CheckIcon fontSize="small" /> : undefined}
+                                    onClick={() => onConfigureConfig(item.key)}
+                                    sx={{ textTransform: 'none', whiteSpace: 'nowrap' }}
+                                >
+                                    Cấu hình
+                                </Button>
+                            ) : undefined}
+                        >
+                            {item.configured ? 'Đã cấu hình' : 'Chưa cấu hình'} {item.label}
+                        </Alert>
+                    ))}
 
                     {workflow.steps.length === 0 && (
                         <Alert severity="info">Workflow chưa có bước nào — thêm bước vào index.md của thư mục workflow.</Alert>
@@ -1476,6 +1720,10 @@ export default function MarketingWorkflowDrawer({
                                                                         {promptItem.label}
                                                                     </Typography>
                                                                 </Box>
+                                                                <PromptKeywordChips
+                                                                    keywords={keywordsForFile(choiceInfo.file)}
+                                                                    getState={promptKeywordGetState}
+                                                                />
                                                                 <MarketingWorkflowBreakdown
                                                                     workflowKey={activeWorkflowKey}
                                                                     item={promptItem}
@@ -1508,6 +1756,10 @@ export default function MarketingWorkflowDrawer({
                                                                 {row}
                                                                 {updateButton}
                                                             </Box>
+                                                            <PromptKeywordChips
+                                                                keywords={keywordsForFile(choiceInfo.file)}
+                                                                getState={promptKeywordGetState}
+                                                            />
                                                             {noteNode}
                                                         </Box>
                                                     );
@@ -1535,13 +1787,27 @@ export default function MarketingWorkflowDrawer({
                                                         );
 
                                                         if (step.promptExists) {
-                                                            return button;
+                                                            return (
+                                                                <Box sx={{ minWidth: 0 }}>
+                                                                    {button}
+                                                                    <PromptKeywordChips
+                                                                        keywords={keywordsForFile(step.prompt)}
+                                                                        getState={promptKeywordGetState}
+                                                                    />
+                                                                </Box>
+                                                            );
                                                         }
 
                                                         return (
-                                                            <Tooltip title={`File prompt chưa tồn tại: ${step.prompt}`} placement="top">
-                                                                <span>{button}</span>
-                                                            </Tooltip>
+                                                            <Box sx={{ minWidth: 0 }}>
+                                                                <Tooltip title={`File prompt chưa tồn tại: ${step.prompt}`} placement="top">
+                                                                    <span>{button}</span>
+                                                                </Tooltip>
+                                                                <PromptKeywordChips
+                                                                    keywords={keywordsForFile(step.prompt)}
+                                                                    getState={promptKeywordGetState}
+                                                                />
+                                                            </Box>
                                                         );
                                                     })()
                                                 )}
@@ -1638,7 +1904,7 @@ export default function MarketingWorkflowDrawer({
                                                             size="small"
                                                             variant="contained"
                                                             color={provider === 'chatgpt' ? 'success' : 'primary'}
-                                                            disabled={busy || !generateExists}
+                                                            disabled={busy || !generateExists || configBlocked}
                                                             startIcon={
                                                                 deepseekAction === sessionKey
                                                                     ? <CircularProgress size={12} color="inherit" />
@@ -1656,7 +1922,7 @@ export default function MarketingWorkflowDrawer({
                                                                         size="small"
                                                                         variant="outlined"
                                                                         color={provider === 'chatgpt' ? 'success' : 'secondary'}
-                                                                        disabled={busy}
+                                                                        disabled={busy || configBlocked}
                                                                         startIcon={<OpenInNewOutlinedIcon fontSize="small" />}
                                                                         onClick={() => { void runOpenDeepseekSession(cb, sessionKey, true, provider, step.updateBox); }}
                                                                         sx={{ textTransform: 'none' }}

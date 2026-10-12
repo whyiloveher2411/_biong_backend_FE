@@ -91,6 +91,9 @@ const HORIZONTAL_SCROLLBAR_HEIGHT = 12;
 /** Nội dung thay [script-style] khi video chưa chọn phong cách script. */
 const SCRIPT_STYLE_DEFAULT_GUIDE = 'Không có phong cách riêng — giữ giọng tự nhiên, cuốn hút.';
 
+/** Nội dung thay [THUMBNAIL_FORMAT] khi kênh chưa cấu hình format thumbnail. */
+const THUMBNAIL_FORMAT_DEFAULT_GUIDE = 'Chưa cấu hình format thumbnail cho kênh — giữ thumbnail đồng nhất, đơn giản và rõ ở kích thước điện thoại.';
+
 async function fallbackManualBeatDivisionSave(): Promise<boolean> {
     return false;
 }
@@ -540,6 +543,7 @@ export default function ShortVideoAgentVideoTimeline({
     const [channelDrawerOpen, setChannelDrawerOpen] = React.useState(false);
     const [channelId, setChannelId] = React.useState(0);
     const [channelTitle, setChannelTitle] = React.useState('');
+    const [channelThumbnailFormat, setChannelThumbnailFormat] = React.useState('');
     const [timelineScaleWidth, setTimelineScaleWidth] = usePersistedTimelineScaleWidth(
         SHORT_VIDEO_AGENT_TIMELINE_ZOOM_STORAGE_KEY,
     );
@@ -627,6 +631,7 @@ export default function ShortVideoAgentVideoTimeline({
         if (!shortVideoId || shortVideoId <= 0) {
             setChannelId(0);
             setChannelTitle('');
+            setChannelThumbnailFormat('');
             return;
         }
         fetchShortVideoAgentChannel(shortVideoId)
@@ -636,11 +641,13 @@ export default function ShortVideoAgentVideoTimeline({
                 }
                 setChannelId(result?.channelId || 0);
                 setChannelTitle(result?.channel?.title || '');
+                setChannelThumbnailFormat(String(result?.channel?.thumbnail_format || ''));
             })
             .catch(() => {
                 if (!cancelled) {
                     setChannelId(0);
                     setChannelTitle('');
+                    setChannelThumbnailFormat('');
                 }
             });
         return () => {
@@ -1487,12 +1494,42 @@ export default function ShortVideoAgentVideoTimeline({
                     promptContext={{
                         topic: promptTopic,
                         'script-style': scriptStylePrompt.trim() || SCRIPT_STYLE_DEFAULT_GUIDE,
+                        THUMBNAIL_FORMAT: channelThumbnailFormat.trim() || THUMBNAIL_FORMAT_DEFAULT_GUIDE,
                         ...(imageStylePrompt.trim()
                             ? {
                                 'prompt-style': imageStylePrompt.trim(),
                                 STYLE_REFERENCE: imageStylePrompt.trim(),
                             }
                             : {}),
+                    }}
+                    configItems={[
+                        {
+                            key: 'image-style',
+                            label: 'Phong cách hình ảnh',
+                            severity: 'error',
+                            configured: Boolean(imageStylePrompt.trim()),
+                        },
+                        {
+                            key: 'script-style',
+                            label: 'Phong cách script',
+                            severity: 'info',
+                            configured: Boolean(scriptStylePrompt.trim()),
+                        },
+                        {
+                            key: 'channel',
+                            label: 'Kênh',
+                            severity: 'warning',
+                            configured: channelId > 0,
+                        },
+                    ]}
+                    onConfigureConfig={(key) => {
+                        if (key === 'image-style') {
+                            setImageStyleDrawerOpen(true);
+                        } else if (key === 'script-style') {
+                            setScriptStyleDrawerOpen(true);
+                        } else if (key === 'channel') {
+                            setChannelDrawerOpen(true);
+                        }
                     }}
                     shortVideoId={shortVideoId}
                     audioScript={audioScript}
@@ -2025,11 +2062,18 @@ export default function ShortVideoAgentVideoTimeline({
                     setChannelId(nextChannelId);
                     if (nextChannelId <= 0) {
                         setChannelTitle('');
+                        setChannelThumbnailFormat('');
                         return;
                     }
                     fetchShortVideoAgentChannel(shortVideoId)
-                        .then((result) => setChannelTitle(result?.channel?.title || ''))
-                        .catch(() => setChannelTitle(''));
+                        .then((result) => {
+                            setChannelTitle(result?.channel?.title || '');
+                            setChannelThumbnailFormat(String(result?.channel?.thumbnail_format || ''));
+                        })
+                        .catch(() => {
+                            setChannelTitle('');
+                            setChannelThumbnailFormat('');
+                        });
                 }}
             />
         </Box>

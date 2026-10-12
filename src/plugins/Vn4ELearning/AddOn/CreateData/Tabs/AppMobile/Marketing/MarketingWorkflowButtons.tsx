@@ -8,7 +8,7 @@ import {
     type WorkflowPromptContext,
     type WorkflowDefinition,
 } from 'helpers/marketingWorkflowPrompts';
-import MarketingWorkflowDrawer from './MarketingWorkflowDrawer';
+import MarketingWorkflowDrawer, { type WorkflowConfigItem } from './MarketingWorkflowDrawer';
 
 type Props = {
     disabled?: boolean;
@@ -18,6 +18,13 @@ type Props = {
     shortVideoId?: number;
     /** Audio script hiện tại — thay key [audio-script] khi copy prompt. */
     audioScript?: string;
+    /**
+     * Danh sách cấu hình Kênh / Phong cách script / Phong cách hình ảnh — LUÔN hiển thị đủ.
+     * Khi còn mục chưa cấu hình: chặn mở phiên DeepSeek.
+     */
+    configItems?: WorkflowConfigItem[];
+    /** Mở drawer cấu hình tương ứng khi user bấm "Cấu hình" trên alert. */
+    onConfigureConfig?: (key: string) => void;
 };
 
 /**
@@ -29,6 +36,8 @@ export default function MarketingWorkflowButtons({
     promptContext,
     shortVideoId,
     audioScript,
+    configItems = [],
+    onConfigureConfig,
 }: Props) {
     const [workflows, setWorkflows] = React.useState<WorkflowDefinition[] | null>(null);
     const [loading, setLoading] = React.useState(false);
@@ -125,6 +134,8 @@ export default function MarketingWorkflowButtons({
                 promptContext={promptContext}
                 shortVideoId={shortVideoId}
                 audioScript={audioScript}
+                configItems={configItems}
+                onConfigureConfig={onConfigureConfig}
                 onClose={() => setOpen(false)}
             />
         </>
