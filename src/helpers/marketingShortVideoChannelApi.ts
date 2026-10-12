@@ -16,6 +16,7 @@ export type ShortVideoChannel = {
     keyword: string;
     category: string;
     video_format: string;
+    thumbnail_format: string;
     lang: string;
     voice: string;
     hashtags: string;
@@ -35,6 +36,7 @@ export type ShortVideoChannelSavePayload = {
     keyword?: string;
     category?: string;
     video_format?: string;
+    thumbnail_format?: string;
     lang?: string;
     voice?: string;
     hashtags?: string;
@@ -91,6 +93,7 @@ export function saveShortVideoChannel(payload: ShortVideoChannelSavePayload): Pr
             keyword: payload.keyword ?? '',
             category: payload.category ?? '',
             video_format: payload.video_format ?? '',
+            thumbnail_format: payload.thumbnail_format ?? '',
             lang: payload.lang ?? '',
             voice: payload.voice ?? '',
             hashtags: payload.hashtags ?? '',

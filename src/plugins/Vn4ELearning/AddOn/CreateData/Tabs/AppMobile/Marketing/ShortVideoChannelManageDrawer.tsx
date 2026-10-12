@@ -56,6 +56,7 @@ type ChannelFormState = {
     keyword: string;
     category: string;
     video_format: string;
+    thumbnail_format: string;
     lang: string;
     voice: string;
     hashtags: string;
@@ -72,6 +73,7 @@ const EMPTY_FORM: ChannelFormState = {
     keyword: '',
     category: '',
     video_format: '',
+    thumbnail_format: '',
     lang: '',
     voice: '',
     hashtags: '',
@@ -226,6 +228,18 @@ function ChannelForm({
                 multiline
                 minRows={3}
                 helperText="Mô tả/format mặc định khi tạo video thuộc kênh này"
+            />
+            <TextField
+                label="Format thumbnail mặc định"
+                value={form.thumbnail_format}
+                onChange={(e) => onFormChange({ thumbnail_format: e.target.value })}
+                disabled={disabled}
+                size="small"
+                fullWidth
+                multiline
+                minRows={3}
+                placeholder="VD: Nền tối, nhân vật biểu cảm bên phải, text vàng viền đen góc trên trái, logo góc dưới phải"
+                helperText="Quy chuẩn thumbnail của kênh (style, bố cục, màu, cách đặt text…) để thumbnail đồng nhất"
             />
             <Box sx={twoCol}>
                 <TextField
@@ -416,6 +430,7 @@ export default function ShortVideoChannelManageDrawer({
             keyword: channel.keyword || '',
             category: channel.category || '',
             video_format: channel.video_format || '',
+            thumbnail_format: channel.thumbnail_format || '',
             lang: channel.lang || '',
             voice: channel.voice || '',
             hashtags: channel.hashtags || '',
@@ -483,6 +498,7 @@ export default function ShortVideoChannelManageDrawer({
             keyword: form.keyword,
             category: form.category,
             video_format: form.video_format,
+            thumbnail_format: form.thumbnail_format,
             lang: form.lang,
             voice: form.voice,
             hashtags: form.hashtags,
@@ -762,6 +778,16 @@ export default function ShortVideoChannelManageDrawer({
                                                 noWrap
                                             >
                                                 Keyword: {channel.keyword}
+                                            </Typography>
+                                        ) : null}
+                                        {channel.thumbnail_format ? (
+                                            <Typography
+                                                variant="caption"
+                                                color="text.secondary"
+                                                sx={{ display: 'block' }}
+                                                noWrap
+                                            >
+                                                Thumbnail: {channel.thumbnail_format}
                                             </Typography>
                                         ) : null}
                                     </Box>
