@@ -569,7 +569,7 @@ export default function ShortVideoAgentVideoTimeline({
         }
     }, [shortVideoId]);
 
-    // Phong cách hình ảnh của video (thay [prompt-style] khi copy prompt workflow).
+    // Phong cách hình ảnh của video (thay [IMAGE-STYLE] khi copy prompt workflow).
     React.useEffect(() => {
         let cancelled = false;
         if (!shortVideoId || shortVideoId <= 0) {
@@ -1497,7 +1497,7 @@ export default function ShortVideoAgentVideoTimeline({
                         THUMBNAIL_FORMAT: channelThumbnailFormat.trim() || THUMBNAIL_FORMAT_DEFAULT_GUIDE,
                         ...(imageStylePrompt.trim()
                             ? {
-                                'prompt-style': imageStylePrompt.trim(),
+                                'IMAGE-STYLE': imageStylePrompt.trim(),
                                 STYLE_REFERENCE: imageStylePrompt.trim(),
                             }
                             : {}),

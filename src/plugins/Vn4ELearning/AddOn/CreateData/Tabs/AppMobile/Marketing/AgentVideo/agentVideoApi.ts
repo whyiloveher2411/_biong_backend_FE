@@ -1782,6 +1782,9 @@ export type AgentVideoSettingField = {
 export type AgentVideoContentResponse = {
     success?: boolean;
     title?: string;
+    /** Nhóm chủ đề đã chọn ở bước "Tìm chủ đề" (màu badge giống row_badge_callback). */
+    agent_topic_group?: string;
+    agent_topic_group_badge?: { color?: string; backgroundColor?: string; borderColor?: string } | null;
     audio_script?: string;
     audio_script_updated_at?: string;
     audio_script_generated_at?: string;

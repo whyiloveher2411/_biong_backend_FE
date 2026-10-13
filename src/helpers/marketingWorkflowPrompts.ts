@@ -81,10 +81,10 @@ export type WorkflowOutputsMap = Record<string, Record<string, string>>;
 
 /**
  * Key đặc biệt thay bằng audio script của post short video hiện tại khi copy prompt:
- * mọi "[audio-script]" (không phân biệt hoa thường, cho phép "[ audio-script ]")
+ * mọi "[AUDIO-SCRIPT]" (không phân biệt hoa thường, cho phép "[ AUDIO-SCRIPT ]")
  * trong nội dung prompt được thay — nếu script trống thì key giữ nguyên.
  */
-export const WORKFLOW_AUDIO_SCRIPT_KEY = 'audio-script';
+export const WORKFLOW_AUDIO_SCRIPT_KEY = 'AUDIO-SCRIPT';
 
 /** Workflow step import xong image prompt cho beat → workspace reload manual beat marks. */
 export const MANUAL_BEAT_PROMPTS_SAVED_EVENT = 'vn4-manual-beat-prompts-saved';
@@ -345,8 +345,9 @@ export function parseWorkflowPromptChoiceValues(raw: string | undefined): Record
 }
 
 /**
- * File prompt hiệu lực của 1 item có nhóm lựa chọn: lấy option đang chọn (theo label),
- * fallback option đầu tiên (mặc định). Item không có choice → dùng file cố định.
+ * File prompt hiệu lực của 1 item có nhóm lựa chọn: lấy option ĐANG CHỌN (theo label).
+ * Item có choice nhưng CHƯA chọn → trả rỗng (không fallback option đầu) để UI ẩn prompt
+ * và buộc user chọn chủ đề trước khi mở DeepSeek. Item không có choice → dùng file cố định.
  */
 export function resolveWorkflowPromptChoiceFile(
     item: Pick<WorkflowPromptItem, 'file' | 'exists' | 'choice' | 'choiceOptions'>,
@@ -356,11 +357,17 @@ export function resolveWorkflowPromptChoiceFile(
         return { file: item.file, exists: item.exists, optionLabel: '' };
     }
     const selectedLabel = String(choiceValues[item.choice] || '').trim();
-    const option = item.choiceOptions.find((entry) => entry.label === selectedLabel) || item.choiceOptions[0];
+    if (!selectedLabel) {
+        return { file: '', exists: false, optionLabel: '' };
+    }
+    const option = item.choiceOptions.find((entry) => entry.label === selectedLabel);
+    if (!option) {
+        return { file: '', exists: false, optionLabel: '' };
+    }
     return {
-        file: option?.file || item.file,
-        exists: option ? option.exists !== false : item.exists,
-        optionLabel: option?.label || '',
+        file: option.file || '',
+        exists: option.exists !== false,
+        optionLabel: option.label || '',
     };
 }
 
@@ -589,7 +596,7 @@ export async function copyWorkflowPromptToClipboard(
  * index.md có thể khai báo `scriptBreakdown: N` cho 1 prompt: mỗi lần chỉ chạy N beat
  * (beat = dòng non-empty của audio script, khớp BEAT RULE trong prompt bước 3). UI tự
  * tính số phần và render nhiều button copy; user dán kết quả từng phần rồi nối lại.
- * Với prompt cần cả [audio-script] lẫn output dạng block BEAT (vd plan-prompt), các
+ * Với prompt cần cả [AUDIO-SCRIPT] lẫn output dạng block BEAT (vd plan-prompt), các
  * output đó cũng được cắt theo đúng dải beat của từng phần.
  */
 
@@ -665,7 +672,7 @@ export type WorkflowBreakdownChunk = {
     beatCount: number;
     /** Đoạn audio script của phần này. */
     audioScript: string;
-    /** Context thay key cho phần này: [audio-script] + output block BEAT đã cắt theo dải beat. */
+    /** Context thay key cho phần này: [AUDIO-SCRIPT] + output block BEAT đã cắt theo dải beat. */
     context: WorkflowPromptContext;
 };
 

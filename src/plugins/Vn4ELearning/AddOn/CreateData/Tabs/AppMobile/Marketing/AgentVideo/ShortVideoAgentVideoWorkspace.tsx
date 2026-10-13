@@ -548,9 +548,40 @@ export default function ShortVideoAgentVideoWorkspace({
         </Typography>
     );
 
-    const drawerTitle = state.title
-        ? `Short video #${shortVideoId} — ${state.title}`
-        : `Short video #${shortVideoId}`;
+    const drawerTitle = (
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
+            <span>
+                {state.title
+                    ? `Short video #${shortVideoId} — ${state.title}`
+                    : `Short video #${shortVideoId}`}
+            </span>
+            {state.topicGroup ? (
+                <Box
+                    component="span"
+                    sx={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        height: 18,
+                        px: 1,
+                        borderRadius: '9px',
+                        fontSize: 11,
+                        fontWeight: 700,
+                        lineHeight: 1,
+                        whiteSpace: 'nowrap',
+                        color: state.topicGroupBadge?.color || '#ffffff',
+                        backgroundColor: state.topicGroupBadge?.backgroundColor || '#1565c0',
+                        border: `1px solid ${
+                            state.topicGroupBadge?.borderColor
+                            || state.topicGroupBadge?.backgroundColor
+                            || '#1565c0'
+                        }`,
+                    }}
+                >
+                    {state.topicGroup}
+                </Box>
+            ) : null}
+        </Box>
+    );
 
     const headerAction = (
         <Box

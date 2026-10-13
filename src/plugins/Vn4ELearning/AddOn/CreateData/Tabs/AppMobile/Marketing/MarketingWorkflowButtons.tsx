@@ -16,7 +16,7 @@ type Props = {
     promptContext?: WorkflowPromptContext;
     /** ID short video hiện tại — lưu/đọc workflow outputs (key/value updateField). */
     shortVideoId?: number;
-    /** Audio script hiện tại — thay key [audio-script] khi copy prompt. */
+    /** Audio script hiện tại — thay key [AUDIO-SCRIPT] khi copy prompt. */
     audioScript?: string;
     /**
      * Danh sách cấu hình Kênh / Phong cách script / Phong cách hình ảnh — LUÔN hiển thị đủ.

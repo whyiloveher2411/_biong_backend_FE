@@ -96,7 +96,7 @@ type Props = {
     promptContext?: WorkflowPromptContext;
     /** ID short video hiện tại — load/lưu workflow outputs (key/value theo updateField). */
     shortVideoId?: number;
-    /** Audio script hiện tại — thay key [audio-script] khi copy prompt. */
+    /** Audio script hiện tại — thay key [AUDIO-SCRIPT] khi copy prompt. */
     audioScript?: string;
     /**
      * Danh sách cấu hình Kênh / Phong cách script / Phong cách hình ảnh — LUÔN hiển thị đủ,
@@ -157,13 +157,13 @@ const ENABLE_CHATGPT_SESSION = false;
 export type PromptKeywordState = 'ready' | 'empty' | 'unknown';
 
 /**
- * Các key đặc biệt do FE tự inject khi copy prompt (không khai báo trong index.md).
- * Dùng để nhận biết keyword "có định nghĩa".
+ * Các key đặc biệt do FE tự inject khi copy prompt (không khai báo trong index.md) — CHỈ gồm
+ * các key thực sự là placeholder thay được trong prompt. Dùng để nhận biết keyword "có định nghĩa".
  */
 const SPECIAL_PROMPT_KEYS = [
     'topic',
     'script-style',
-    'prompt-style',
+    'IMAGE-STYLE',
     'STYLE_REFERENCE',
     'THUMBNAIL_FORMAT',
     WORKFLOW_AUDIO_SCRIPT_KEY,
@@ -173,8 +173,6 @@ const SPECIAL_PROMPT_KEYS = [
     'FULL_BEATS',
     'TARGET_RANGE',
     'PREVIOUS_CUES',
-    'deepseek_original_audio',
-    'character_sheet_description',
 ];
 
 /** Tách các keyword dạng [key] trong nội dung prompt (giữ thứ tự, bỏ trùng). */
@@ -296,8 +294,6 @@ export default function MarketingWorkflowDrawer({
     );
     const copiedTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
     const outputsLoadedRef = React.useRef<number>(-1);
-    /** Chống lưu lặp lựa chọn mặc định (guard theo video#workflow#giá trị). */
-    const persistedDefaultChoiceRef = React.useRef('');
     /** Chữ ký trạng thái phiên DeepSeek lần poll trước — để chỉ reload khi có dữ liệu mới. */
     const lastDeepseekSyncRef = React.useRef('');
 
@@ -547,72 +543,6 @@ export default function MarketingWorkflowDrawer({
     }, [workflow, savingChoice, shortVideoId, draftChoiceValues, savedChoiceValues, api]);
 
     /**
-     * Lưu lựa chọn MẶC ĐỊNH cho nhóm choice chưa có giá trị (vd nhom-chu-de = Business).
-     * UI vốn hiển thị option đầu làm mặc định nhưng không ghi vào DB → video "không thuộc
-     * nhóm chủ đề nào". Effect này tự lưu mặc định để mọi video đều có nhóm chủ đề thật,
-     * khớp đúng những gì người dùng đang thấy (và dùng cho lọc/feature sau này).
-     */
-    React.useEffect(() => {
-        if (!open || !workflow) {
-            return;
-        }
-        const sid = Number(shortVideoId || 0);
-        if (!sid) {
-            return;
-        }
-        const defaults: Record<string, string> = {};
-        (workflow.steps || []).forEach((step) => {
-            (step.prompts || []).forEach((item) => {
-                const choiceName = item.choice;
-                if (!choiceName || item.choiceOptions.length === 0) {
-                    return;
-                }
-                if (savedChoiceValues[choiceName]) {
-                    return;
-                }
-                const option = item.choiceOptions.find((entry) => entry.exists) || item.choiceOptions[0];
-                if (option?.label) {
-                    defaults[choiceName] = option.label;
-                }
-            });
-        });
-        const names = Object.keys(defaults);
-        if (names.length === 0) {
-            return;
-        }
-        const guardKey = `${sid}#${workflow.key}#${names.map((name) => `${name}:${defaults[name]}`).join(',')}`;
-        if (persistedDefaultChoiceRef.current === guardKey) {
-            return;
-        }
-        persistedDefaultChoiceRef.current = guardKey;
-        const next = { ...savedChoiceValues, ...defaults };
-        setDraftChoiceValues((prev) => ({ ...prev, ...defaults }));
-        void saveWorkflowOutput(sid, workflow.key, WORKFLOW_PROMPT_CHOICE_KEY, JSON.stringify(next))
-            .then((result) => {
-                if (!result.ok) {
-                    // Cho phép thử lại lần sau nếu lưu lỗi.
-                    persistedDefaultChoiceRef.current = '';
-                    return;
-                }
-                if (result.outputs) {
-                    setOutputs(result.outputs);
-                } else {
-                    setOutputs((prev) => ({
-                        ...prev,
-                        [workflow.key]: {
-                            ...(prev[workflow.key] || {}),
-                            [WORKFLOW_PROMPT_CHOICE_KEY]: JSON.stringify(next),
-                        },
-                    }));
-                }
-            })
-            .catch(() => {
-                persistedDefaultChoiceRef.current = '';
-            });
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [open, workflow?.key, shortVideoId, storedChoicesJson]);
-
-    /**
      * Context thay key khi copy prompt = outputs đã lưu + biến inputPrompt + promptContext (topic...)
      * + audio script hiện tại. Nhận outputs map qua tham số để caller có thể dùng bản fresh
      * vừa fetch (overlay DeepSeek lưu character sheet / audio gốc trực tiếp vào DB, không qua
@@ -745,7 +675,8 @@ export default function MarketingWorkflowDrawer({
 
     /**
      * Tập key "có định nghĩa": biến inputPrompt + updateField của workflow + các key đặc biệt
-     * (FE tự inject) + mọi key đang có trong context.
+     * (FE tự inject). Dùng để phân loại keyword trong prompt (xanh/đỏ thay vì xám).
+     * KHÔNG gồm các key context tự sinh (output nội bộ, *_saved_at, chunk…) để tránh nhiễu.
      */
     const promptDefinedKeys = React.useMemo(() => {
         const set = new Set<string>();
@@ -760,9 +691,57 @@ export default function MarketingWorkflowDrawer({
             (step.prompts || []).forEach((item) => add(item.updateField));
         });
         SPECIAL_PROMPT_KEYS.forEach(add);
-        Object.keys(mergedPromptContext).forEach(add);
         return set;
-    }, [workflow, mergedPromptContext]);
+    }, [workflow]);
+
+    /**
+     * Tập "định nghĩa keyword" thực sự được phép thay trong prompt (biến inputPrompt + key đặc
+     * biệt). KHÔNG gồm updateField vì đó là output nội bộ, không phải placeholder prompt.
+     */
+    const promptKeywordDefinitions = React.useMemo(() => {
+        const set = new Set<string>();
+        const add = (raw?: string) => {
+            const key = String(raw || '').trim().toLowerCase();
+            if (key) {
+                set.add(key);
+            }
+        };
+        (workflow?.steps || []).forEach((step) => {
+            (step.inputPrompt || []).forEach((def) => add(def.name));
+        });
+        SPECIAL_PROMPT_KEYS.forEach(add);
+        return set;
+    }, [workflow]);
+
+    /** Tập keyword (lowercase) thực sự xuất hiện trong BẤT KỲ prompt nào của workflow. */
+    const usedPromptKeywords = React.useMemo(() => {
+        const set = new Set<string>();
+        if (!workflow) {
+            return set;
+        }
+        const prefix = `${workflow.key}::`;
+        Object.entries(promptKeywordMap).forEach(([mapKey, keywords]) => {
+            if (mapKey.startsWith(prefix)) {
+                keywords.forEach((keyword) => {
+                    const key = keyword.trim().toLowerCase();
+                    if (key) {
+                        set.add(key);
+                    }
+                });
+            }
+        });
+        return set;
+    }, [promptKeywordMap, workflow]);
+
+    /**
+     * Key có định nghĩa keyword (biến inputPrompt + key đặc biệt) nhưng KHÔNG xuất hiện trong
+     * prompt nào của workflow → keyword dư, không được dùng.
+     */
+    const unusedDefinedKeys = React.useMemo(() => (
+        Array.from(promptKeywordDefinitions)
+            .filter((key) => !usedPromptKeywords.has(key))
+            .sort()
+    ), [promptKeywordDefinitions, usedPromptKeywords]);
 
     /** Trạng thái keyword: ready (có data) / empty (có định nghĩa, chưa data) / unknown. */
     const promptKeywordGetState = React.useCallback((keyword: string): PromptKeywordState => {
@@ -1342,7 +1321,7 @@ export default function MarketingWorkflowDrawer({
                                 {workflow.title}
                             </Typography>
                             <Typography variant="caption" sx={{ color: accentText, opacity: 0.85, display: 'block', mt: 0.25 }}>
-                                {workflow.steps.length} bước · Copy prompt tự thay [topic], [audio-script] và các key output đã lưu
+                                {workflow.steps.length} bước · Copy prompt tự thay [topic], [AUDIO-SCRIPT] và các key output đã lưu
                             </Typography>
                         </Box>
                     )}
@@ -1406,6 +1385,39 @@ export default function MarketingWorkflowDrawer({
                             {item.configured ? 'Đã cấu hình' : 'Chưa cấu hình'} {item.label}
                         </Alert>
                     ))}
+
+                    {unusedDefinedKeys.length > 0 && (
+                        <Box sx={{ mb: 1.5 }}>
+                            <Typography
+                                variant="caption"
+                                sx={{ color: 'text.secondary', display: 'block', mb: 0.5 }}
+                            >
+                                Keyword có định nghĩa trong code nhưng không xuất hiện trong prompt nào (dư):
+                            </Typography>
+                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                                {unusedDefinedKeys.map((key) => (
+                                    <Tooltip
+                                        key={key}
+                                        title="Có định nghĩa nhưng không dùng trong prompt nào"
+                                        placement="top"
+                                    >
+                                        <Chip
+                                            size="small"
+                                            variant="contained"
+                                            label={`[${key}]`}
+                                            sx={{
+                                                height: 20,
+                                                fontSize: 10.5,
+                                                bgcolor: '#7b1fa2',
+                                                color: '#fff',
+                                                '& .MuiChip-label': { px: 0.75 },
+                                            }}
+                                        />
+                                    </Tooltip>
+                                ))}
+                            </Box>
+                        </Box>
+                    )}
 
                     {workflow.steps.length === 0 && (
                         <Alert severity="info">Workflow chưa có bước nào — thêm bước vào index.md của thư mục workflow.</Alert>
@@ -1606,8 +1618,10 @@ export default function MarketingWorkflowDrawer({
                                                     const choiceInfo = resolveWorkflowPromptChoiceFile(promptItem, effectiveChoiceValues);
                                                     const hasChoice = Boolean(promptItem.choice) && promptItem.choiceOptions.length > 0;
                                                     const selectedChoiceLabel = hasChoice
-                                                        ? (effectiveChoiceValues[promptItem.choice] || promptItem.choiceOptions[0].label)
+                                                        ? String(effectiveChoiceValues[promptItem.choice] || '').trim()
                                                         : '';
+                                                    // Chưa chọn chủ đề → ẩn prompt, buộc user chọn trước khi mở DeepSeek.
+                                                    const choicePending = hasChoice && !selectedChoiceLabel;
 
                                                     const choiceNode = hasChoice ? (
                                                         <Box sx={{ mb: 0.5, width: '100%' }}>
@@ -1637,6 +1651,20 @@ export default function MarketingWorkflowDrawer({
                                                             </Box>
                                                         </Box>
                                                     ) : null;
+
+                                                    if (choicePending) {
+                                                        return (
+                                                            <Box key={itemKey} sx={{ minWidth: 0 }}>
+                                                                {choiceNode}
+                                                                <Typography
+                                                                    variant="caption"
+                                                                    sx={{ display: 'block', mt: 0.25, color: 'warning.main' }}
+                                                                >
+                                                                    Chọn {promptItem.choiceLabel || 'chủ đề'} để hiện prompt.
+                                                                </Typography>
+                                                            </Box>
+                                                        );
+                                                    }
 
                                                     const button = (
                                                         <Button

@@ -117,7 +117,7 @@ export function saveShortVideoAgentImageStyle(shortVideoId: number, styleId: num
 }
 
 /**
- * Prompt của phong cách hình ảnh video đang dùng — thay [prompt-style] khi copy
+ * Prompt của phong cách hình ảnh video đang dùng — thay [IMAGE-STYLE] khi copy
  * prompt workflow. Trả null khi chưa chọn style / style đã xóa / lỗi.
  */
 export async function fetchShortVideoAgentImageStyle(

@@ -601,6 +601,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     apiRef.current = api;
 
     const [title, setTitle] = React.useState('');
+    const [topicGroup, setTopicGroup] = React.useState('');
+    const [topicGroupBadge, setTopicGroupBadge] = React.useState<{ color?: string; backgroundColor?: string; borderColor?: string } | null>(null);
     const [audioScript, setAudioScript] = React.useState('');
     const [scriptApproved, setScriptApproved] = React.useState(false);
     const [audioFileUrl, setAudioFileUrl] = React.useState('');
@@ -724,7 +726,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             cancelled = true;
         };
     }, [open, shortVideoId]);
-    // Video 2s: image prompt đã chứa sẵn phong cách (thay [prompt-style] từ post
+    // Video 2s: image prompt đã chứa sẵn phong cách (thay [IMAGE-STYLE] từ post
     // type image style) → KHÔNG append suffix gen_style khi dùng prompt.
     const whiteboardImageStyleSuffix = React.useMemo(
         () => (agentVisualMode === 'video_2s'
@@ -1187,6 +1189,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         const serverScript = String(res?.audio_script || '').trim();
         savedScriptRef.current = serverScript;
         setTitle(String(res?.title || '').trim());
+        setTopicGroup(String(res?.agent_topic_group || '').trim());
+        setTopicGroupBadge(res?.agent_topic_group_badge ?? null);
         setTtsPhoneticDict(mergeTtsPhoneticDictEntries(
             Array.isArray(res?.tts_phonetic_dict) ? res.tts_phonetic_dict : [],
         ));
@@ -9907,6 +9911,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         confirmingManualBeatTimeline,
         handleConfirmManualBeatTimeline,
         title,
+        topicGroup,
+        topicGroupBadge,
         shortVideoId,
         audioScript,
         setAudioScript: handleAudioScriptChange,

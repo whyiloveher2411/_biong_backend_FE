@@ -238,7 +238,7 @@ function StyleForm({
                 multiline
                 minRows={8}
                 maxRows={20}
-                helperText="Prompt mô tả đầy đủ phong cách hình ảnh — thay [prompt-style] khi copy prompt workflow"
+                helperText="Prompt mô tả đầy đủ phong cách hình ảnh — thay [IMAGE-STYLE] khi copy prompt workflow"
             />
             <TextField
                 label="STYLE SNAPSHOT"
@@ -416,7 +416,7 @@ export default function ShortVideoImageStyleManageDrawer({
                 setForm(EMPTY_FORM);
                 reloadList();
                 // Sửa style đang dùng cho video → refresh prompt ở cha để copy prompt
-                // workflow thay [prompt-style] bằng dữ liệu mới nhất (không bị cache cũ).
+                // workflow thay [IMAGE-STYLE] bằng dữ liệu mới nhất (không bị cache cũ).
                 if (form.id > 0 && currentStyleId === form.id) {
                     onStyleChange?.(form.id);
                 }
