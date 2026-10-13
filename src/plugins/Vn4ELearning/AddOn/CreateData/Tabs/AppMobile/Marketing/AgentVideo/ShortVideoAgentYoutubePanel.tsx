@@ -30,6 +30,7 @@ import {
     fetchDeepseekYoutubeStatus,
     fetchYoutubeThumbnailStatus,
     generateYoutubeThumbnailImage,
+    openYoutubeThumbnailChatBrowser,
     parseShortVideoPromptMessage,
     refineYoutubeThumbnailImage,
     resolveYoutubeChapters,
@@ -39,7 +40,6 @@ import {
 } from 'helpers/marketingShortVideoAgentPrompt';
 import { parseYoutubeContentResponse, isYoutubeContentResponse } from 'helpers/shortVideoYoutubeContentResponse';
 import { fetchShortVideoAgentImageStyle } from 'helpers/marketingShortVideoImageStyleApi';
-import { openMetaAiChatUrlWithCookie } from 'helpers/marketingImportHtmlWorkflow';
 import {
     fetchWorkflowOutputs,
     saveWorkflowOutput,
@@ -152,7 +152,6 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
     const [jobImageUrls, setJobImageUrls] = React.useState<Record<string, string>>({});
     // rank → url chatbot đã tạo ảnh + feedback đang chờ update (từ status polling).
     const [statusChatUrls, setStatusChatUrls] = React.useState<Record<string, string>>({});
-    const [statusChatCookieIds, setStatusChatCookieIds] = React.useState<Record<string, number>>({});
     const [statusFeedbackNotes, setStatusFeedbackNotes] = React.useState<Record<string, string>>({});
     const [savingFeedbackRank, setSavingFeedbackRank] = React.useState<string>('');
     const [syncingLatestRank, setSyncingLatestRank] = React.useState<string>('');
@@ -172,7 +171,6 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
             setPendingRanks(new Set());
             setJobImageUrls({});
             setStatusChatUrls({});
-            setStatusChatCookieIds({});
             setStatusFeedbackNotes({});
             setChaptersText('');
             setChaptersWarning('');
@@ -185,7 +183,6 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
         setPendingRanks(new Set());
         setJobImageUrls({});
         setStatusChatUrls({});
-        setStatusChatCookieIds({});
         setStatusFeedbackNotes({});
         fetchWorkflowOutputs(shortVideoId).then((map) => {
             setOutputs(map || {});
@@ -204,9 +201,6 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
                 }
                 if (res?.chat_urls && typeof res.chat_urls === 'object') {
                     setStatusChatUrls(res.chat_urls);
-                }
-                if (res?.chat_cookie_ids && typeof res.chat_cookie_ids === 'object') {
-                    setStatusChatCookieIds(res.chat_cookie_ids);
                 }
                 setStatusFeedbackNotes(
                     res?.feedback_notes && typeof res.feedback_notes === 'object'
@@ -256,9 +250,6 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
                 }
                 if (res?.chat_urls && typeof res.chat_urls === 'object') {
                     setStatusChatUrls((prev) => ({ ...prev, ...res.chat_urls }));
-                }
-                if (res?.chat_cookie_ids && typeof res.chat_cookie_ids === 'object') {
-                    setStatusChatCookieIds((prev) => ({ ...prev, ...res.chat_cookie_ids }));
                 }
                 // Feedback được BE xóa khi update xong → thay toàn bộ (không merge) để badge tắt.
                 setStatusFeedbackNotes(
@@ -410,19 +401,6 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
         });
         return { ...map, ...statusChatUrls };
     }, [outputs, statusChatUrls]);
-
-    // Cookie_id account Meta.ai đã tạo chat theo rank (để set lại cookie khi mở).
-    const thumbnailChatCookieIds = React.useMemo(() => {
-        const map: Record<string, number> = {};
-        Object.entries(outputs[YOUTUBE_WORKFLOW_KEY] || {}).forEach(([key, value]) => {
-            const match = key.match(/^thumbnail_cookie_id_(\d+)$/);
-            const id = Number(value);
-            if (match && Number.isFinite(id) && id > 0) {
-                map[match[1]] = id;
-            }
-        });
-        return { ...map, ...statusChatCookieIds };
-    }, [outputs, statusChatCookieIds]);
 
     // Feedback đang chờ update theo rank (BE xóa khi render xong).
     const thumbnailFeedbackNotes = React.useMemo<Record<string, string>>(
@@ -796,32 +774,32 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
             state.showMessage('Concept này chưa có url chatbot', 'warning');
             return;
         }
-        let host = '';
-        try {
-            host = new URL(chatUrl).hostname || '';
-        } catch {
-            host = '';
-        }
-        // Chat Meta.ai cần extension set lại cookie account tạo chat trước khi mở
-        // (window.open không set được cookie pool → chat không mở).
-        if (!/(^|\.)meta\.ai$/i.test(host)) {
-            window.open(chatUrl, '_blank', 'noopener,noreferrer');
+        if (!shortVideoId) {
+            state.showMessage('Thiếu short video — không mở được chat', 'warning');
             return;
         }
+        // Mở chat bằng browser trên SERVER (GUI, giống "Mở luồng chat cũ") với đúng
+        // cookie account đã tạo chat — thay cho window.open trên browser hiện tại.
         try {
-            await openMetaAiChatUrlWithCookie({
-                chatUrl,
-                shortVideoId,
-                rank,
-                cookieId: Number(thumbnailChatCookieIds[rankKey] || 0),
-            });
+            const res = await openYoutubeThumbnailChatBrowser(shortVideoId, rank);
+            if (!res?.success) {
+                state.showMessage(
+                    parseShortVideoPromptMessage(res?.message) || 'Không mở được chat trên server',
+                    'error',
+                );
+                return;
+            }
+            state.showMessage(
+                parseShortVideoPromptMessage(res?.message) || 'Đã mở chat trên browser server',
+                'success',
+            );
         } catch (error) {
             state.showMessage(
-                error instanceof Error ? error.message : 'Không mở được chat Meta.ai',
+                error instanceof Error ? error.message : 'Không mở được chat trên server',
                 'error',
             );
         }
-    }, [thumbnailChatUrls, thumbnailChatCookieIds, shortVideoId, state]);
+    }, [thumbnailChatUrls, shortVideoId, state]);
 
     /**
      * Gửi feedback cho 1 concept: FE hiển thị ngay trạng thái chờ + gọi API tạo job;

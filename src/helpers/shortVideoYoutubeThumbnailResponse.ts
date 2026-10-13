@@ -36,6 +36,28 @@ export type YoutubeThumbnailScoreBreakdownItem = {
     value: number | null;
 };
 
+export type YoutubeThumbnailElementMapRow = {
+    ideaElement: string;
+    role: string;
+    howRendered: string;
+};
+
+export type YoutubeThumbnailFinalizedFromIdea = {
+    lockedCore: string;
+    elementMap: YoutubeThumbnailElementMapRow[];
+    completedByYou: string[];
+    adjustments: string[];
+};
+
+export type YoutubeThumbnailStyleDecision = {
+    source: string;
+    rendering: string;
+    palette: string;
+    lighting: string;
+    typographyFeel: string;
+    reason: string;
+};
+
 export type YoutubeThumbnailConcept = {
     rank: number;
     viralScore: string;
@@ -48,6 +70,17 @@ export type YoutubeThumbnailConcept = {
     visualComposition: YoutubeThumbnailPoint[];
     thumbnailText: string;
     imagePrompt: string;
+    /** Các field JSON mới (prompt gộp) — hiển thị thêm trong dialog chi tiết. */
+    thumbnailSubtext: string;
+    templateId: string;
+    templateName: string;
+    templateReason: string;
+    spotlightElement: string;
+    questionsRaised: string[];
+    openingVisualMatch: string;
+    weakPoints: string[];
+    styleDecision: YoutubeThumbnailStyleDecision | null;
+    finalizedFromIdea: YoutubeThumbnailFinalizedFromIdea | null;
 };
 
 export type YoutubeThumbnailWinner = {
@@ -74,8 +107,14 @@ const BULLET_PREFIX_RE = /^\s*[-*]\s+/;
  * Response chuẩn mới của prompt generate-thumbnail-youtube là JSON array — có thể
  * được bọc trong ```json fence``` hoặc có text thường trước/sau. Extract JSON hợp lệ từ text.
  */
+function stripTrailingStatusToken(value: string): string {
+    return String(value || '')
+        .replace(/([}\]"])\s*(FINISHED|WIP)\s*$/i, '$1')
+        .trim();
+}
+
 function extractJsonArray(text: string): unknown | null {
-    const raw = String(text || '').trim();
+    const raw = stripTrailingStatusToken(String(text || '').trim());
     if (!raw || !raw.includes('[')) {
         return null;
     }
@@ -83,9 +122,14 @@ function extractJsonArray(text: string): unknown | null {
     const candidates: string[] = [];
     const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
     if (fenced) {
-        candidates.push(fenced[1]);
+        candidates.push(stripTrailingStatusToken(fenced[1]));
     }
     candidates.push(raw);
+
+    // Dữ liệu cũ/stream lỗi: array mất ngoặc `[` mở đầu → thử bọc lại.
+    if (!raw.startsWith('[') && raw.includes('{')) {
+        candidates.push(`[${raw}`);
+    }
 
     for (const candidate of candidates) {
         const start = candidate.indexOf('[');
@@ -171,6 +215,78 @@ function normalizeJsonConcept(data: unknown, index: number): YoutubeThumbnailCon
         why.push({ label: 'hook', text: hook });
     }
 
+    // ---- Các field JSON mới (prompt gộp) ----
+    const thumbnailSubtext = pick('thumbnail_subtext', 'thumbnailSubtext');
+    const templateId = pick('template_id', 'templateId');
+    const templateName = pick('template_name', 'templateName');
+    const templateReason = pick('template_reason', 'templateReason');
+    const spotlightElement = pick('spotlight_element', 'spotlightElement');
+    const questionsRaised = Array.isArray(obj.questions_raised ?? obj.questionsRaised)
+        ? (obj.questions_raised ?? obj.questionsRaised as unknown[])
+            .map((item) => (typeof item === 'string' ? item.trim() : ''))
+            .filter((item) => item !== '')
+        : [];
+    const openingVisualMatch = pick('opening_visual_match', 'openingVisualMatch');
+    const weakPoints = Array.isArray(obj.weak_points ?? obj.weakPoints)
+        ? (obj.weak_points ?? obj.weakPoints as unknown[])
+            .map((item) => (typeof item === 'string' ? item.trim() : ''))
+            .filter((item) => item !== '')
+        : [];
+
+    let styleDecision: YoutubeThumbnailStyleDecision | null = null;
+    const rawStyle = obj.style_decision ?? obj.styleDecision;
+    if (rawStyle && typeof rawStyle === 'object' && !Array.isArray(rawStyle)) {
+        const s = rawStyle as Record<string, unknown>;
+        const sPick = (...keys: string[]): string => {
+            for (const key of keys) {
+                const value = s[key];
+                if (typeof value === 'string' && value.trim()) {
+                    return value.trim();
+                }
+            }
+            return '';
+        };
+        styleDecision = {
+            source: sPick('source'),
+            rendering: sPick('rendering'),
+            palette: sPick('palette'),
+            lighting: sPick('lighting'),
+            typographyFeel: sPick('typography_feel', 'typographyFeel'),
+            reason: sPick('reason'),
+        };
+    }
+
+    let finalizedFromIdea: YoutubeThumbnailFinalizedFromIdea | null = null;
+    const rawFinalized = obj.finalized_from_idea ?? obj.finalizedFromIdea;
+    if (rawFinalized && typeof rawFinalized === 'object' && !Array.isArray(rawFinalized)) {
+        const f = rawFinalized as Record<string, unknown>;
+        const elementMap: YoutubeThumbnailElementMapRow[] = Array.isArray(f.element_map ?? f.elementMap)
+            ? (f.element_map ?? f.elementMap as unknown[])
+                .map((row) => {
+                    if (!row || typeof row !== 'object' || Array.isArray(row)) {
+                        return null;
+                    }
+                    const r = row as Record<string, unknown>;
+                    const str = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
+                    return {
+                        ideaElement: str(r.idea_element ?? r.ideaElement),
+                        role: str(r.role),
+                        howRendered: str(r.how_rendered ?? r.howRendered),
+                    };
+                })
+                .filter((row): row is YoutubeThumbnailElementMapRow => row !== null)
+            : [];
+        const strList = (value: unknown): string[] => (Array.isArray(value)
+            ? value.map((item) => (typeof item === 'string' ? item.trim() : '')).filter((item) => item !== '')
+            : []);
+        finalizedFromIdea = {
+            lockedCore: typeof f.locked_core === 'string' ? f.locked_core.trim() : (typeof f.lockedCore === 'string' ? f.lockedCore.trim() : ''),
+            elementMap,
+            completedByYou: strList(f.completed_by_you ?? f.completedByYou),
+            adjustments: strList(f.adjustments),
+        };
+    }
+
     return {
         rank,
         viralScore,
@@ -183,6 +299,16 @@ function normalizeJsonConcept(data: unknown, index: number): YoutubeThumbnailCon
         visualComposition: [],
         thumbnailText,
         imagePrompt,
+        thumbnailSubtext,
+        templateId,
+        templateName,
+        templateReason,
+        spotlightElement,
+        questionsRaised,
+        openingVisualMatch,
+        weakPoints,
+        styleDecision,
+        finalizedFromIdea,
     };
 }
 
@@ -337,6 +463,16 @@ export function parseYoutubeThumbnailResponse(raw: string): YoutubeThumbnailPars
                         visualComposition: [],
                         thumbnailText: '',
                         imagePrompt: '',
+                        thumbnailSubtext: '',
+                        templateId: '',
+                        templateName: '',
+                        templateReason: '',
+                        spotlightElement: '',
+                        questionsRaised: [],
+                        openingVisualMatch: '',
+                        weakPoints: [],
+                        styleDecision: null,
+                        finalizedFromIdea: null,
                     };
                     result.concepts.push(concept);
                     conceptSub = '';

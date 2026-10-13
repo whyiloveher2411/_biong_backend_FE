@@ -293,6 +293,32 @@ export async function fetchWorkflowDefinitions(force = false): Promise<WorkflowD
     return request;
 }
 
+/**
+ * Danh sách chủ đề của workflow "video-image" (nhóm choice `nhom-chu-de` trong
+ * prompts/workflow/video-image/index.md) — dùng cho select "Chủ đề" của kênh.
+ * Trả [] khi không tìm thấy workflow/nhóm choice.
+ */
+export async function fetchShortVideoTopicOptions(
+    workflowKey = 'video-image',
+    choiceName = 'nhom-chu-de',
+): Promise<string[]> {
+    const workflows = await fetchWorkflowDefinitions();
+    const workflow = workflows.find((entry) => entry.key === workflowKey);
+    if (!workflow) {
+        return [];
+    }
+    for (const step of workflow.steps) {
+        for (const item of step.prompts) {
+            if (item.choice === choiceName && item.choiceOptions.length > 0) {
+                return item.choiceOptions
+                    .map((option) => String(option.label || '').trim())
+                    .filter((label) => label !== '');
+            }
+        }
+    }
+    return [];
+}
+
 export async function fetchWorkflowPromptContent(
     workflow: string,
     file: string,

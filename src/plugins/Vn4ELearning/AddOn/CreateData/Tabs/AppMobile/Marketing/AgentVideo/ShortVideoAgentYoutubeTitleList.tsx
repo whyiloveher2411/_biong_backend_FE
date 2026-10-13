@@ -384,17 +384,50 @@ export default function ShortVideoAgentYoutubeTitleList({
     const tags = parsed.tags;
     const seoTitle = parsed.seo?.title ?? null;
     const seoDescription = parsed.seo?.description ?? null;
+    const mainKeyword = parsed.mainKeyword || '';
+    const introMustDeliver = parsed.introMustDeliver || '';
     const hasDescription = Boolean(description) || hashtags.length > 0;
     const hasFirstComment = Boolean(firstComment);
     const hasTags = tags.length > 0;
     const hasSeo = Boolean(seoTitle || seoDescription);
+    const hasMeta = Boolean(mainKeyword || introMustDeliver);
 
-    if (!hasItems && !hasAudience && !hasWinner && !hasPackaging && !hasDescription && !hasFirstComment && !hasTags && !hasSeo) {
+    if (
+        !hasItems && !hasAudience && !hasWinner && !hasPackaging
+        && !hasDescription && !hasFirstComment && !hasTags && !hasSeo && !hasMeta
+    ) {
         return null;
     }
 
     return (
         <Stack spacing={1.5}>
+            {hasMeta ? (
+                <Box
+                    sx={{
+                        border: 1,
+                        borderColor: 'divider',
+                        borderRadius: 2,
+                        p: 1.25,
+                        bgcolor: 'background.paper',
+                    }}
+                >
+                    {mainKeyword ? (
+                        <Typography variant="body2" sx={{ fontSize: 12.5, lineHeight: 1.5 }}>
+                            <strong>Từ khoá chính:</strong> {mainKeyword}
+                        </Typography>
+                    ) : null}
+                    {introMustDeliver ? (
+                        <Typography
+                            variant="body2"
+                            color="text.secondary"
+                            sx={{ fontSize: 12.5, lineHeight: 1.5, mt: mainKeyword ? 0.5 : 0 }}
+                        >
+                            <strong>30s đầu phải thể hiện:</strong> {introMustDeliver}
+                        </Typography>
+                    ) : null}
+                </Box>
+            ) : null}
+
             {hasDescription ? (
                 <Box
                     sx={{

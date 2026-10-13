@@ -15,6 +15,8 @@ export type ShortVideoChannel = {
     image: string | Record<string, unknown> | null;
     keyword: string;
     category: string;
+    /** Chủ đề kênh (vd. Business, History). */
+    topic_group: string;
     video_format: string;
     thumbnail_format: string;
     lang: string;
@@ -23,6 +25,10 @@ export type ShortVideoChannel = {
     cta: string;
     tone: string;
     target_audience: string;
+    /** Phong cách hình ảnh mặc định của kênh (0 = không đặt). */
+    image_style_id: number;
+    /** Phong cách script mặc định của kênh (0 = không đặt). */
+    script_style_id: number;
     created_at?: string;
     updated_at?: string;
 };
@@ -35,6 +41,7 @@ export type ShortVideoChannelSavePayload = {
     image?: string | Record<string, unknown> | null;
     keyword?: string;
     category?: string;
+    topic_group?: string;
     video_format?: string;
     thumbnail_format?: string;
     lang?: string;
@@ -43,6 +50,8 @@ export type ShortVideoChannelSavePayload = {
     cta?: string;
     tone?: string;
     target_audience?: string;
+    image_style_id?: number;
+    script_style_id?: number;
 };
 
 type ApiMessageLike = { content?: string } | string | undefined;
@@ -92,6 +101,7 @@ export function saveShortVideoChannel(payload: ShortVideoChannelSavePayload): Pr
             image: image && typeof image === 'object' ? JSON.stringify(image) : image,
             keyword: payload.keyword ?? '',
             category: payload.category ?? '',
+            topic_group: payload.topic_group ?? '',
             video_format: payload.video_format ?? '',
             thumbnail_format: payload.thumbnail_format ?? '',
             lang: payload.lang ?? '',
@@ -100,6 +110,8 @@ export function saveShortVideoChannel(payload: ShortVideoChannelSavePayload): Pr
             cta: payload.cta ?? '',
             tone: payload.tone ?? '',
             target_audience: payload.target_audience ?? '',
+            image_style_id: payload.image_style_id ?? 0,
+            script_style_id: payload.script_style_id ?? 0,
         },
     }) as Promise<{ success?: boolean; channel?: ShortVideoChannel; channel_id?: number }>;
 }
@@ -122,6 +134,10 @@ export function saveShortVideoAgentChannel(shortVideoId: number, channelId: numb
     success?: boolean;
     short_video_id?: number;
     agent_channel_id?: number;
+    agent_image_style_id?: number;
+    audio_script_style_id?: number;
+    applied_image_style?: boolean;
+    applied_script_style?: boolean;
 }> {
     return ajax({
         url: 'plugin/vn4-e-learning/app-mobile/marketing/short-video/save-agent-channel',
@@ -132,6 +148,10 @@ export function saveShortVideoAgentChannel(shortVideoId: number, channelId: numb
         success?: boolean;
         short_video_id?: number;
         agent_channel_id?: number;
+        agent_image_style_id?: number;
+        audio_script_style_id?: number;
+        applied_image_style?: boolean;
+        applied_script_style?: boolean;
     }>;
 }
 

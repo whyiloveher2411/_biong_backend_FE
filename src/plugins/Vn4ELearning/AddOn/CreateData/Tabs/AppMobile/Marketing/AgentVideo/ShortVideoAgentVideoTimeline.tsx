@@ -2063,16 +2063,39 @@ export default function ShortVideoAgentVideoTimeline({
                     if (nextChannelId <= 0) {
                         setChannelTitle('');
                         setChannelThumbnailFormat('');
-                        return;
+                    } else {
+                        fetchShortVideoAgentChannel(shortVideoId)
+                            .then((result) => {
+                                setChannelTitle(result?.channel?.title || '');
+                                setChannelThumbnailFormat(String(result?.channel?.thumbnail_format || ''));
+                            })
+                            .catch(() => {
+                                setChannelTitle('');
+                                setChannelThumbnailFormat('');
+                            });
                     }
-                    fetchShortVideoAgentChannel(shortVideoId)
+                    // Kênh có thể tự áp phong cách mặc định cho video (khi video
+                    // chưa chọn phong cách) → refresh lại phong cách hình ảnh / script.
+                    fetchShortVideoAgentImageStyle(shortVideoId)
                         .then((result) => {
-                            setChannelTitle(result?.channel?.title || '');
-                            setChannelThumbnailFormat(String(result?.channel?.thumbnail_format || ''));
+                            setImageStyleId(result?.styleId || 0);
+                            setImageStyleTitle(result?.title || '');
+                            setImageStylePrompt(result?.prompt || '');
                         })
                         .catch(() => {
-                            setChannelTitle('');
-                            setChannelThumbnailFormat('');
+                            setImageStyleId(0);
+                            setImageStyleTitle('');
+                            setImageStylePrompt('');
+                        });
+                    fetchShortVideoAgentScriptStyle(shortVideoId)
+                        .then((result) => {
+                            setScriptStyleTitle(result?.title || '');
+                            setScriptStylePrompt(result?.guide || '');
+                            agentState?.setAgentAudioScriptStyleId(result?.styleId || 0);
+                        })
+                        .catch(() => {
+                            setScriptStyleTitle('');
+                            setScriptStylePrompt('');
                         });
                 }}
             />

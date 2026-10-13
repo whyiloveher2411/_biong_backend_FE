@@ -116,6 +116,10 @@ export type YoutubeTitleParseResult = {
     firstComment: string;
     hashtags: string[];
     tags: string[];
+    /** Từ khoá chính (JSON mới) dùng cho description + tag đầu. */
+    mainKeyword: string;
+    /** Câu mô tả 30s đầu video phải thể hiện (JSON mới). */
+    introMustDeliver: string;
     seo: {
         title: YoutubeSeoScore | null;
         description: YoutubeSeoScore | null;
@@ -134,6 +138,8 @@ const EMPTY_RESULT: YoutubeTitleParseResult = {
     firstComment: '',
     hashtags: [],
     tags: [],
+    mainKeyword: '',
+    introMustDeliver: '',
     seo: { title: null, description: null },
 };
 
@@ -203,8 +209,15 @@ function parseWhyPoint(raw: string): YoutubeTitleWhyPoint {
 /* ────────────────────────── JSON parsing ────────────────────────── */
 
 /** Extract JSON object từ response — có thể bọc trong ```json fence``` hoặc text trước/sau. */
+/** Bỏ token trạng thái lẫn ở cuối phản hồi stream (`}FINISHED`). */
+function stripTrailingStatusToken(value: string): string {
+    return String(value || '')
+        .replace(/([}\]"])\s*(FINISHED|WIP)\s*$/i, '$1')
+        .trim();
+}
+
 export function extractJsonObject(text: string): unknown | null {
-    const raw = String(text || '').trim();
+    const raw = stripTrailingStatusToken(String(text || '').trim());
     if (!raw || !raw.includes('{')) {
         return null;
     }
@@ -212,9 +225,14 @@ export function extractJsonObject(text: string): unknown | null {
     const candidates: string[] = [];
     const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
     if (fenced) {
-        candidates.push(fenced[1]);
+        candidates.push(stripTrailingStatusToken(fenced[1]));
     }
     candidates.push(raw);
+
+    // Dữ liệu cũ/stream lỗi: JSON object mất ngoặc `{` mở đầu → thử bọc lại.
+    if (!raw.startsWith('{') && raw.includes(':')) {
+        candidates.push(`{${raw}`);
+    }
 
     for (const candidate of candidates) {
         const start = candidate.indexOf('{');
@@ -547,6 +565,8 @@ function normalizeJsonResult(data: unknown): YoutubeTitleParseResult | null {
     const firstComment = pickString(obj.first_comment ?? obj.firstComment);
     const hashtags = normalizeStringArray(obj.hashtags);
     const tags = normalizeStringArray(obj.tags);
+    const mainKeyword = pickString(obj.main_keyword ?? obj.mainKeyword);
+    const introMustDeliver = pickString(obj.intro_must_deliver ?? obj.introMustDeliver);
     const seoRaw = (obj.seo_score ?? obj.seoScore) as Record<string, unknown> | undefined;
     const seo = {
         title: seoRaw ? normalizeJsonSeoEntry(seoRaw.title ?? seoRaw.seo_title) : null,
@@ -562,6 +582,8 @@ function normalizeJsonResult(data: unknown): YoutubeTitleParseResult | null {
         || Boolean(firstComment)
         || hashtags.length > 0
         || tags.length > 0
+        || Boolean(mainKeyword)
+        || Boolean(introMustDeliver)
         || Boolean(seo.title)
         || Boolean(seo.description);
 
@@ -569,7 +591,20 @@ function normalizeJsonResult(data: unknown): YoutubeTitleParseResult | null {
         return null;
     }
 
-    return { audienceInsight, items, winner, packaging, description, chapters, firstComment, hashtags, tags, seo };
+    return {
+        audienceInsight,
+        items,
+        winner,
+        packaging,
+        description,
+        chapters,
+        firstComment,
+        hashtags,
+        tags,
+        mainKeyword,
+        introMustDeliver,
+        seo,
+    };
 }
 
 /* ────────────────────────── Markdown fallback ────────────────────────── */

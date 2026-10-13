@@ -218,6 +218,27 @@ export async function syncLatestYoutubeThumbnailImage(
     }) as Promise<SyncLatestYoutubeThumbnailImageResponse>;
 }
 
+export type OpenYoutubeThumbnailChatResponse = ShortVideoPromptFetchResponse & {
+    url?: string;
+    cookie_id?: number;
+    pid?: number;
+    rank?: number;
+};
+
+/**
+ * Mở lại chat đã tạo ảnh thumbnail bằng browser trên SERVER (GUI, detached — giống
+ * "Mở luồng chat cũ") với đúng cookie account đã tạo chat, THAY vì mở tab trên
+ * browser hiện tại (extension/window.open thường sai cookie).
+ */
+export async function openYoutubeThumbnailChatBrowser(
+    shortVideoId: number,
+    rank: number,
+): Promise<OpenYoutubeThumbnailChatResponse> {
+    return postShortVideoPrompt('short-video/youtube-thumbnail-chat-open', shortVideoId, {
+        rank,
+    }) as Promise<OpenYoutubeThumbnailChatResponse>;
+}
+
 export async function fetchShortVideoAgentPrompt(
     shortVideoId: number,
     phase: ShortVideoAgentPromptPhase,

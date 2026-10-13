@@ -9952,6 +9952,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         savingIntroduceApp,
         handleIntroduceAppChange,
         agentAudioScriptStyleId,
+        setAgentAudioScriptStyleId,
         savingAudioScriptStyle,
         audioScriptStyles,
         handleAgentAudioScriptStyleChange,

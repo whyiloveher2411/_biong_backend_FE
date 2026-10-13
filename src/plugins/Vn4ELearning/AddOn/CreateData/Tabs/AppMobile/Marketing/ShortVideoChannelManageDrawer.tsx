@@ -11,6 +11,7 @@ import {
     DialogContentText,
     DialogTitle,
     IconButton,
+    MenuItem,
     Radio,
     Stack,
     TextField,
@@ -36,6 +37,15 @@ import {
     uploadShortVideoChannelImage,
     type ShortVideoChannel,
 } from 'helpers/marketingShortVideoChannelApi';
+import {
+    listShortVideoImageStyles,
+    type ShortVideoImageStyle,
+} from 'helpers/marketingShortVideoImageStyleApi';
+import {
+    listShortVideoScriptStyles,
+    type ShortVideoScriptStyle,
+} from 'helpers/marketingShortVideoScriptStyleApi';
+import { fetchShortVideoTopicOptions } from 'helpers/marketingWorkflowPrompts';
 
 type Props = {
     open: boolean;
@@ -55,6 +65,7 @@ type ChannelFormState = {
     image: ChannelFormImage;
     keyword: string;
     category: string;
+    topic_group: string;
     video_format: string;
     thumbnail_format: string;
     lang: string;
@@ -63,6 +74,8 @@ type ChannelFormState = {
     cta: string;
     tone: string;
     target_audience: string;
+    image_style_id: number;
+    script_style_id: number;
 };
 
 const EMPTY_FORM: ChannelFormState = {
@@ -72,6 +85,7 @@ const EMPTY_FORM: ChannelFormState = {
     image: null,
     keyword: '',
     category: '',
+    topic_group: '',
     video_format: '',
     thumbnail_format: '',
     lang: '',
@@ -80,6 +94,8 @@ const EMPTY_FORM: ChannelFormState = {
     cta: '',
     tone: '',
     target_audience: '',
+    image_style_id: 0,
+    script_style_id: 0,
 };
 
 /** Parse field image (JSON {link, type_link, s3_key}) → {url, s3_key} cho form. */
@@ -112,6 +128,9 @@ function ChannelForm({
     onSubmit,
     onCancel,
     onUploadImage,
+    imageStyles,
+    scriptStyles,
+    topicOptions,
 }: {
     form: ChannelFormState;
     onFormChange: (patch: Partial<ChannelFormState>) => void;
@@ -120,6 +139,9 @@ function ChannelForm({
     onSubmit: () => void;
     onCancel: () => void;
     onUploadImage: (file: File) => void;
+    imageStyles: ShortVideoImageStyle[];
+    scriptStyles: ShortVideoScriptStyle[];
+    topicOptions: string[];
 }) {
     const fileInputRef = React.useRef<HTMLInputElement>(null);
     const [dragOver, setDragOver] = React.useState(false);
@@ -160,6 +182,26 @@ function ChannelForm({
                     fullWidth
                     placeholder="VD: Technology, Food"
                 />
+                <TextField
+                    select
+                    label="Chủ đề"
+                    value={form.topic_group}
+                    onChange={(e) => onFormChange({ topic_group: e.target.value })}
+                    disabled={disabled}
+                    size="small"
+                    fullWidth
+                    helperText="Danh sách lấy từ workflow video-image (nhóm chủ đề ở bước Tìm chủ đề)."
+                >
+                    <MenuItem value="">Không chọn</MenuItem>
+                    {topicOptions.map((topic) => (
+                        <MenuItem key={topic} value={topic}>
+                            {topic}
+                        </MenuItem>
+                    ))}
+                    {form.topic_group && !topicOptions.includes(form.topic_group) ? (
+                        <MenuItem value={form.topic_group}>{form.topic_group} (không có trong danh sách)</MenuItem>
+                    ) : null}
+                </TextField>
                 <TextField
                     label="Tone / phong cách nội dung"
                     value={form.tone}
@@ -264,6 +306,47 @@ function ChannelForm({
                     minRows={4}
                     placeholder="Theo dõi kênh để xem thêm nhé!"
                 />
+            </Box>
+            <Box>
+                <Typography variant="subtitle2" sx={{ mb: 0.75 }}>
+                    Phong cách mặc định của kênh
+                </Typography>
+                <Box sx={twoCol}>
+                    <TextField
+                        select
+                        label="Phong cách hình ảnh mặc định"
+                        value={form.image_style_id}
+                        onChange={(e) => onFormChange({ image_style_id: Number(e.target.value) })}
+                        disabled={disabled}
+                        size="small"
+                        fullWidth
+                        helperText="Video gán kênh này mà chưa chọn phong cách hình ảnh sẽ tự dùng phong cách này."
+                    >
+                        <MenuItem value={0}>Không đặt mặc định</MenuItem>
+                        {imageStyles.map((style) => (
+                            <MenuItem key={style.id} value={style.id}>
+                                {style.title || `Style #${style.id}`}
+                            </MenuItem>
+                        ))}
+                    </TextField>
+                    <TextField
+                        select
+                        label="Phong cách script mặc định"
+                        value={form.script_style_id}
+                        onChange={(e) => onFormChange({ script_style_id: Number(e.target.value) })}
+                        disabled={disabled}
+                        size="small"
+                        fullWidth
+                        helperText="Video gán kênh này mà chưa chọn phong cách script sẽ tự dùng phong cách này."
+                    >
+                        <MenuItem value={0}>Không đặt mặc định</MenuItem>
+                        {scriptStyles.map((style) => (
+                            <MenuItem key={style.id} value={style.id}>
+                                {style.title || `Style #${style.id}`}
+                            </MenuItem>
+                        ))}
+                    </TextField>
+                </Box>
             </Box>
             <Box>
                 <Typography variant="subtitle2" sx={{ mb: 0.75 }}>
@@ -380,6 +463,9 @@ export default function ShortVideoChannelManageDrawer({
     const [loading, setLoading] = React.useState(false);
     const [error, setError] = React.useState<string | null>(null);
     const [channels, setChannels] = React.useState<ShortVideoChannel[]>([]);
+    const [imageStyles, setImageStyles] = React.useState<ShortVideoImageStyle[]>([]);
+    const [scriptStyles, setScriptStyles] = React.useState<ShortVideoScriptStyle[]>([]);
+    const [topicOptions, setTopicOptions] = React.useState<string[]>([]);
     const [mode, setMode] = React.useState<'list' | 'form'>('list');
     const [form, setForm] = React.useState<ChannelFormState>(EMPTY_FORM);
     const [saving, setSaving] = React.useState(false);
@@ -407,14 +493,39 @@ export default function ShortVideoChannelManageDrawer({
             });
     }, []);
 
+    const reloadStyleOptions = React.useCallback(() => {
+        listShortVideoImageStyles()
+            .then((result) => {
+                setImageStyles(Array.isArray(result?.styles) ? result.styles : []);
+            })
+            .catch(() => {
+                setImageStyles([]);
+            });
+        listShortVideoScriptStyles()
+            .then((result) => {
+                setScriptStyles(Array.isArray(result?.styles) ? result.styles : []);
+            })
+            .catch(() => {
+                setScriptStyles([]);
+            });
+        fetchShortVideoTopicOptions()
+            .then((options) => {
+                setTopicOptions(Array.isArray(options) ? options : []);
+            })
+            .catch(() => {
+                setTopicOptions([]);
+            });
+    }, []);
+
     React.useEffect(() => {
         if (open) {
             setMode('list');
             setForm(EMPTY_FORM);
             setDeleteTarget(null);
             reloadList();
+            reloadStyleOptions();
         }
-    }, [open, reloadList]);
+    }, [open, reloadList, reloadStyleOptions]);
 
     const openAddForm = () => {
         setForm(EMPTY_FORM);
@@ -429,6 +540,7 @@ export default function ShortVideoChannelManageDrawer({
             image: channelToFormImage(channel),
             keyword: channel.keyword || '',
             category: channel.category || '',
+            topic_group: channel.topic_group || '',
             video_format: channel.video_format || '',
             thumbnail_format: channel.thumbnail_format || '',
             lang: channel.lang || '',
@@ -437,6 +549,8 @@ export default function ShortVideoChannelManageDrawer({
             cta: channel.cta || '',
             tone: channel.tone || '',
             target_audience: channel.target_audience || '',
+            image_style_id: channel.image_style_id || 0,
+            script_style_id: channel.script_style_id || 0,
         });
         setMode('form');
     };
@@ -497,6 +611,7 @@ export default function ShortVideoChannelManageDrawer({
                 : '',
             keyword: form.keyword,
             category: form.category,
+            topic_group: form.topic_group,
             video_format: form.video_format,
             thumbnail_format: form.thumbnail_format,
             lang: form.lang,
@@ -505,6 +620,8 @@ export default function ShortVideoChannelManageDrawer({
             cta: form.cta,
             tone: form.tone,
             target_audience: form.target_audience,
+            image_style_id: form.image_style_id,
+            script_style_id: form.script_style_id,
         })
             .then((result) => {
                 setSaving(false);
@@ -650,6 +767,9 @@ export default function ShortVideoChannelManageDrawer({
                             onSubmit={handleSubmit}
                             onCancel={() => setMode('list')}
                             onUploadImage={handleUploadImage}
+                            imageStyles={imageStyles}
+                            scriptStyles={scriptStyles}
+                            topicOptions={topicOptions}
                         />
                     </Box>
                 ) : null}
@@ -695,6 +815,8 @@ export default function ShortVideoChannelManageDrawer({
                         {channels.map((channel) => {
                             const thumbnail = shortVideoChannelImageUrl(channel.image);
                             const selected = currentChannelId === channel.id;
+                            const imageStyleName = imageStyles.find((item) => item.id === channel.image_style_id)?.title || '';
+                            const scriptStyleName = scriptStyles.find((item) => item.id === channel.script_style_id)?.title || '';
                             return (
                                 <Box
                                     key={channel.id}
@@ -760,6 +882,15 @@ export default function ShortVideoChannelManageDrawer({
                                                 sx={{ height: 20, mb: 0.5 }}
                                             />
                                         ) : null}
+                                        {channel.topic_group ? (
+                                            <Chip
+                                                size="small"
+                                                color="primary"
+                                                variant="outlined"
+                                                label={`Chủ đề: ${channel.topic_group}`}
+                                                sx={{ height: 20, mb: 0.5, ml: channel.category ? 0.5 : 0 }}
+                                            />
+                                        ) : null}
                                         {channel.description ? (
                                             <Typography
                                                 variant="caption"
@@ -788,6 +919,26 @@ export default function ShortVideoChannelManageDrawer({
                                                 noWrap
                                             >
                                                 Thumbnail: {channel.thumbnail_format}
+                                            </Typography>
+                                        ) : null}
+                                        {imageStyleName ? (
+                                            <Typography
+                                                variant="caption"
+                                                color="text.secondary"
+                                                sx={{ display: 'block' }}
+                                                noWrap
+                                            >
+                                                Hình ảnh: {imageStyleName}
+                                            </Typography>
+                                        ) : null}
+                                        {scriptStyleName ? (
+                                            <Typography
+                                                variant="caption"
+                                                color="text.secondary"
+                                                sx={{ display: 'block' }}
+                                                noWrap
+                                            >
+                                                Script: {scriptStyleName}
                                             </Typography>
                                         ) : null}
                                     </Box>

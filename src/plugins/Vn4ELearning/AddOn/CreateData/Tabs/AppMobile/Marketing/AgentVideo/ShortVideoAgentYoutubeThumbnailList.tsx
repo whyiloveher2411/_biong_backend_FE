@@ -522,6 +522,116 @@ function ConceptDetailDialog({
                                 </Box>
                             ) : null}
 
+                            {concept.thumbnailSubtext ? (
+                                <Typography variant="body2" color="text.secondary" sx={{ fontSize: 12, lineHeight: 1.5 }}>
+                                    <strong>Subtext:</strong> {concept.thumbnailSubtext}
+                                </Typography>
+                            ) : null}
+
+                            {concept.templateName || concept.templateId || concept.templateReason ? (
+                                <Box>
+                                    <Typography variant="caption" fontWeight={700} color="text.secondary">
+                                        Template
+                                    </Typography>
+                                    <Typography variant="body2" color="text.secondary" sx={{ fontSize: 12, lineHeight: 1.5, mt: 0.25 }}>
+                                        {concept.templateName || concept.templateId}
+                                        {concept.templateId && concept.templateName ? ` (${concept.templateId})` : ''}
+                                        {concept.templateReason ? ` — ${concept.templateReason}` : ''}
+                                    </Typography>
+                                </Box>
+                            ) : null}
+
+                            {concept.spotlightElement ? (
+                                <Typography variant="body2" color="text.secondary" sx={{ fontSize: 12, lineHeight: 1.5 }}>
+                                    <strong>Spotlight:</strong> {concept.spotlightElement}
+                                </Typography>
+                            ) : null}
+
+                            {concept.questionsRaised.length > 0 ? (
+                                <Box>
+                                    <Typography variant="caption" fontWeight={700} color="text.secondary">
+                                        Câu hỏi gợi mở
+                                    </Typography>
+                                    <PointList points={concept.questionsRaised.map((text) => ({ label: '', text }))} />
+                                </Box>
+                            ) : null}
+
+                            {concept.openingVisualMatch ? (
+                                <Typography variant="body2" color="text.secondary" sx={{ fontSize: 12, lineHeight: 1.5 }}>
+                                    <strong>5s mở đầu khớp thumbnail:</strong> {concept.openingVisualMatch}
+                                </Typography>
+                            ) : null}
+
+                            {concept.styleDecision
+                                && (concept.styleDecision.rendering
+                                    || concept.styleDecision.palette
+                                    || concept.styleDecision.lighting
+                                    || concept.styleDecision.typographyFeel
+                                    || concept.styleDecision.reason) ? (
+                                <Box>
+                                    <Typography variant="caption" fontWeight={700} color="text.secondary">
+                                        Phong cách
+                                        {concept.styleDecision.source ? ` (${concept.styleDecision.source})` : ''}
+                                    </Typography>
+                                    <Typography variant="body2" color="text.secondary" sx={{ fontSize: 12, lineHeight: 1.5, mt: 0.25 }}>
+                                        {[
+                                            concept.styleDecision.rendering,
+                                            concept.styleDecision.palette,
+                                            concept.styleDecision.lighting,
+                                            concept.styleDecision.typographyFeel,
+                                        ].filter(Boolean).join(' · ')}
+                                    </Typography>
+                                    {concept.styleDecision.reason ? (
+                                        <Typography variant="body2" color="text.secondary" sx={{ fontSize: 12, lineHeight: 1.5, mt: 0.25 }}>
+                                            {concept.styleDecision.reason}
+                                        </Typography>
+                                    ) : null}
+                                </Box>
+                            ) : null}
+
+                            {concept.finalizedFromIdea
+                                && (concept.finalizedFromIdea.lockedCore
+                                    || concept.finalizedFromIdea.elementMap.length > 0
+                                    || concept.finalizedFromIdea.adjustments.length > 0) ? (
+                                <Box>
+                                    <Typography variant="caption" fontWeight={700} color="text.secondary">
+                                        Hoàn thiện từ idea
+                                    </Typography>
+                                    {concept.finalizedFromIdea.lockedCore ? (
+                                        <Typography variant="body2" color="text.secondary" sx={{ fontSize: 12, lineHeight: 1.5, mt: 0.25 }}>
+                                            <strong>Core (giữ nguyên):</strong> {concept.finalizedFromIdea.lockedCore}
+                                        </Typography>
+                                    ) : null}
+                                    {concept.finalizedFromIdea.elementMap.length > 0 ? (
+                                        <Box component="ul" sx={{ m: 0, mt: 0.5, pl: 2 }}>
+                                            {concept.finalizedFromIdea.elementMap.map((row, index) => (
+                                                <Box component="li" key={index} sx={{ mb: 0.25 }}>
+                                                    <Typography variant="body2" color="text.secondary" sx={{ fontSize: 12, lineHeight: 1.45 }}>
+                                                        <strong>{row.ideaElement || '—'}</strong>
+                                                        {row.role ? ` (${row.role})` : ''}
+                                                        {row.howRendered ? `: ${row.howRendered}` : ''}
+                                                    </Typography>
+                                                </Box>
+                                            ))}
+                                        </Box>
+                                    ) : null}
+                                    {concept.finalizedFromIdea.adjustments.length > 0 ? (
+                                        <Typography variant="body2" color="text.secondary" sx={{ fontSize: 12, lineHeight: 1.5, mt: 0.5 }}>
+                                            <strong>Điều chỉnh:</strong> {concept.finalizedFromIdea.adjustments.join('; ')}
+                                        </Typography>
+                                    ) : null}
+                                </Box>
+                            ) : null}
+
+                            {concept.weakPoints.length > 0 ? (
+                                <Box>
+                                    <Typography variant="caption" fontWeight={700} color="warning.main">
+                                        Điểm yếu
+                                    </Typography>
+                                    <PointList points={concept.weakPoints.map((text) => ({ label: '', text }))} />
+                                </Box>
+                            ) : null}
+
                             <ScoreBreakdownBars concept={concept} />
 
                             {imageUrl ? (
