@@ -28,6 +28,7 @@ import {
     deepseekYoutubeGenerate,
     enqueueYoutubeThumbnailImages,
     fetchDeepseekYoutubeStatus,
+    fetchYoutubePrompt,
     fetchYoutubeThumbnailStatus,
     generateYoutubeThumbnailImage,
     openYoutubeThumbnailChatBrowser,
@@ -38,6 +39,7 @@ import {
     type YoutubePromptKind,
     type YoutubeThumbnailConceptPrompt,
 } from 'helpers/marketingShortVideoAgentPrompt';
+import { openDeepseekVideoImageSession } from 'helpers/marketingDeepseekVideoImage';
 import { parseYoutubeContentResponse, isYoutubeContentResponse } from 'helpers/shortVideoYoutubeContentResponse';
 import { fetchShortVideoAgentImageStyle } from 'helpers/marketingShortVideoImageStyleApi';
 import {
@@ -61,6 +63,16 @@ type Props = {
 
 /** Khoá workflow lưu output title/thumbnail vào field workflow_outputs của short video. */
 const YOUTUBE_WORKFLOW_KEY = 'youtube';
+
+/** Key workflow cho PHIÊN DeepSeek thủ công (dùng chung hạ tầng session như workflow). */
+const YOUTUBE_SESSION_WORKFLOW_KEY = 'youtube';
+
+/**
+ * TẠM ẨN luồng queue job cũ (enqueue + worker headless chạy nền) — đã chuyển sang mở
+ * browser session thủ công (overlay "Update short video Headless" + ô lưu nội dung YouTube).
+ * Đổi thành true để bật lại nút queue khi cần.
+ */
+const ENABLE_YOUTUBE_QUEUE = false;
 
 /**
  * Prompt gộp: dùng TITLE GỐC của video, trả về mô tả + chapter + tags + SEO và concept ảnh thu nhỏ
@@ -508,10 +520,11 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
     }, [pastingKind, savingKind, shortVideoId, handleSave, state]);
 
     /**
-     * Đưa job DeepSeek sinh nội dung YouTube (gộp title + description + thumbnail) vào hàng đợi
-     * rồi poll trạng thái tới khi xong. (DeepThink/Search có thể mất vài phút → worker chạy nền.)
+     * [TẠM ẨN — luồng queue cũ] Đưa job DeepSeek sinh nội dung YouTube (gộp title + description +
+     * thumbnail) vào hàng đợi rồi poll trạng thái tới khi xong. (DeepThink/Search có thể mất vài
+     * phút → worker chạy nền.) Chỉ chạy khi ENABLE_YOUTUBE_QUEUE = true; giữ nguyên code để bật lại.
      */
-    const handleDeepseekGenerate = React.useCallback(async () => {
+    const handleDeepseekQueueGenerate = React.useCallback(async () => {
         if (deepseekKind || savingKind) {
             return;
         }
@@ -580,6 +593,110 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
         } catch (error) {
             state.showMessage(
                 error instanceof Error ? error.message : 'Không gọi được DeepSeek',
+                'error',
+            );
+            setDeepseekKind('');
+        }
+    }, [deepseekKind, savingKind, shortVideoId, state]);
+
+    /**
+     * Mở browser DeepSeek (session thủ công) cho nội dung YouTube — giống nút "Mở DeepSeek"
+     * của workflow: BE mở browser + dán prompt vào ô chat, overlay "Update short video Headless"
+     * có ô "Nội dung YouTube (JSON)" để dán phản hồi và lưu vào workflow_outputs.youtube.content.
+     *
+     * Sau khi mở, poll `deepseek-youtube-status` cho tới khi user bấm "Lưu nội dung YouTube"
+     * trên overlay (BE set deepseek_status=done) → tự đổ kết quả vào UI.
+     */
+    const handleOpenDeepseekSession = React.useCallback(async () => {
+        if (deepseekKind || savingKind) {
+            return;
+        }
+        if (!shortVideoId) {
+            state.showMessage('Thiếu short video — không mở được DeepSeek', 'warning');
+            return;
+        }
+        setDeepseekKind(PROMPT_KIND);
+        try {
+            const promptRes = await fetchYoutubePrompt(shortVideoId, PROMPT_KIND);
+            const prompt = String(promptRes?.content || '').trim();
+            if (!promptRes?.success || !prompt) {
+                state.showMessage(
+                    parseShortVideoPromptMessage(promptRes?.message) || 'Không tải được prompt nội dung YouTube',
+                    'error',
+                );
+                setDeepseekKind('');
+                return;
+            }
+
+            const res = await openDeepseekVideoImageSession({
+                shortVideoId,
+                promptGenerate: prompt,
+                promptBeat: '',
+                promptTranslate: '',
+                resume: false,
+                workflowKey: YOUTUBE_SESSION_WORKFLOW_KEY,
+                provider: 'deepseek',
+                updateBox: ['youtube'],
+            });
+            if (!res?.success) {
+                state.showMessage(
+                    parseShortVideoPromptMessage(res?.message) || 'Không mở được browser DeepSeek',
+                    'error',
+                );
+                setDeepseekKind('');
+                return;
+            }
+            state.showMessage(
+                parseShortVideoPromptMessage(res?.message)
+                    || 'Đã mở browser DeepSeek — bấm Enter gửi prompt, rồi dán phản hồi và bấm "Lưu nội dung YouTube" trên overlay.',
+                'info',
+            );
+
+            const startedAt = Date.now();
+            const maxWaitMs = 15 * 60 * 1000;
+            const poll = async (): Promise<void> => {
+                if (Date.now() - startedAt > maxWaitMs) {
+                    state.showMessage('Chưa nhận được nội dung YouTube — kiểm tra overlay browser rồi thử lại', 'warning');
+                    setDeepseekKind('');
+                    return;
+                }
+                const st = await fetchDeepseekYoutubeStatus(shortVideoId).catch(() => null);
+                if (st?.status === 'done') {
+                    const text = String(st.text || '');
+                    setValue(text);
+                    if (st.outputs) {
+                        setOutputs(st.outputs as WorkflowOutputsMap);
+                    } else {
+                        setOutputs((prev) => ({
+                            ...prev,
+                            [YOUTUBE_WORKFLOW_KEY]: {
+                                ...(prev[YOUTUBE_WORKFLOW_KEY] || {}),
+                                [PROMPT_KIND]: text,
+                            },
+                        }));
+                    }
+                    state.showMessage(
+                        parseShortVideoPromptMessage(st.message)
+                            || 'Đã lưu nội dung YouTube từ overlay',
+                        'success',
+                    );
+                    setDeepseekKind('');
+                    return;
+                }
+                if (st?.status === 'error') {
+                    state.showMessage(
+                        parseShortVideoPromptMessage(st.message) || 'Phiên DeepSeek gặp lỗi',
+                        'error',
+                    );
+                    setDeepseekKind('');
+                    return;
+                }
+                deepseekPollRef.current = setTimeout(() => { void poll(); }, 5000);
+            };
+            void poll();
+        } catch (error) {
+            state.showMessage(
+                error instanceof Error ? error.message : 'Không mở được DeepSeek',
                 'error',
             );
             setDeepseekKind('');
@@ -987,7 +1104,7 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
                         YouTube
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                        Prompt dùng tiêu đề gốc của video để sinh mô tả + chapter + tags + ảnh thu nhỏ. Copy prompt gửi lên chatbot rồi dán kết quả để lưu và phân tích — hoặc bấm “Mở DeepSeek” để tự động sinh và lưu.
+                        Prompt dùng tiêu đề gốc của video để sinh mô tả + chapter + tags + ảnh thu nhỏ. Copy prompt gửi lên chatbot rồi dán kết quả để lưu và phân tích — hoặc bấm “Mở DeepSeek” để mở browser kèm overlay, gửi prompt và lưu nội dung ngay trên overlay.
                     </Typography>
                 </Box>
 
@@ -1076,7 +1193,9 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
                                 title={
                                     copyDisabledReason
                                         ? copyDisabledReason
-                                        : 'Mở DeepSeek (headless) với cookie, tự gửi prompt và lưu phản hồi'
+                                        : (ENABLE_YOUTUBE_QUEUE
+                                            ? 'Đưa yêu cầu DeepSeek vào hàng đợi (worker chạy nền, tự lưu khi xong)'
+                                            : 'Mở browser DeepSeek — tự gửi prompt, dán phản hồi & bấm "Lưu nội dung YouTube" trên overlay')
                                 }
                                 placement="top"
                             >
@@ -1088,7 +1207,11 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
                                         loading={deepseeking}
                                         disabled={copyDisabled || Boolean(deepseekKind) || Boolean(savingKind)}
                                         startIcon={<SmartToyOutlinedIcon fontSize="small" />}
-                                        onClick={() => { void handleDeepseekGenerate(); }}
+                                        onClick={() => {
+                                            void (ENABLE_YOUTUBE_QUEUE
+                                                ? handleDeepseekQueueGenerate()
+                                                : handleOpenDeepseekSession());
+                                        }}
                                         sx={{ textTransform: 'none' }}
                                     >
                                         {deepseeking ? 'DeepSeek đang xử lý…' : 'Mở DeepSeek'}
