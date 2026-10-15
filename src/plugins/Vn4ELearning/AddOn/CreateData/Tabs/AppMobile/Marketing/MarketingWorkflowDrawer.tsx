@@ -222,7 +222,7 @@ function PromptKeywordChips({
                     <Tooltip key={keyword} title={title} placement="top">
                         <Chip
                             size="small"
-                            variant="contained"
+                            variant="filled"
                             color={color}
                             label={`[${keyword}]`}
                             sx={{ height: 20, fontSize: 10.5, '& .MuiChip-label': { px: 0.75 } }}
@@ -1403,7 +1403,7 @@ export default function MarketingWorkflowDrawer({
                                     >
                                         <Chip
                                             size="small"
-                                            variant="contained"
+                                            variant="filled"
                                             label={`[${key}]`}
                                             sx={{
                                                 height: 20,

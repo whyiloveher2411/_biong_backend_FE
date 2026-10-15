@@ -147,6 +147,14 @@ function extractJsonArray(text: string): unknown | null {
     return null;
 }
 
+function toStringList(value: unknown): string[] {
+    return Array.isArray(value)
+        ? value
+            .map((item: unknown) => (typeof item === 'string' ? item.trim() : ''))
+            .filter((item) => item !== '')
+        : [];
+}
+
 function normalizeJsonConcept(data: unknown, index: number): YoutubeThumbnailConcept | null {
     if (!data || typeof data !== 'object' || Array.isArray(data)) {
         return null;
@@ -221,17 +229,9 @@ function normalizeJsonConcept(data: unknown, index: number): YoutubeThumbnailCon
     const templateName = pick('template_name', 'templateName');
     const templateReason = pick('template_reason', 'templateReason');
     const spotlightElement = pick('spotlight_element', 'spotlightElement');
-    const questionsRaised = Array.isArray(obj.questions_raised ?? obj.questionsRaised)
-        ? (obj.questions_raised ?? obj.questionsRaised as unknown[])
-            .map((item) => (typeof item === 'string' ? item.trim() : ''))
-            .filter((item) => item !== '')
-        : [];
+    const questionsRaised = toStringList(obj.questions_raised ?? obj.questionsRaised);
     const openingVisualMatch = pick('opening_visual_match', 'openingVisualMatch');
-    const weakPoints = Array.isArray(obj.weak_points ?? obj.weakPoints)
-        ? (obj.weak_points ?? obj.weakPoints as unknown[])
-            .map((item) => (typeof item === 'string' ? item.trim() : ''))
-            .filter((item) => item !== '')
-        : [];
+    const weakPoints = toStringList(obj.weak_points ?? obj.weakPoints);
 
     let styleDecision: YoutubeThumbnailStyleDecision | null = null;
     const rawStyle = obj.style_decision ?? obj.styleDecision;
@@ -260,9 +260,10 @@ function normalizeJsonConcept(data: unknown, index: number): YoutubeThumbnailCon
     const rawFinalized = obj.finalized_from_idea ?? obj.finalizedFromIdea;
     if (rawFinalized && typeof rawFinalized === 'object' && !Array.isArray(rawFinalized)) {
         const f = rawFinalized as Record<string, unknown>;
-        const elementMap: YoutubeThumbnailElementMapRow[] = Array.isArray(f.element_map ?? f.elementMap)
-            ? (f.element_map ?? f.elementMap as unknown[])
-                .map((row) => {
+        const rawElementMap = f.element_map ?? f.elementMap;
+        const elementMap: YoutubeThumbnailElementMapRow[] = Array.isArray(rawElementMap)
+            ? rawElementMap
+                .map((row: unknown) => {
                     if (!row || typeof row !== 'object' || Array.isArray(row)) {
                         return null;
                     }

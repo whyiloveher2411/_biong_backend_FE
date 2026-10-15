@@ -199,6 +199,7 @@ import {
     type SocialAccountItem,
     type AgentVideoBeatAudioState,
     type AgentVideoSfxSummary,
+    type ApiMessage,
     saveAgentBeatAudio,
     generateSfxCue,
     generateManualBeatAudio,
@@ -284,6 +285,10 @@ import {
     deriveBeatAudioProgress,
     type BeatAudioProgress,
 } from './agentVideoBeatAudioProgress';
+import {
+    deriveSfxProgress,
+    type SfxProgress,
+} from './agentVideoSfxProgress';
 import { normalizeClipAspect, type ClipAspect } from './agentVideoClipAspect';
 import { normalizeAgentBeatFrequency, type AgentBeatFrequency } from './agentVideoBeatFrequency';
 import { normalizeImportHtmlForAudio } from './agentVideoCustomHtmlPreview';
@@ -7097,7 +7102,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             }
             const ok = (res as { success?: boolean } | null)?.success === true;
             showMessage(
-                parseApiMessage((res as { message?: unknown } | null)?.message)
+                parseApiMessage((res as { message?: ApiMessage } | null)?.message)
                     || (ok ? 'Đã sinh SFX' : 'Sinh SFX thất bại'),
                 ok ? 'success' : 'error',
             );
@@ -9879,6 +9884,16 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         fullAutoPipeline?.status,
     ]);
 
+    const sfxProgress = React.useMemo((): SfxProgress => deriveSfxProgress({
+        summary: sfxSummary,
+        pipelineStep: fullAutoPipeline?.current_step,
+        pipelineStatus: fullAutoPipeline?.status,
+    }), [
+        sfxSummary,
+        fullAutoPipeline?.current_step,
+        fullAutoPipeline?.status,
+    ]);
+
     return {
         isVideo2sMode,
         manualBeatMarks,
@@ -9976,6 +9991,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         whiteboardBeatRenders,
         whiteboardRenderProgress,
         beatAudioProgress,
+        sfxProgress,
         renderingWhiteboardBeatIds,
         uploadingBeatVideoToCapcutIds,
         handleRenderWhiteboardBeat,

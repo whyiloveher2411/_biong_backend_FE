@@ -1262,6 +1262,7 @@ export default function ShortVideoAgentVideoWorkspace({
                 }}
                 whiteboardRenderProgress={state.whiteboardRenderProgress}
                 beatAudioProgress={state.beatAudioProgress}
+                sfxProgress={state.sfxProgress}
                 geminiScriptStatus={state.geminiScriptStatus}
                 geminiScriptPhoneticStatus={state.geminiScriptPhoneticStatus}
                 geminiDivisionStatus={state.geminiDivisionStatus}

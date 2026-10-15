@@ -36,6 +36,16 @@ import {
     beatAudioProgressSubtitle,
     type BeatAudioProgress,
 } from './agentVideoBeatAudioProgress';
+import {
+    sfxProgressLabel,
+    sfxProgressSubtitle,
+    type SfxProgress,
+} from './agentVideoSfxProgress';
+import {
+    beatImageProgressLabel,
+    beatImageProgressSubtitle,
+    deriveBeatImageProgress,
+} from './agentVideoBeatImageProgress';
 import { useAgentHeadlessPreview } from './useAgentHeadlessPreview';
 import { setHeadlessPreviewLayout } from 'helpers/shortVideoHeadlessPreviewBus';
 
@@ -68,6 +78,7 @@ type Props = {
     onStepToggleChange: (toggleKey: FullAutoStepToggleKey, checked: boolean) => void;
     whiteboardRenderProgress?: WhiteboardRenderProgress | null;
     beatAudioProgress?: BeatAudioProgress | null;
+    sfxProgress?: SfxProgress | null;
     geminiScriptStatus?: string;
     geminiScriptPhoneticStatus?: string;
     geminiDivisionStatus?: string;
@@ -187,6 +198,7 @@ export default function ShortVideoAgentHeadlessPreview({
     onStepToggleChange,
     whiteboardRenderProgress = null,
     beatAudioProgress = null,
+    sfxProgress = null,
     geminiScriptStatus = 'none',
     geminiScriptPhoneticStatus = 'none',
     geminiDivisionStatus = 'none',
@@ -231,6 +243,18 @@ export default function ShortVideoAgentHeadlessPreview({
     const beatAudioTitle = showBeatAudioProgress && beatAudioProgress
         ? beatAudioProgressLabel(beatAudioProgress)
         : '';
+    const showSfxProgress = Boolean(
+        pipelineRunning && currentStep === 'sfx',
+    );
+    const sfxTitle = showSfxProgress && sfxProgress
+        ? sfxProgressLabel(sfxProgress)
+        : '';
+    const beatImageProgress = deriveBeatImageProgress({
+        progress: geminiFillProgress,
+        status: geminiImageFillStatus,
+        pipelineStep: currentStep,
+        pipelineStatus: pipeline?.status,
+    });
 
     const chatgptInChain = usesChatgptWebTts(selectedTtsPlatforms);
     const chatgptTtsActive = chatgptInChain && (
@@ -391,20 +415,14 @@ export default function ShortVideoAgentHeadlessPreview({
     const beatId = String(
         (showWhiteboardRenderProgress && whiteboardRenderProgress?.activeBeatId)
         || (showBeatAudioProgress && beatAudioProgress?.activeBeatId)
+        || (showSfxProgress && sfxProgress?.activeCueId)
         || preview.metadata?.beat_id
         || vibesFillProgress?.beatId
         || geminiFillProgress?.beatId
         || '',
     ).trim();
-    const imageFillProgressLabel = (() => {
-        const current = Number(geminiFillProgress?.current || 0);
-        const total = Number(geminiFillProgress?.total || 0);
-        const beatPart = beatId || 'đang chờ beat…';
-        if (total > 0 && current > 0) {
-            return `Ảnh beat · ${beatPart} (${current}/${total})`;
-        }
-        return `Ảnh beat · ${beatPart}`;
-    })();
+    const imageFillProgressLabel = beatImageProgressLabel(beatImageProgress)
+        || `Ảnh beat · ${beatId || 'đang chờ beat…'}`;
     const imageJobActive = isActiveJobStatus(geminiImageFillStatus);
     const vibesJobActive = isActiveJobStatus(vibesFillStatus);
     // `beat_image_fill` đã xong chưa? `current_step` có thể bị đẩy sang `beat_video_animate`
@@ -442,6 +460,9 @@ export default function ShortVideoAgentHeadlessPreview({
         }
         if (showBeatAudioProgress && beatAudioTitle) {
             return beatAudioTitle;
+        }
+        if (showSfxProgress && sfxTitle) {
+            return sfxTitle;
         }
         if (isImageFillStep) {
             return imageFillProgressLabel;
@@ -481,6 +502,18 @@ export default function ShortVideoAgentHeadlessPreview({
                 beatAudioProgress && beatAudioProgress.total > 0
                     ? `${beatAudioProgress.completed}/${beatAudioProgress.total} beat`
                     : 'Đang chuẩn bị tạo audio từng beat…'
+            )
+        )
+        : '';
+    const sfxSubtitle = showSfxProgress
+        ? (
+            (sfxProgress
+                ? sfxProgressSubtitle(sfxProgress)
+                : '')
+            || (
+                sfxProgress && sfxProgress.total > 0
+                    ? `${sfxProgress.completed}/${sfxProgress.total} cue`
+                    : 'Đang chuẩn bị tạo sound effect…'
             )
         )
         : '';
@@ -602,20 +635,25 @@ export default function ShortVideoAgentHeadlessPreview({
                     >
                         {isImageFillStep
                             ? (
-                                Number(geminiFillProgress?.total || 0) > 0
-                                    ? `Meta.ai · ${Number(geminiFillProgress?.current || 0)}/${Number(geminiFillProgress?.total || 0)}`
-                                    : 'Meta.ai headless'
+                                beatImageProgressSubtitle(beatImageProgress)
+                                    || (
+                                        Number(geminiFillProgress?.total || 0) > 0
+                                            ? `Meta.ai · ${Number(geminiFillProgress?.current || 0)}/${Number(geminiFillProgress?.total || 0)}`
+                                            : 'Meta.ai headless'
+                                    )
                             )
                             : (showBeatAudioProgress && beatAudioSubtitle
                                 ? beatAudioSubtitle
-                                : (pipelineRunning ? pipelineProgressLabel(currentStep) : (
-                                    isActiveJobStatus(geminiScriptPhoneticStatus)
-                                        ? pipelineProgressLabel('script_phonetic_normalize')
-                                        : (chatgptTtsActive
-                                            ? 'ChatGPT Web TTS'
-                                            : `Short video #${shortVideoId}`)
-                                )))}
-                        {!isImageFillStep && !showBeatAudioProgress && beatId ? ` · ${beatId}` : ''}
+                                : (showSfxProgress && sfxSubtitle
+                                    ? sfxSubtitle
+                                    : (pipelineRunning ? pipelineProgressLabel(currentStep) : (
+                                        isActiveJobStatus(geminiScriptPhoneticStatus)
+                                            ? pipelineProgressLabel('script_phonetic_normalize')
+                                            : (chatgptTtsActive
+                                                ? 'ChatGPT Web TTS'
+                                                : `Short video #${shortVideoId}`)
+                                    ))))}
+                        {!isImageFillStep && !showBeatAudioProgress && !showSfxProgress && beatId ? ` · ${beatId}` : ''}
                     </Typography>
                 </Box>
                 {browserStep && !minimized ? (
@@ -846,6 +884,80 @@ export default function ShortVideoAgentHeadlessPreview({
                                     size="small"
                                     color="error"
                                     label={`${beatAudioProgress.failed.length} beat lỗi`}
+                                    sx={{ mt: 1, height: 22, '& .MuiChip-label': { px: 0.75, fontSize: 11 } }}
+                                />
+                            ) : null}
+                        </Box>
+                    ) : showSfxProgress ? (
+                        <Box sx={{ px: 3, width: '100%', maxWidth: 420, textAlign: 'center' }}>
+                            {running ? <CircularProgress size={30} color="inherit" sx={{ mb: 1.5 }} /> : null}
+                            <Typography variant="body2" fontWeight={600}>
+                                {sfxProgress?.active
+                                    ? sfxProgressLabel(sfxProgress)
+                                    : stepLabel(currentStep, agentVisualMode)}
+                            </Typography>
+                            {sfxProgress && sfxProgress.total > 0 ? (
+                                <LinearProgress
+                                    variant="determinate"
+                                    value={Math.max(0, Math.min(100, sfxProgress.percent))}
+                                    sx={{
+                                        mt: 1.5,
+                                        mb: 1,
+                                        height: 8,
+                                        borderRadius: 1,
+                                        bgcolor: 'rgba(255,255,255,0.12)',
+                                        '& .MuiLinearProgress-bar': { bgcolor: 'warning.light' },
+                                    }}
+                                />
+                            ) : null}
+                            <Typography
+                                variant="caption"
+                                sx={{ display: 'block', mt: 0.75, color: 'rgba(255,255,255,0.72)' }}
+                            >
+                                {sfxSubtitle}
+                            </Typography>
+                            {sfxProgress && sfxProgress.failed.length > 0 ? (
+                                <Chip
+                                    size="small"
+                                    color="error"
+                                    label={`${sfxProgress.failed.length} cue lỗi`}
+                                    sx={{ mt: 1, height: 22, '& .MuiChip-label': { px: 0.75, fontSize: 11 } }}
+                                />
+                            ) : null}
+                        </Box>
+                    ) : isImageFillStep ? (
+                        <Box sx={{ px: 3, width: '100%', maxWidth: 420, textAlign: 'center' }}>
+                            {running ? <CircularProgress size={30} color="inherit" sx={{ mb: 1.5 }} /> : null}
+                            <Typography variant="body2" fontWeight={600}>
+                                {beatImageProgress.active
+                                    ? beatImageProgressLabel(beatImageProgress)
+                                    : imageFillProgressLabel}
+                            </Typography>
+                            {beatImageProgress.total > 0 ? (
+                                <LinearProgress
+                                    variant="determinate"
+                                    value={Math.max(0, Math.min(100, beatImageProgress.percent))}
+                                    sx={{
+                                        mt: 1.5,
+                                        mb: 1,
+                                        height: 8,
+                                        borderRadius: 1,
+                                        bgcolor: 'rgba(255,255,255,0.12)',
+                                        '& .MuiLinearProgress-bar': { bgcolor: 'primary.light' },
+                                    }}
+                                />
+                            ) : null}
+                            <Typography
+                                variant="caption"
+                                sx={{ display: 'block', mt: 0.75, color: 'rgba(255,255,255,0.72)' }}
+                            >
+                                {beatImageProgressSubtitle(beatImageProgress) || 'Meta.ai headless'}
+                            </Typography>
+                            {beatImageProgress.failed.length > 0 ? (
+                                <Chip
+                                    size="small"
+                                    color="error"
+                                    label={`${beatImageProgress.failed.length} beat lỗi`}
                                     sx={{ mt: 1, height: 22, '& .MuiChip-label': { px: 0.75, fontSize: 11 } }}
                                 />
                             ) : null}
