@@ -2867,7 +2867,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         beatImagePrompt?: string;
         beatVideoUrl?: string;
         beatVideoDelete?: boolean;
-        beatMediaSource?: 'image' | 'video';
+        beatMediaSource?: 'image' | 'video' | 'html';
         beatImageDelete?: boolean;
         beatImageChatUrl?: string;
         beatImageSyncLatest?: boolean;
@@ -4362,7 +4362,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             videoUrl?: string;
             videoDurationSec?: number;
             deleteVideo?: boolean;
-            mediaSource?: 'image' | 'video';
+            mediaSource?: 'image' | 'video' | 'html';
         },
     ): Promise<boolean> => {
         const draftUpdatedAt = new Date().toISOString();
@@ -4449,7 +4449,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
 
     const handleSetBeatMediaSource = React.useCallback(async (
         beatId: string,
-        mediaSource: 'image' | 'video',
+        mediaSource: 'image' | 'video' | 'html',
     ): Promise<boolean> => {
         const normalizedBeatId = String(beatId || '').trim();
         if (!normalizedBeatId) {

@@ -46,6 +46,9 @@ export type BeatHtmlEntry = {
     render_error_at?: string;
 };
 
+/** Nguồn render của 1 beat trong video_2s/whiteboard: ảnh, video thay thế, hoặc HTML motion. */
+export type BeatMediaSource = 'image' | 'video' | 'html';
+
 export type BeatImageEntry = {
     image_url: string;
     /**
@@ -62,8 +65,11 @@ export type BeatImageEntry = {
     video_url?: string;
     video_updated_at?: string;
     video_duration_sec?: number;
-    /** Nguồn render của beat: 'image' (ảnh beat) hoặc 'video' (video thay thế). */
-    media_source?: 'image' | 'video';
+    /**
+     * Nguồn render của beat: 'image' (ảnh beat), 'video' (video thay thế) hoặc
+     * 'html' (HTML motion — render bằng HyperFrames thay cho ảnh/video).
+     */
+    media_source?: BeatMediaSource;
     /**
      * URL chat chatbot (Meta.ai / Duck.ai) đã tạo ảnh beat — user mở lại chat gốc
      * để xem/update ảnh ngay trong conversation đó.
@@ -698,15 +704,18 @@ export function parseBeatImageEntry(entry: unknown): BeatImageEntry | null {
     const chatUrl = String(raw.chat_url || '').trim();
     const imagePrompt = String(raw.image_prompt || '').trim();
     const videoUrl = String(raw.video_url || '').trim();
-    // Ảnh đã xóa nhưng còn metadata (prompt / chat_url / video) → vẫn parse để nút
-    // "Mở url chatbot" / render video dùng được; chỉ bỏ entry rỗng hoàn toàn.
-    if (!imageUrl && !chatUrl && !imagePrompt && !videoUrl) {
-        return null;
-    }
     const mediaSourceRaw = String(raw.media_source || '').trim().toLowerCase();
-    const mediaSource: 'image' | 'video' | undefined = mediaSourceRaw === 'image' || mediaSourceRaw === 'video'
+    const mediaSource: BeatMediaSource | undefined = mediaSourceRaw === 'image'
+        || mediaSourceRaw === 'video'
+        || mediaSourceRaw === 'html'
         ? mediaSourceRaw
         : undefined;
+    // Ảnh đã xóa nhưng còn metadata (prompt / chat_url / video) → vẫn parse để nút
+    // "Mở url chatbot" / render video dùng được. Beat chỉ có media_source='html'
+    // (HTML motion không cần ảnh/video) cũng phải giữ flag; chỉ bỏ entry rỗng hoàn toàn.
+    if (!imageUrl && !chatUrl && !imagePrompt && !videoUrl && mediaSource !== 'html') {
+        return null;
+    }
     const qaStatus = raw.qa_status != null ? normalizeBeatQaStatus(raw.qa_status) : undefined;
     const extraUrls = Array.isArray(raw.extra_image_urls)
         ? raw.extra_image_urls
@@ -758,10 +767,13 @@ export function parseBeatImageBlock(raw: unknown): Record<string, BeatImageEntry
 
 /**
  * Beat render bằng video thay vì ảnh? Ưu tiên video khi có `video_url` và user
- * chưa chọn rõ `media_source = 'image'`.
+ * chưa chọn rõ `media_source = 'image'` (hoặc `'html'` — HTML motion thắng).
  */
 export function beatImageEntryUsesVideo(entry?: BeatImageEntry | null): boolean {
     if (!entry) {
+        return false;
+    }
+    if (entry.media_source === 'html') {
         return false;
     }
     if (!String(entry.video_url || '').trim()) {
@@ -770,12 +782,21 @@ export function beatImageEntryUsesVideo(entry?: BeatImageEntry | null): boolean 
     return entry.media_source !== 'image';
 }
 
+/** Beat render bằng HTML motion (HyperFrames) thay cho ảnh/video? */
+export function beatImageEntryUsesHtml(entry?: BeatImageEntry | null): boolean {
+    return Boolean(entry) && entry?.media_source === 'html';
+}
+
 export function getBeatImageVisualState(
     beatImage: Record<string, BeatImageEntry>,
     beatId: string,
     override?: { image_layers?: unknown } | null,
 ): BeatHtmlVisualState {
     const entry = beatImage[beatId];
+    // Beat chọn HTML motion là nguồn render → không cần ảnh cũng coi là có visual.
+    if (entry?.media_source === 'html') {
+        return entry.render_status === 'error' ? 'error' : 'ok';
+    }
     const hasEntryImage = Boolean(String(entry?.image_url || '').trim());
     // Ảnh beat có thể nằm trong override.image_layers (lưu qua extension) —
     // chỉ khi KHÔNG có ảnh ở cả hai nguồn mới tính là missing (timeline đỏ).
@@ -1118,6 +1139,10 @@ export function isBeatImageMissing(
     beatId: string,
     dualLayer?: { section?: BeatMapSection | null; backgroundUrl?: string },
 ): boolean {
+    // Beat chọn HTML motion → không cần ảnh beat.
+    if (beatImage[beatId]?.media_source === 'html') {
+        return false;
+    }
     if (!String(beatImage[beatId]?.image_url || '').trim()) {
         return true;
     }

@@ -2,6 +2,7 @@ import React from 'react';
 import { Box, Typography } from '@mui/material';
 import ImageOutlinedIcon from '@mui/icons-material/ImageOutlined';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import CodeIcon from '@mui/icons-material/Code';
 import {
     computeContainScale,
     computeScaledStageHeight,
@@ -17,8 +18,8 @@ type Props = {
     audioUrl?: string;
     /** Video thay thế ảnh beat (render bằng video khi mediaSource = 'video'). */
     videoUrl?: string;
-    /** Nguồn render đang chọn: 'image' | 'video'. */
-    mediaSource?: 'image' | 'video';
+    /** Nguồn render đang chọn: 'image' | 'video' | 'html' (HTML motion). */
+    mediaSource?: 'image' | 'video' | 'html';
 };
 
 export default function ShortVideoAgentBeatImagePreview({
@@ -38,8 +39,9 @@ export default function ShortVideoAgentBeatImagePreview({
 
     const videoSrc = String(videoUrl || '').trim();
     const hasImage = Boolean(String(imageUrl || '').trim()) && !failed;
+    const isHtmlMotion = mediaSource === 'html';
     const showVideo = mediaSource === 'video' && videoSrc !== '' && !videoFailed;
-    const hasMedia = showVideo || hasImage;
+    const hasMedia = showVideo || hasImage || isHtmlMotion;
     const stage = getClipStageDimensions(clipAspect);
     const containScale = computeContainScale(containerWidth || 360, undefined, clipAspect);
     const scaledStageHeight = computeScaledStageHeight(containScale, clipAspect);
@@ -183,7 +185,7 @@ export default function ShortVideoAgentBeatImagePreview({
                             </Box>
                         ) : null}
                     </>
-                ) : (
+                ) : hasImage ? (
                     <Box
                         component="img"
                         src={imageUrl}
@@ -199,7 +201,48 @@ export default function ShortVideoAgentBeatImagePreview({
                             bgcolor: '#fff',
                         }}
                     />
+                ) : (
+                    <Box
+                        sx={{
+                            height: '100%',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 0.75,
+                            color: 'common.white',
+                            bgcolor: 'grey.900',
+                        }}
+                    >
+                        <CodeIcon sx={{ fontSize: 32, opacity: 0.85 }} />
+                        <Typography variant="caption" sx={{ fontWeight: 600 }}>
+                            HTML motion
+                        </Typography>
+                    </Box>
                 )}
+                {isHtmlMotion && (hasImage || showVideo) ? (
+                    <Box
+                        sx={{
+                            position: 'absolute',
+                            bottom: 6,
+                            left: 6,
+                            px: 0.75,
+                            py: 0.25,
+                            borderRadius: 0.75,
+                            bgcolor: 'rgba(0,0,0,0.65)',
+                            color: 'common.white',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 0.5,
+                            pointerEvents: 'none',
+                        }}
+                    >
+                        <CodeIcon sx={{ fontSize: 12 }} />
+                        <Typography variant="caption" sx={{ fontSize: 10, lineHeight: 1 }}>
+                            HTML motion
+                        </Typography>
+                    </Box>
+                ) : null}
             </Box>
             {audioUrl ? (
                 <audio

@@ -382,10 +382,16 @@ export default function ShortVideoAgentBeatInfoDrawer({
                     </DetailSection>
 
                     <DetailSection
-                        eyebrow={isWhiteboardMode ? 'Live ảnh' : 'Live HTML'}
+                        eyebrow={
+                            isWhiteboardMode
+                            && !(beatImage?.media_source === 'html' && String(beatHtml?.html || '').trim())
+                                ? 'Live ảnh'
+                                : 'Live HTML'
+                        }
                         title="Preview visual"
                     >
-                        {isWhiteboardMode ? (
+                        {isWhiteboardMode
+                            && !(beatImage?.media_source === 'html' && String(beatHtml?.html || '').trim()) ? (
                             <ShortVideoAgentBeatImagePreview
                                 beatId={beat.id}
                                 imageUrl={String(beatImage?.image_url || '')}

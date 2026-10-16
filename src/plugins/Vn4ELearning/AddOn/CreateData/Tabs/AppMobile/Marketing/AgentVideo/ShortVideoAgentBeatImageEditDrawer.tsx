@@ -39,8 +39,8 @@ type Props = {
     initialImageUrl?: string;
     /** Video thay thế ảnh beat (hiển thị trong preview khi mediaSource = 'video'). */
     initialVideoUrl?: string;
-    /** Nguồn render đang chọn: 'image' | 'video'. */
-    initialMediaSource?: 'image' | 'video';
+    /** Nguồn render đang chọn: 'image' | 'video' | 'html' (HTML motion). */
+    initialMediaSource?: 'image' | 'video' | 'html';
     initialCreativePrompt?: string;
     clipAspect?: import('./agentVideoClipAspect').ClipAspect;
     saving?: boolean;

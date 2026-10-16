@@ -803,6 +803,7 @@ export default function ShortVideoAgentVideoWorkspace({
                                 state={state}
                                 beatId={currentBeatId}
                                 imageUrl={currentBeatImageUrl}
+                                onEditHtml={handleOpenEditBeatHtml}
                             />
                         ) : !state.isWhiteboardMode && currentBeatId ? (
                             /* MOTION HTML: 2 cột — TRÁI preview HTML ĐỒNG BỘ timeline

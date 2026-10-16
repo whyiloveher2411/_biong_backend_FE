@@ -5068,8 +5068,8 @@ export async function saveAgentImportHtml(
         /** Video thay thế ảnh beat (render bằng video khi media_source = 'video'). */
         beatVideoUrl?: string;
         beatVideoDelete?: boolean;
-        /** Nguồn render của beat: 'image' | 'video'. */
-        beatMediaSource?: 'image' | 'video';
+        /** Nguồn render của beat: 'image' | 'video' | 'html' (HTML motion). */
+        beatMediaSource?: 'image' | 'video' | 'html';
         /** Xóa CHỈ ảnh beat (image_url + extra urls) — giữ prompt / chat_url / vùng ảnh. */
         beatImageDelete?: boolean;
         beatImageChatUrl?: string;

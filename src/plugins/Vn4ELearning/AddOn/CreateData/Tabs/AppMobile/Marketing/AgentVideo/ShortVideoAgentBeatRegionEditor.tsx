@@ -60,6 +60,8 @@ import WhiteboardBeatImagePromptControl from './WhiteboardBeatImagePromptControl
 import WhiteboardBeatAudioControl from './WhiteboardBeatAudioControl';
 import WhiteboardCustomBackgroundControl from './WhiteboardCustomBackgroundControl';
 import WhiteboardBeatVideoControl from './WhiteboardBeatVideoControl';
+import WhiteboardBeatHtmlMotionControl from './WhiteboardBeatHtmlMotionControl';
+import BeatHtmlMotionPreview from './BeatHtmlMotionPreview';
 import WhiteboardRegionTimeline, {
     type ManualBeatAdjSession,
     type ManualBeatAdjSlot,
@@ -78,6 +80,7 @@ import WhiteboardBeatTimingPreview, {
     WhiteboardBeatVideoPreview,
     type WhiteboardBeatVideoPreviewHandle,
 } from './WhiteboardBeatTimingPreview';
+import { getClipStageDimensions } from './agentVideoHtmlBeatPreviewScale';
 import PlaceEntryDirectionPicker from './PlaceEntryDirectionPicker';
 import { getBeatTimelineSegments, normalizeBeatQaStatus } from './agentVideoBeatMap';
 import { resolveAgentVideoBeatSceneBudgetSec, resolveAgentVideoBeatTransitionDurationSec } from './agentVideoTimelineModel';
@@ -291,6 +294,8 @@ type Props = {
     state: AgentVideoState;
     beatId: string;
     imageUrl: string;
+    /** Mở popup nhập/sửa HTML motion cho beat (beat_html). */
+    onEditHtml?: (beatId: string) => void;
 };
 
 const REGION_COLORS = [
@@ -493,6 +498,7 @@ export default function ShortVideoAgentBeatRegionEditor({
     state,
     beatId,
     imageUrl: primaryImageUrl,
+    onEditHtml,
 }: Props) {
     const currentOverride = state.agentWhiteboardBeatOverrides?.[beatId] || {};
 
@@ -1290,6 +1296,23 @@ export default function ShortVideoAgentBeatRegionEditor({
         const h = imgNatural.h * scale;
         return { x: (boxSize.w - w) / 2, y: (boxSize.h - h) / 2, w, h };
     }, [imgNatural, boxSize]);
+
+    // Beat HTML motion chỉ có HTML (không ảnh) → chưa có containRect; dựng rect theo
+    // tỉ lệ clip để preview HTML vẫn có khung + zoom/pan như ảnh.
+    const htmlMotionFallbackRect = React.useMemo(() => {
+        if (!boxSize) {
+            return null;
+        }
+        const stage = getClipStageDimensions(state.agentClipAspect);
+        const aspect = stage.width / stage.height;
+        let w = boxSize.w;
+        let h = w / aspect;
+        if (h > boxSize.h) {
+            h = boxSize.h;
+            w = h * aspect;
+        }
+        return { x: (boxSize.w - w) / 2, y: (boxSize.h - h) / 2, w, h };
+    }, [boxSize, state.agentClipAspect]);
 
     // SVG viewBox 1000x1000 bị kéo giãn theo box (preserveAspectRatio none) →
     // bù scale ngược để dot/text luôn TRÒN và KHÔNG méo (kể cả khi canvas zoom).
@@ -3860,10 +3883,14 @@ export default function ShortVideoAgentBeatRegionEditor({
     const focusY = parseRatio(currentOverride.focus_y, 0.5);
     const customBgUrl = String(currentOverride.custom_background_url || '').trim();
     const useCustomBg = customBgUrl !== '' && !currentOverride.custom_background_hidden;
-    // Nguồn render của beat: video thay thế (ưu tiên nếu có) hoặc ảnh beat.
+    // Nguồn render của beat: HTML motion / video thay thế / ảnh beat.
     const beatReplacementVideoUrl = String(state.beatImage?.[beatId]?.video_url || '').trim();
-    const beatReplacementMediaSource: 'image' | 'video' = state.beatImage?.[beatId]?.media_source
+    const beatReplacementMediaSource: 'image' | 'video' | 'html' = state.beatImage?.[beatId]?.media_source
         || (beatReplacementVideoUrl ? 'video' : 'image');
+    const beatHasHtmlMotion = Boolean(String(state.beatHtml?.[beatId]?.html || '').trim());
+    const beatHtmlMotionSource = String(state.beatHtml?.[beatId]?.html || '');
+    const isHtmlMotionPreview = beatReplacementMediaSource === 'html' && Boolean(beatHtmlMotionSource.trim());
+    const stageRect = isHtmlMotionPreview ? (containRect ?? htmlMotionFallbackRect) : containRect;
     // Dán toàn bộ ảnh beat lên custom bg (ảnh beat là PNG nền trong suốt) —
     // không cần vùng cutout để thấy nội dung ảnh.
     const beatImageOverBg = useCustomBg && Boolean(currentOverride.beat_image_over_background);
@@ -3957,6 +3984,23 @@ export default function ShortVideoAgentBeatRegionEditor({
         window.addEventListener('pointerup', onWinUp);
         window.addEventListener('pointercancel', onWinUp);
     }, [clampPan, pan.x, pan.y, zoom]);
+
+    /**
+     * Kéo ở vùng NỀN canvas (ngoài ảnh/iframe) cũng pan preview — target phải là
+     * chính canvas (con như SVG/nút/iframe tự xử lý riêng hoặc stopPropagation).
+     */
+    const handleCanvasBackgroundMouseDown = React.useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+        if (event.button !== 0) {
+            return;
+        }
+        if (event.target !== event.currentTarget) {
+            return;
+        }
+        if (isAddActive) {
+            return;
+        }
+        startCanvasPan(event.clientX, event.clientY);
+    }, [isAddActive, startCanvasPan]);
 
     const handleZoomAt = React.useCallback((nextZoom: number, cx: number, cy: number) => {
         if (!containRect || boxSize?.w == null) {
@@ -4449,6 +4493,7 @@ export default function ShortVideoAgentBeatRegionEditor({
                     ) : null}
                     <Box
                         ref={measureBoxRef}
+                        onMouseDown={handleCanvasBackgroundMouseDown}
                         sx={{
                             flex: '1 1 0',
                             minHeight: 320,
@@ -4461,6 +4506,7 @@ export default function ShortVideoAgentBeatRegionEditor({
                             bgcolor: 'common.black',
                             userSelect: 'none',
                             WebkitUserSelect: 'none',
+                            cursor: isAddActive ? 'crosshair' : 'grab',
                         }}
                     >
                         {/* img luôn mount để onLoad/onError chạy — containRect phụ thuộc imgNatural */}
@@ -4662,6 +4708,17 @@ export default function ShortVideoAgentBeatRegionEditor({
                             animating={state.animatingBeatVibesIds.includes(beatId)}
                             onAnimateImage={() => state.handleAnimateBeatVibes(beatId)}
                         />
+                        {onEditHtml ? (
+                            <WhiteboardBeatHtmlMotionControl
+                                hasHtml={beatHasHtmlMotion}
+                                selected={beatReplacementMediaSource === 'html'}
+                                saving={state.savingImportHtml}
+                                onOpenEditor={() => onEditHtml(beatId)}
+                                onSelectChange={(next) => {
+                                    void state.handleSetBeatMediaSource(beatId, next ? 'html' : 'image');
+                                }}
+                            />
+                        ) : null}
                         </Stack>
                         ) : null}
                         {/* Zoom % + reset — cột phải cùng các IconButton 32px; scroll/↑↓ vẫn zoom */}
@@ -5602,17 +5659,17 @@ export default function ShortVideoAgentBeatRegionEditor({
                             </Box>
                         ) : null}
 
-                        {!previewActive && containRect && boxSize ? (
+                        {!previewActive && stageRect && boxSize ? (
                             <Box
                                 sx={{
                                     position: 'absolute',
-                                    left: containRect.x + pan.x,
-                                    top: containRect.y + pan.y,
-                                    width: containRect.w * zoom,
-                                    height: containRect.h * zoom,
+                                    left: stageRect.x + pan.x,
+                                    top: stageRect.y + pan.y,
+                                    width: stageRect.w * zoom,
+                                    height: stageRect.h * zoom,
                                     zIndex: 2,
                                     overflow: 'hidden',
-                                    opacity: playheadSec > 0.02 ? 1 : 0,
+                                    opacity: isHtmlMotionPreview ? 1 : (playheadSec > 0.02 ? 1 : 0),
                                     pointerEvents: 'none',
                                     transition: 'opacity 0.12s ease',
                                 }}
@@ -5626,21 +5683,30 @@ export default function ShortVideoAgentBeatRegionEditor({
                                         height: '100%',
                                         transform: timelineZoomCss !== 'none' ? timelineZoomCss : undefined,
                                         transformOrigin: 'center center',
+                                        pointerEvents: isHtmlMotionPreview ? 'none' : undefined,
                                     }}
                                 >
-                                    <WhiteboardBeatTimingPreview
-                                        imageUrl={previewImageUrl}
-                                        customBackgroundUrl={useCustomBg ? customBgUrl : undefined}
-                                        beatImageOverBackground={beatImageOverBg}
-                                        regions={previewRegions}
-                                        imageOverlays={previewOverlays}
-                                        playheadSec={playheadSec}
-                                        durationSec={beatTimeline.beatDurationSec}
-                                        sceneBudgetSec={sceneBudgetSec}
-                                        beatStartSec={beatTimeline.beatStartSec}
-                                        beatWords={beatWords}
-                                        timelineEffects={[]}
-                                    />
+                                    {isHtmlMotionPreview ? (
+                                        <BeatHtmlMotionPreview
+                                            html={beatHtmlMotionSource}
+                                            timeSec={playheadSec}
+                                            durationSec={beatTimeline.beatDurationSec}
+                                        />
+                                    ) : (
+                                        <WhiteboardBeatTimingPreview
+                                            imageUrl={previewImageUrl}
+                                            customBackgroundUrl={useCustomBg ? customBgUrl : undefined}
+                                            beatImageOverBackground={beatImageOverBg}
+                                            regions={previewRegions}
+                                            imageOverlays={previewOverlays}
+                                            playheadSec={playheadSec}
+                                            durationSec={beatTimeline.beatDurationSec}
+                                            sceneBudgetSec={sceneBudgetSec}
+                                            beatStartSec={beatTimeline.beatStartSec}
+                                            beatWords={beatWords}
+                                            timelineEffects={[]}
+                                        />
+                                    )}
                                 </Box>
                             </Box>
                         ) : null}
