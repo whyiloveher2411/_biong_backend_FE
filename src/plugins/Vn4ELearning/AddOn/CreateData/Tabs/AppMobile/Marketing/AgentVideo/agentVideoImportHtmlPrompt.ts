@@ -20,6 +20,8 @@ import {
     sanitizeUniversalComposerForFill,
 } from './agentVideoImportHtmlFillPrompts';
 import { formatWhisperWordsForPrompt } from './agentVideoWhisperPromptFormat';
+import { stripRepresentedImagePromptSections } from './agentVideoManualBeats';
+import { fetchWorkflowPromptContent } from 'helpers/marketingWorkflowPrompts';
 import type { BeatMapSection } from './agentVideoBeatMap';
 import type { ImportHtmlVisualCatalogItem } from './agentVideoApi';
 import { getClipRenderSpec, normalizeClipAspect, type ClipAspect, type ClipRenderSpec } from './agentVideoClipAspect';
@@ -62,6 +64,9 @@ export type ImportHtmlContextPayload = {
     };
     source_format?: string;
     thumbnail_url?: string;
+    workflow_active?: string;
+    beat_html_prompt_workflow?: string;
+    beat_html_prompt_file?: string;
     beat_map?: {
         totalVideoSec?: number;
         sections?: BeatMapSection[];
@@ -201,6 +206,111 @@ const VISUAL_STYLE_ART_DIRECTION: Record<string, string> = {
     'product-promo': 'Polished product presentation with confident depth, refined interface surfaces, focused highlights, and premium reveal timing.',
 };
 
+/**
+ * Art direction cho token [RESOLVED_ART_DIRECTION] — PHẢI khớp backend
+ * `marketing_short_video_import_html_visual_style_direction()` để prompt HTML beat
+ * giống nhau giữa server và fallback FE (xem prompts/workflow/video-html/beat-html-prompt.md).
+ */
+const RESOLVED_ART_DIRECTION: Record<string, string> = {
+    vignelli: 'Editorial modernism: decisive grid, high contrast, disciplined scale and generous negative space.',
+    'kinetic-type': 'Type-led energy: bold hierarchy, rhythmic transforms and punchy graphic transitions.',
+    'warm-grain': 'Warm editorial storytelling: tactile grain, soft depth, human pacing and restrained organic motion.',
+    'nyt-graph': 'Data editorial: precise information hierarchy, chart-like geometry and calm explanatory progression.',
+    'swiss-grid': 'Swiss system: strict modular grid, asymmetric balance, clean geometry and measured motion.',
+    'product-promo': 'Premium product storytelling: focused hero composition, polished depth and benefit-led reveals.',
+};
+
+export function resolveImportHtmlArtDirection(visualStyle: string): string {
+    const resolved = visualStyle === 'auto' ? 'vignelli' : visualStyle;
+    return RESOLVED_ART_DIRECTION[resolved] || RESOLVED_ART_DIRECTION.vignelli;
+}
+
+/** Workflow + file chứa prompt sinh HTML beat (nguồn duy nhất, sửa trực tiếp file .md).
+ * Workflow active lấy từ short video; file cụ thể lấy từ `# beatHtmlPrompt:` trong index.md
+ * (backend trả sẵn trong context `beat_html_prompt_file`). */
+const DEFAULT_IMPORT_HTML_BEAT_WORKFLOW = 'video-html';
+const DEFAULT_IMPORT_HTML_BEAT_FILE = 'beat-html-prompt.md';
+
+const importHtmlBeatHtmlTemplateCache = new Map<string, string>();
+
+/** Tải template prompt HTML beat của workflow (cache theo workflow/file trong phiên). */
+export async function loadImportHtmlBeatHtmlTemplate(
+    workflow = DEFAULT_IMPORT_HTML_BEAT_WORKFLOW,
+    file = DEFAULT_IMPORT_HTML_BEAT_FILE,
+): Promise<string> {
+    const wf = String(workflow || '').trim() || DEFAULT_IMPORT_HTML_BEAT_WORKFLOW;
+    const fn = String(file || '').trim() || DEFAULT_IMPORT_HTML_BEAT_FILE;
+    const cacheKey = `${wf}/${fn}`;
+    const cached = importHtmlBeatHtmlTemplateCache.get(cacheKey);
+    if (cached !== undefined) {
+        return cached;
+    }
+    const res = await fetchWorkflowPromptContent(wf, fn);
+    if (!res.ok || !String(res.content || '').trim()) {
+        throw new Error(res.message || `Không tải được template prompt HTML beat (${cacheKey})`);
+    }
+    importHtmlBeatHtmlTemplateCache.set(cacheKey, res.content);
+    return res.content;
+}
+
+/**
+ * Thay token [KEY] trong template bằng giá trị tương ứng.
+ * CHỈ thay token có trong map — không đụng `[` khác trong nội dung.
+ * Mirror `marketing_short_video_import_html_fill_template_tokens()` (backend).
+ */
+export function fillImportHtmlTemplateTokens(
+    template: string,
+    vars: Record<string, string>,
+): string {
+    let out = String(template || '');
+    // Bỏ khối comment legend ở đầu file (nếu có) — không gửi tới model.
+    out = out.replace(/^\s*<!--[\s\S]*?-->\s*/, '');
+
+    const valueOf = (key: string): string | null => (
+        Object.prototype.hasOwnProperty.call(vars, key) ? String(vars[key] ?? '') : null
+    );
+
+    // 1) Block tuỳ chọn [[IF:TOKEN]] ... [[/IF]] — TOKEN rỗng thì bỏ cả block.
+    out = out.replace(
+        /[ \t]*\[\[IF:([A-Z0-9_]+)\]\][ \t]*\n([\s\S]*?)\n[ \t]*\[\[\/IF\]\][ \t]*\n?/g,
+        (_match, key: string, body: string) => {
+            const value = valueOf(key);
+            return value !== null && value.trim() === '' ? '' : body;
+        },
+    );
+
+    // 2) Bỏ dòng mà MỌI token trên dòng đều rỗng.
+    out = out.split('\n').filter((line) => {
+        const tokens = Array.from(line.matchAll(/\[([A-Z][A-Z0-9_]*)\]/g)).map((m) => m[1]);
+        if (tokens.length === 0) {
+            return true;
+        }
+        let known = true;
+        let allEmpty = true;
+        for (const token of tokens) {
+            const value = valueOf(token);
+            if (value === null) {
+                known = false;
+                break;
+            }
+            if (value.trim() !== '') {
+                allEmpty = false;
+                break;
+            }
+        }
+        return !(known && allEmpty);
+    }).join('\n');
+
+    // 3) Thay token có giá trị.
+    Object.keys(vars).forEach((key) => {
+        out = out.split(`[${key}]`).join(String(vars[key] ?? ''));
+    });
+
+    // 4) Dọn dòng trống/space thừa.
+    out = out.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n');
+    return out.trim();
+}
+
 function buildStyleCompatibilityBlock(visualStyle: string): string {
     const resolvedStyle = visualStyle === 'auto' ? 'vignelli' : visualStyle;
     const artDirection = VISUAL_STYLE_ART_DIRECTION[resolvedStyle]
@@ -324,6 +434,7 @@ function buildGithubTopIntroRankRulesBlock(context: ImportHtmlContextPayload): s
 export async function buildBeatHtmlPrompt(
     context: ImportHtmlContextPayload,
     beat: BeatMapSection,
+    imagePromptBlock = '',
 ): Promise<string> {
     const durationSec = Number(beat.durationSec || 0);
     if (!Number.isFinite(durationSec) || durationSec <= 0) {
@@ -364,6 +475,9 @@ export async function buildBeatHtmlPrompt(
     }
     const visualDescription = String(beat.visual_description || '').trim();
     const background = String(beat.background || '').trim();
+    // Block prompt ảnh: bỏ field đã biểu diễn ở nơi khác (SCRIPT SENTENCE→phrase_anchor,
+    // IMAGE/VISUAL PROMPT→VISUAL_DESCRIPTION) để không trùng.
+    const cleanImagePromptBlock = stripRepresentedImagePromptSections(imagePromptBlock);
     visualLibrary = visualLibrary.filter((item) => (
         Boolean(item.id) && descriptionMentionsExactId(visualDescription, String(item.id))
     ));
@@ -381,6 +495,56 @@ export async function buildBeatHtmlPrompt(
             '```',
         ].join('\n');
 
+    // Template markdown của workflow là nguồn duy nhất (prompts/workflow/video-html/beat-html-prompt.md).
+    // Có template → fill token; thiếu/không tải được → fallback assembly legacy bên dưới.
+    try {
+        const templateText = await loadImportHtmlBeatHtmlTemplate(
+            String(context.beat_html_prompt_workflow || '').trim()
+                || String(context.workflow_active || '').trim()
+                || DEFAULT_IMPORT_HTML_BEAT_WORKFLOW,
+            String(context.beat_html_prompt_file || '').trim() || DEFAULT_IMPORT_HTML_BEAT_FILE,
+        );
+        const area = clipSpec.content_area;
+        const canvasWidth = Number(clipSpec.width || 1080);
+        const canvasHeight = Number(clipSpec.height || 1920);
+        const filled = fillImportHtmlTemplateTokens(templateText, {
+            BEAT_ID: String(beat.id),
+            BEAT_DURATION_SEC: durationFormatted,
+            CLIP_TOTAL_SEC: Number(context.audio_file_duration_sec || 0) > 0 ? clipTotal : '',
+            CLIP_ASPECT: clipAspect,
+            CANVAS: `${clipSpec.width}x${clipSpec.height}`,
+            CANVAS_WIDTH: String(canvasWidth),
+            CANVAS_HEIGHT: String(canvasHeight),
+            VISUAL_STYLE: visualStyle,
+            VISUAL_STYLE_SOURCE: String(context.visual_style || '').trim() ? 'clip' : 'default',
+            RESOLVED_ART_DIRECTION: resolveImportHtmlArtDirection(resolvedStyle),
+            VISUAL_DESCRIPTION: visualDescription,
+            BACKGROUND: background,
+            PHRASE_ANCHOR: String(beat.phrase_anchor || ''),
+            BEAT_START_SEC: formatDurationSec(Number(beat.startSec || 0)),
+            BEAT_END_SEC: formatDurationSec(Number(beat.endSec || 0)),
+            SHORT_VIDEO_ID: String(context.short_video_id ?? '?'),
+            SAFE_LEFT: String(area.left),
+            SAFE_TOP: String(area.top),
+            SAFE_RIGHT: String(canvasWidth - area.right),
+            SAFE_BOTTOM: String(canvasHeight - area.bottom),
+            PAD_RIGHT: String(area.right),
+            PAD_BOTTOM: String(area.bottom),
+            CAPTION_BAND: String(clipSpec.caption_band_px),
+            LAYOUT_REFERENCE_PATH: `layout-${clipAspect}`,
+            BEAT_CONTENT_LANGUAGE_BLOCK: buildBeatHtmlContentLanguageBlock(context.language),
+            VISUAL_LIBRARY_BLOCK: visualBlock,
+            WHISPER_WORDS: beatWhisper.length ? beatWhisperPrompt : '',
+            BEAT_HTML_SCAFFOLD: scaffold,
+            BEAT_IMAGE_PROMPT_BLOCK: cleanImagePromptBlock,
+        });
+        if (filled) {
+            return filled;
+        }
+    } catch {
+        // im lặng — dùng assembly legacy bên dưới.
+    }
+
     return [
         `# HyperFrames — HTML beat ${beat.id} (${durationLabel})`,
         '',
@@ -391,7 +555,7 @@ export async function buildBeatHtmlPrompt(
         `VISUAL_STYLE=${visualStyle}`,
         `RESOLVED_ART_DIRECTION=${artDirection}`,
         `VISUAL_DESCRIPTION=${visualDescription}`,
-        `BACKGROUND=${background || '(thiếu — suy từ visual_description + VISUAL_STYLE, ưu tiên nền ổn định)'}`,
+        background ? `BACKGROUND=${background}` : '',
         '',
         `CLIP_ASPECT=${clipAspect}`,
         `CANVAS=${clipSpec.width}x${clipSpec.height}`,
@@ -420,8 +584,6 @@ export async function buildBeatHtmlPrompt(
         `# Beat ${beat.id} — short video ID ${context.short_video_id ?? '?'}`,
         `Vị trí trong clip: ${formatDurationSec(beat.startSec)}s → ${formatDurationSec(beat.endSec)}s`,
         `phrase_anchor (metadata — KHÔNG render như subtitle; proper noun literal OK khi cần): ${beat.phrase_anchor}`,
-        `visual_description (semantic brief — xem interpretation block): ${visualDescription}`,
-        `background (atmosphere — xem BACKGROUND usage): ${background || '(thiếu)'}`,
         githubRole?.role ? `beat_role: ${githubRole.role}` : '',
         '',
         '## Tự test trước khi trả HTML (bắt buộc)',
@@ -431,10 +593,12 @@ export async function buildBeatHtmlPrompt(
         '',
         '## Whisper trong beat — CHỈ pacing, CẤM karaoke',
         buildFillWhisperPacingRulesBlock(),
-        'Dữ liệu dưới đây chỉ để căn nhịp animation. **Không** tạo element text từ các từ whisper.',
-        '```text',
-        beatWhisperPrompt,
-        '```',
+        ...(beatWhisper.length ? [
+            'Dữ liệu dưới đây chỉ để căn nhịp animation. **Không** tạo element text từ các từ whisper.',
+            '```text',
+            beatWhisperPrompt,
+            '```',
+        ] : []),
         '',
         buildBeatScaffoldInstructionsBlock(durationSec, beat.id, scaffold),
         '## Checklist',
@@ -450,6 +614,17 @@ export async function buildBeatHtmlPrompt(
         '- [ ] Response là **1 file HTML duy nhất** — không nhiều file, không tách css/js',
         isGithubIntro
             ? '- [ ] (github top intro) Nếu chia nhiều list/panel: rank liên tục (#1→#5 rồi #6→#10) — **không** reset về #1'
+            : '',
+        // Đưa field prompt ảnh của beat vào prompt HTML beat (bỏ qua nếu beat chưa có).
+        String(cleanImagePromptBlock || '').trim()
+            ? [
+                '---',
+                '',
+                '# PROMPT ẢNH CỦA BEAT — dữ liệu tham chiếu (không render như subtitle)',
+                'Prompt ảnh đã có của beat (nhân vật, bối cảnh, chi tiết chữ, những thứ BẮT BUỘC tránh). Dùng làm dữ liệu hình ảnh/tham chiếu cho beat; **không** đổi bố cục/technical contract của HTML beat ở trên.',
+                '',
+                String(cleanImagePromptBlock).trim(),
+            ].join('\n')
             : '',
     ].filter((line, index, arr) => !(line === '' && arr[index - 1] === '')).join('\n');
 }

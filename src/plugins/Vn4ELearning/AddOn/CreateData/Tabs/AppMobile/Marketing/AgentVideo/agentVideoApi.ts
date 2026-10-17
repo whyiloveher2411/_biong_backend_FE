@@ -1740,6 +1740,8 @@ export type AgentVideoBeatAudioItem = {
     /** Whisper RIÊNG của beat (beat-local 0s, chạy trên MP3 beat) — ưu tiên hơn whisper full. */
     whisper_words?: { text: string; start: number; end: number }[];
     qa_passed?: boolean;
+    /** Cảnh báo word-count QA (không chặn) — beat vẫn `ready`, chỉ nên nghe lại. */
+    qa_warning?: string;
     error?: string;
 };
 

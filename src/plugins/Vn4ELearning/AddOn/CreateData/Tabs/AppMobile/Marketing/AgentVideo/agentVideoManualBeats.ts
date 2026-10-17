@@ -607,30 +607,73 @@ export function buildVideo2sChatbotPrompt(
     return applyVideo2sStyleSnapshot(out, styleSnapshot, negativeStyleSnapshot);
 }
 
+/** Trích giá trị section theo danh sách nhãn ưu tiên (không hard-code 1 tên field). */
+function extractPlainPromptByLabels(plain: string, labels: string[]): string {
+    for (const label of labels) {
+        const escaped = label.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+');
+        const re = new RegExp(
+            `(?:^|\\n)\\s*${escaped}\\s*:\\s*\\n?([\\s\\S]*?)(?:\\n\\s*[A-Z][A-Z0-9_ ()/\\\\-]{1,60}\\s*:|$)`,
+            'i',
+        );
+        const match = re.exec(plain);
+        if (match && match[1] && match[1].trim()) {
+            return match[1].trim();
+        }
+    }
+    return '';
+}
+
+// Role 'visual' (mirror backend registry): field "cảnh/nhìn thấy" theo thứ tự ưu tiên.
+const PLAIN_PROMPT_VISUAL_LABELS = [
+    'VISUAL PROMPT',
+    'VISUAL DESCRIPTION',
+    'SCENE PROMPT',
+    'SCENE DESCRIPTION',
+    'IMAGE PROMPT',
+    'VISUAL CONCEPT',
+];
+const PLAIN_PROMPT_NEGATIVE_LABELS = ['NEGATIVE PROMPT', 'MUST AVOID', 'AVOID'];
+const PLAIN_PROMPT_BACKGROUND_LABELS = ['BACKGROUND', 'BACKGROUND PROMPT', 'BG PROMPT'];
+
+/**
+ * Bỏ các section đã được biểu diễn ở nơi khác trong prompt HTML beat:
+ *  - SCRIPT SENTENCE  → đã có ở phrase_anchor
+ *  - IMAGE/VISUAL PROMPT → đã có ở VISUAL_DESCRIPTION
+ * Nhờ vậy block "PROMPT ẢNH CỦA BEAT" chỉ còn field chưa xuất hiện
+ * (NEGATIVE PROMPT, VIDEO PROMPT, CORE MEANING…) — không bị trùng.
+ */
+const IMAGE_PROMPT_REPRESENTED_LABELS = ['SCRIPT SENTENCE', 'IMAGE PROMPT', 'VISUAL PROMPT'];
+
+export function stripRepresentedImagePromptSections(text: string): string {
+    const source = String(text || '');
+    if (!source.trim()) {
+        return '';
+    }
+    const labelAlt = IMAGE_PROMPT_REPRESENTED_LABELS
+        .map((label) => label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+'))
+        .join('|');
+    const sectionRe = new RegExp(
+        `(?:^|\\n)[ \\t]*(${labelAlt})[ \\t]*:[ \\t]*\\n?[\\s\\S]*?(?=\\n[ \\t]*[A-Z][A-Z0-9_ ()/\\\\-]{1,60}[ \\t]*:|$)`,
+        'gi',
+    );
+    const out = source.replace(sectionRe, (match) => (match.startsWith('\n') ? '\n' : ''));
+    return out.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
 /** Meta.ai video 2s trả prompt plain text — bọc thành JSON object đủ 7 key cho beat_map. */
 export function wrapVideo2sPlainImagePrompt(plain: string, content: string): Record<string, string> {
     const normalized = String(plain || '').trim();
-    let subject = normalized;
-    const imageMatch = /IMAGE PROMPT:\s*\n?([\s\S]*?)(?:\n\s*NEGATIVE PROMPT:|$)/i.exec(normalized);
-    if (imageMatch?.[1]) {
-        subject = imageMatch[1].trim();
-    } else {
-        const visualMatch = /VISUAL CONCEPT:\s*\n?([\s\S]*?)(?:\n\s*IMAGE PROMPT:|$)/i.exec(normalized);
-        if (visualMatch?.[1]) {
-            subject = visualMatch[1].trim();
-        }
-    }
-    let mustAvoid = 'watermark, logo, photorealism, 3D render, dense text';
-    const negativeMatch = /NEGATIVE PROMPT:\s*\n?([\s\S]*)$/i.exec(normalized);
-    if (negativeMatch?.[1]) {
-        mustAvoid = negativeMatch[1].trim().slice(0, 400);
-    }
+    // Đọc theo role (nhiều tên field) — workflow tự chọn tên, không hard-code.
+    let subject = extractPlainPromptByLabels(normalized, PLAIN_PROMPT_VISUAL_LABELS) || normalized;
+    let mustAvoid = extractPlainPromptByLabels(normalized, PLAIN_PROMPT_NEGATIVE_LABELS)
+        || 'watermark, logo, photorealism, 3D render, dense text';
     if (!subject) {
         subject = content.trim() || 'illustrate script beat';
     }
     if (subject.length > 1800) {
         subject = subject.slice(0, 1800);
     }
+    mustAvoid = mustAvoid.slice(0, 400);
     let scene = content.trim() || 'documentary scene';
     if (scene.length > 400) {
         scene = scene.slice(0, 400);
@@ -813,7 +856,21 @@ export function buildBeatMapFromManualMarks(
     const sections: BeatMapSection[] = effectiveMarks.map((mark, index) => {
         const id = `beat_${index + 1}`;
         const content = mark.content.trim();
-        const visualDescription = content.length > 200 ? `${content.slice(0, 197)}...` : content;
+        // visual_description cho prompt HTML beat lấy từ ROLE 'visual' của prompt beat
+        // (VISUAL PROMPT / IMAGE PROMPT / SCENE PROMPT…) — mirror backend
+        // marketing_short_video_manual_beat_build_beat_map. Không có → fallback narration.
+        const rawImagePrompt = mark.imagePrompt.trim();
+        const visualFromPrompt = rawImagePrompt
+            ? extractPlainPromptByLabels(rawImagePrompt, PLAIN_PROMPT_VISUAL_LABELS)
+            : '';
+        const backgroundFromPrompt = rawImagePrompt
+            ? extractPlainPromptByLabels(rawImagePrompt, PLAIN_PROMPT_BACKGROUND_LABELS)
+            : '';
+        const visualBase = visualFromPrompt || content;
+        const visualLimit = visualFromPrompt ? 1200 : 200;
+        const visualDescription = visualBase.length > visualLimit
+            ? `${visualBase.slice(0, visualLimit - 3)}...`
+            : visualBase;
         const section: BeatMapSection = {
             id,
             beat_id: id,
@@ -822,7 +879,7 @@ export function buildBeatMapFromManualMarks(
             durationSec: mark.durationSec,
             phrase_anchor: content,
             visual_description: visualDescription || `Beat ${index + 1}`,
-            background: '',
+            background: backgroundFromPrompt ? backgroundFromPrompt.slice(0, 400) : '',
         };
         if (mark.imagePrompt.trim()) {
             section.image_prompt = wrapVideo2sPlainImagePrompt(mark.imagePrompt, content);

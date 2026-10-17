@@ -3938,15 +3938,17 @@ export default function ShortVideoAgentBeatRegionEditor({
     const clampPan = React.useCallback((x: number, y: number, z: number) => {
         const vw = boxSize?.w ?? 0;
         const vh = boxSize?.h ?? 0;
-        if (!containRect || vw <= 0 || vh <= 0) {
+        // Dùng khung hiệu lực (stageRect): beat HTML motion không có ảnh → containRect null
+        // nhưng vẫn có khung theo tỉ lệ clip → pan/zoom phải hoạt động.
+        if (!stageRect || vw <= 0 || vh <= 0) {
             return { x, y };
         }
-        const cw = containRect.w * z;
-        const ch = containRect.h * z;
-        const minX = -(containRect.x + cw);
-        const maxX = vw - containRect.x;
-        const minY = -(containRect.y + ch);
-        const maxY = vh - containRect.y;
+        const cw = stageRect.w * z;
+        const ch = stageRect.h * z;
+        const minX = -(stageRect.x + cw);
+        const maxX = vw - stageRect.x;
+        const minY = -(stageRect.y + ch);
+        const maxY = vh - stageRect.y;
         if (minX > maxX || minY > maxY) {
             return { x: 0, y: 0 };
         }
@@ -3954,7 +3956,7 @@ export default function ShortVideoAgentBeatRegionEditor({
             x: Math.max(minX, Math.min(maxX, x)),
             y: Math.max(minY, Math.min(maxY, y)),
         };
-    }, [boxSize, containRect]);
+    }, [boxSize, stageRect]);
 
     /** Pan canvas khi kéo trên ảnh upload — dùng pointer events (không dùng mouse:
      * preventDefault trên pointerdown sẽ chặn mouseup → pan bị “dính” sau khi thả). */
@@ -4003,7 +4005,7 @@ export default function ShortVideoAgentBeatRegionEditor({
     }, [isAddActive, startCanvasPan]);
 
     const handleZoomAt = React.useCallback((nextZoom: number, cx: number, cy: number) => {
-        if (!containRect || boxSize?.w == null) {
+        if (!stageRect || boxSize?.w == null) {
             return;
         }
         const z = Math.max(0.25, Math.min(8, nextZoom));
@@ -4011,12 +4013,12 @@ export default function ShortVideoAgentBeatRegionEditor({
             return;
         }
         const c = {
-            x: (cx - (containRect.x + pan.x)) / zoom,
-            y: (cy - (containRect.y + pan.y)) / zoom,
+            x: (cx - (stageRect.x + pan.x)) / zoom,
+            y: (cy - (stageRect.y + pan.y)) / zoom,
         };
         setZoom(z);
-        setPan(clampPan(cx - containRect.x - c.x * z, cy - containRect.y - c.y * z, z));
-    }, [containRect, boxSize, zoom, pan, clampPan]);
+        setPan(clampPan(cx - stageRect.x - c.x * z, cy - stageRect.y - c.y * z, z));
+    }, [stageRect, boxSize, zoom, pan, clampPan]);
 
     const handleResetZoom = React.useCallback(() => {
         setZoom(1);
@@ -5487,6 +5489,9 @@ export default function ShortVideoAgentBeatRegionEditor({
                                     p: 2,
                                     textAlign: 'center',
                                     bgcolor: 'rgba(0,0,0,0.55)',
+                                    // Cho phép pan/zoom trên canvas xuyên qua lớp phủ; chỉ nút
+                                    // "Mở ảnh trong tab mới" mới nhận click.
+                                    pointerEvents: 'none',
                                 }}
                             >
                                 <Typography variant="subtitle2" color="error">
@@ -5500,7 +5505,7 @@ export default function ShortVideoAgentBeatRegionEditor({
                                     href={imageUrl}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    sx={{ textTransform: 'none' }}
+                                    sx={{ textTransform: 'none', pointerEvents: 'auto' }}
                                 >
                                     Mở ảnh trong tab mới
                                 </Button>
@@ -5518,6 +5523,8 @@ export default function ShortVideoAgentBeatRegionEditor({
                                     p: 2,
                                     textAlign: 'center',
                                     bgcolor: 'rgba(0,0,0,0.55)',
+                                    // Beat chưa có ảnh (vd beat HTML motion): không chặn pan/zoom.
+                                    pointerEvents: 'none',
                                 }}
                             >
                                 <Typography variant="subtitle2" color="text.secondary">

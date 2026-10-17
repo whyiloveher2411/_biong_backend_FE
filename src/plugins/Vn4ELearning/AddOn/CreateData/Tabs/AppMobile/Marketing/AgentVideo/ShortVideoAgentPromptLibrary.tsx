@@ -159,7 +159,11 @@ function PromptRow(props: {
 export default function ShortVideoAgentPromptLibrary({ state }: Props) {
     const { showMessage } = useFloatingMessages();
     const [copyingKey, setCopyingKey] = React.useState<PromptKey | ''>('');
-    const beatSections = state.beatMap?.sections ?? [];
+    // Video 2s: beat_map DB rỗng — dùng beat_map hiệu lực (derive từ marks) để copy prompt
+    // của beat đã có thay vì disable vì "thiếu beat-map".
+    const beatSections = (state.effectiveBeatMap?.sections?.length
+        ? state.effectiveBeatMap.sections
+        : (state.beatMap?.sections ?? []));
     const [selectedBeatId, setSelectedBeatId] = React.useState('');
 
     React.useEffect(() => {
@@ -180,7 +184,7 @@ export default function ShortVideoAgentPromptLibrary({ state }: Props) {
 
     const hasScript = state.hasScript;
     const whisperReady = state.whisperStatus === 'completed';
-    const beatMapReady = Boolean(state.beatMapReady && beatSections.length > 0);
+    const beatMapReady = Boolean(state.beatMapReadyForUi && beatSections.length > 0);
     const fillReady = beatMapReady && Boolean(selectedBeatId);
     const assembleReady = state.renderMode === 'import_html' && state.beatsHtmlCompleted > 0;
     const cursor1Ready = !state.scriptApproved;

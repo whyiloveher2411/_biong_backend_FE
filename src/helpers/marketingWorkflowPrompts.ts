@@ -828,7 +828,43 @@ const WORKFLOW_SECTION_NAMES = [
     'VISUAL CONCEPT',
     'IMAGE PROMPT',
     'NEGATIVE PROMPT',
+    // Alias field "prompt nhìn thấy" của các workflow khác (vd video-html VISUAL PROMPT).
+    'VISUAL PROMPT',
+    'VISUAL DESCRIPTION',
+    'SCENE PROMPT',
+    'SCENE DESCRIPTION',
+    'BACKGROUND',
+    'VIDEO PROMPT',
+    'MOTION PROMPT',
+    'MOTION TIMELINE',
 ];
+
+/**
+ * Section "prompt nhìn thấy" — beat được coi là hợp lệ nếu có BẤT KỲ field nào
+ * dưới đây (mỗi workflow tự chọn tên). Thứ tự = ưu tiên khi 1 beat có nhiều field.
+ * Mirror registry backend `marketing_short_video_beat_prompt_field_registry()` role 'visual'.
+ */
+export const WORKFLOW_VISUAL_SECTION_NAMES = [
+    'VISUAL PROMPT',
+    'VISUAL DESCRIPTION',
+    'SCENE PROMPT',
+    'SCENE DESCRIPTION',
+    'IMAGE PROMPT',
+    'VISUAL CONCEPT',
+];
+
+/** Lấy giá trị "prompt nhìn thấy" đầu tiên có trong sections của 1 beat. */
+export function resolveWorkflowVisualPrompt(
+    sections: Record<string, string>,
+): string {
+    for (const name of WORKFLOW_VISUAL_SECTION_NAMES) {
+        const value = (sections[name] || '').trim();
+        if (value) {
+            return value;
+        }
+    }
+    return '';
+}
 
 const WORKFLOW_SECTION_RE = new RegExp(
     `^\\s*(?:#{1,6}\\s*)?[-*•]?\\s*(${WORKFLOW_SECTION_NAMES.join('|')})\\s*:\\s*(.*)$`,
@@ -905,8 +941,9 @@ export type WorkflowBreakdownPartValidation = {
 
 /**
  * Validate 1 phần đã dán trước khi gộp vào input tổng: đủ số beat, đúng thứ tự audio
- * (chống dán nhầm phần), đủ SCRIPT SENTENCE / IMAGE PROMPT (cấu trúc mới chỉ 2 field),
- * prompt không trùng trong phần. Mirror các check quan trọng của backend import-prompt-file.
+ * (chống dán nhầm phần), đủ SCRIPT SENTENCE + section prompt visual/ảnh (nhận nhiều
+ * tên field theo workflow, xem WORKFLOW_VISUAL_SECTION_NAMES), prompt không trùng
+ * trong phần. Mirror các check quan trọng của backend import-prompt-file.
  */
 export function validateWorkflowBreakdownPart(
     partText: string,
@@ -946,7 +983,8 @@ export function validateWorkflowBreakdownPart(
     for (let index = 0; index < limit; index += 1) {
         const sections = parsed[index].sections;
         const script = (sections['SCRIPT SENTENCE'] || '').trim();
-        const imagePrompt = (sections['IMAGE PROMPT'] || '').trim();
+        // Chấp nhận BẤT KỲ field "prompt nhìn thấy" nào (mỗi workflow tự chọn tên).
+        const imagePrompt = resolveWorkflowVisualPrompt(sections);
 
         if (!script) {
             errors.push(`Beat ${index + 1}: thiếu SCRIPT SENTENCE`);
@@ -954,13 +992,13 @@ export function validateWorkflowBreakdownPart(
             errors.push(`Beat ${index + 1}: SCRIPT SENTENCE không khớp audio`);
         }
         if (!imagePrompt) {
-            errors.push(`Beat ${index + 1}: thiếu IMAGE PROMPT`);
+            errors.push(`Beat ${index + 1}: thiếu section prompt visual/ảnh (${WORKFLOW_VISUAL_SECTION_NAMES.join(' / ')})`);
         }
         if (imagePrompt) {
             const signature = normalizeWorkflowScriptKey(imagePrompt);
             const duplicatedWith = promptSignatures.get(signature);
             if (duplicatedWith !== undefined) {
-                errors.push(`Beat ${index + 1}: IMAGE PROMPT trùng với Beat ${duplicatedWith}`);
+                errors.push(`Beat ${index + 1}: prompt visual trùng với Beat ${duplicatedWith}`);
             } else {
                 promptSignatures.set(signature, index + 1);
             }

@@ -5493,34 +5493,68 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     };
 
     const handleCopyBeatHtmlPrompt = async (beatId: string) => {
-        if (!beatMapReady || !beatMap) {
-            showMessage('Cần beat-map hợp lệ trước', 'warning');
+        // Video 2s: beat nằm ở manual_beat_marks, `beat_map` trong DB rỗng/không "ready"
+        // toàn cục — KHÔNG gate theo beatMapReady/beatMap nữa (trước đây báo sai
+        // "Cần beat-map hợp lệ trước" dù beat đã đủ prompt). Luôn resolve beat từ beat_map
+        // hiệu lực (video 2s derive từ marks) để copy được prompt của beat đã có.
+        const beatSections = effectiveBeatMap?.sections?.length
+            ? effectiveBeatMap.sections
+            : (beatMap?.sections ?? []);
+        if (!beatSections.length) {
+            showMessage('Chưa có beat — cần chia beat trước khi copy prompt', 'warning');
             return;
         }
-        const beat = beatMap.sections.find((item) => item.id === beatId);
+        const beat = beatSections.find((item) => item.id === beatId);
         if (!beat) {
             showMessage('Không tìm thấy beat', 'error');
             return;
         }
         setCopyingBeatHtmlPromptBeatId(beatId);
         try {
-            const serverRes = await fetchImportHtmlBeatHtmlPrompt(shortVideoId, beatId);
-            let prompt = String(serverRes?.prompt || '').trim();
-            if (!serverRes?.success || !prompt) {
+            // Prompt ảnh đã có của beat — dùng cho section tham chiếu "PROMPT ẢNH CỦA BEAT"
+            // trong prompt HTML beat (server tự lấy; FE fallback nhận qua tham số).
+            const imagePrompt = (
+                (isVideo2sMode
+                    ? resolveVideo2sPlainImagePrompt(manualBeatMarksRef.current, beatId)
+                    : '')
+                || beatImagePromptToText(beatImage[beatId]?.image_prompt || '')
+                || beatImagePromptToText(beat.image_prompt || '')
+            ).trim();
+
+            // Prompt tạo HyperFrames beat — server là bản chuẩn; fallback build local khi
+            // server từ chối vì beat-map chưa "ready" toàn cục (1 beat vẫn đủ dữ liệu).
+            let beatPrompt = '';
+            let serverMessage = '';
+            try {
+                const serverRes = await fetchImportHtmlBeatHtmlPrompt(shortVideoId, beatId);
+                if (serverRes?.success) {
+                    beatPrompt = String(serverRes?.prompt || '').trim();
+                } else {
+                    serverMessage = parseApiMessage(serverRes?.message);
+                }
+            } catch {
+                // im lặng — fallback build local bên dưới.
+            }
+            if (!beatPrompt) {
                 const res = await fetchImportHtmlContext(shortVideoId) as ImportHtmlContextPayload;
                 if (!res?.success) {
                     showMessage(
                         parseImportHtmlContextMessage(res?.message)
-                            || parseApiMessage(serverRes?.message)
-                            || 'Không lấy được prompt beat HTML',
+                            || serverMessage
+                            || 'Không lấy được context để dựng prompt beat HTML',
                         'error',
                     );
                     return;
                 }
-                prompt = await buildBeatHtmlPrompt({ ...res, beat_map: beatMap }, beat);
+                beatPrompt = await buildBeatHtmlPrompt(
+                    { ...res, beat_map: effectiveBeatMap ?? beatMap ?? res.beat_map },
+                    beat,
+                    imagePrompt,
+                );
             }
-            await copyTextToClipboard(prompt);
-            showMessage(`Đã copy prompt HTML ${beatId}`, 'success');
+
+            await copyTextToClipboard(beatPrompt.trim());
+            showMessage(`Đã copy prompt HTML ${beatId} + prompt ảnh beat`, 'success');
         } catch (e) {
             showMessage(e instanceof Error ? e.message : String(e), 'error');
         } finally {

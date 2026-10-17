@@ -980,7 +980,7 @@ export default function AgentVideoBeatBoundaryOverlay({
                             <ContentCopyIcon fontSize="small" />
                         )}
                     </ListItemIcon>
-                    <ListItemText primary="Copy prompt" secondary="Copy prompt HTML beat" />
+                    <ListItemText primary="Copy prompt" secondary="Copy prompt HTML beat + prompt ảnh beat" />
                 </MenuItem>
 
                 <MenuItem
