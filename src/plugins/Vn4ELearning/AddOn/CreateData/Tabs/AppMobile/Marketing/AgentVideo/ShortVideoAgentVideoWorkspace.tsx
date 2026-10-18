@@ -4,6 +4,7 @@ import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import FactCheckIcon from '@mui/icons-material/FactCheck';
 import CollectionsOutlinedIcon from '@mui/icons-material/CollectionsOutlined';
 import ManageAccountsOutlinedIcon from '@mui/icons-material/ManageAccountsOutlined';
+import ViewInArOutlinedIcon from '@mui/icons-material/ViewInArOutlined';
 import DrawerCustom from 'components/molecules/DrawerCustom';
 import Button from 'components/atoms/Button';
 import { isKeyboardEditableTarget } from 'helpers/shortVideoEditorKeyboard';
@@ -11,6 +12,7 @@ import ShortVideoAgentLeftPanel from './ShortVideoAgentLeftPanel';
 import ShortVideoAgentWorkflowPanel from './ShortVideoAgentWorkflowPanel';
 import ShortVideoAgentVideoTimeline from './ShortVideoAgentVideoTimeline';
 import ShortVideoResourceManageDrawer from '../ShortVideoResourceManageDrawer';
+import ShortVideoModel3dManageDrawer from '../ShortVideoModel3dManageDrawer';
 import AccountsManageDrawer from './AccountsManageDrawer';
 import ShortVideoAgentBeatRegionEditor from './ShortVideoAgentBeatRegionEditor';
 import ShortVideoAgentCustomHtmlPreview from './ShortVideoAgentCustomHtmlPreview';
@@ -180,6 +182,7 @@ export default function ShortVideoAgentVideoWorkspace({
     const [leftPanelOpen, setLeftPanelOpen] = React.useState(false);
     const [leftPanelTab, setLeftPanelTab] = React.useState<ShortVideoAgentLeftTab>(initialTab);
     const [resourceDrawerOpen, setResourceDrawerOpen] = React.useState(false);
+    const [model3dDrawerOpen, setModel3dDrawerOpen] = React.useState(false);
     const [accountsDrawerOpen, setAccountsDrawerOpen] = React.useState(false);
     const [rightPanelOpen, setRightPanelOpen] = React.useState(false);
     const [qaDrawerOpen, setQaDrawerOpen] = React.useState(false);
@@ -604,6 +607,16 @@ export default function ShortVideoAgentVideoWorkspace({
                 sx={HEADER_BTN_SX}
             >
                 Quản lý Resource
+            </Button>
+            <Button
+                size="small"
+                variant="contained"
+                color="secondary"
+                startIcon={<ViewInArOutlinedIcon />}
+                onClick={() => setModel3dDrawerOpen(true)}
+                sx={HEADER_BTN_SX}
+            >
+                Quản lý model 3D
             </Button>
             <Button
                 size="small"
@@ -1178,6 +1191,10 @@ export default function ShortVideoAgentVideoWorkspace({
                 onClose={() => setResourceDrawerOpen(false)}
                 shortVideoId={shortVideoId}
                 shortVideoTitle={state.title || `Short video #${shortVideoId}`}
+            />
+            <ShortVideoModel3dManageDrawer
+                open={model3dDrawerOpen}
+                onClose={() => setModel3dDrawerOpen(false)}
             />
             <AccountsManageDrawer
                 open={accountsDrawerOpen}
