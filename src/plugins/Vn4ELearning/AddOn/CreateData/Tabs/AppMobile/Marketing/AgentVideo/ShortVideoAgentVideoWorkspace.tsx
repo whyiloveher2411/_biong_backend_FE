@@ -858,6 +858,7 @@ export default function ShortVideoAgentVideoWorkspace({
                                         audioDurationSec={state.audioDurationSec}
                                         videoRef={videoRef}
                                         clipAspect={state.agentClipAspect}
+                                        shortVideoId={shortVideoId}
                                     />
                                 </Box>
                                 <Box
@@ -1262,6 +1263,7 @@ export default function ShortVideoAgentVideoWorkspace({
                 beatIndex={infoBeatIndex}
                 clipAspect={state.agentClipAspect}
                 saving={state.savingImportHtml}
+                shortVideoId={shortVideoId}
                 onSaveVisualDescription={handleSaveBeatInfoVisualDescription}
             />
             <ShortVideoAgentHeadlessPreview

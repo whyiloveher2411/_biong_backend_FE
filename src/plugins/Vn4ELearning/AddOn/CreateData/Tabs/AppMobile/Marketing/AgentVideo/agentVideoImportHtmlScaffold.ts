@@ -86,6 +86,7 @@ export function buildSingleBeatHtmlScaffold(
     durationSec: number,
     beatId: string,
     aspect: ClipAspect = '9:16',
+    assetLibrary = false,
 ): string {
     const total = formatDurationSec(durationSec);
     const compositionId = beatId || 'beat_1';
@@ -94,11 +95,25 @@ export function buildSingleBeatHtmlScaffold(
 
     // Scaffold cho chatbot preview (hf-seek trong iframe).
     // Khi assemble render: chạy normalize-import-html-beat-for-render.mjs trước hyperframes render.
+    // assetLibrary=true → thêm GLTFLoader/SkeletonUtils + assets-config + assets-runtime (model 3D).
+
+    const scriptTags = [
+        '<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>',
+        ...(assetLibrary
+            ? [
+                '<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/loaders/GLTFLoader.js"></script>',
+                '<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/utils/SkeletonUtils.js"></script>',
+                '<script src="assets/dist/assets-config.js"></script>',
+                '<script src="assets/assets-runtime.js"></script>',
+            ]
+            : []),
+    ].join('\n');
 
     return `<!doctype html>
 <html data-duration="${total}" data-aspect="${aspectRatio}">
 <head>
 <meta charset="utf-8" />
+${scriptTags}
 <style>
 :root {
   --cream:#f6f5f1; --cream-2:#efece4; --ink:#0a0a0a; --mute:#6b6862;

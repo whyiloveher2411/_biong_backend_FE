@@ -18,6 +18,8 @@ export type BeatMapSection = {
     image_prompt?: Record<string, unknown> | string;
     /** Set dressing per beat (EN). Có thể rỗng trên map cũ trước khi chia lại. */
     background: string;
+    /** Id model 3D (thư viện) được chọn cho beat — nhúng vào HTML beat qua Assets. */
+    model_3d_ids?: number[];
 };
 
 export type BeatMap = {

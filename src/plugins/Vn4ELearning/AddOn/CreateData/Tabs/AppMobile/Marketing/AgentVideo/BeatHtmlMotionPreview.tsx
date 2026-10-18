@@ -3,6 +3,7 @@ import { Box, Typography } from '@mui/material';
 import CodeIcon from '@mui/icons-material/Code';
 import {
     ensureImportHtmlDataDuration,
+    localizeImportHtmlAssetScripts,
     localizeImportHtmlExternalScripts,
     seekCustomHtmlIframe,
 } from './agentVideoCustomHtmlPreview';
@@ -17,6 +18,8 @@ type Props = {
     /** ID beat — dùng để đổi `key` của iframe khi chuyển beat (tránh tái dùng
      *  node iframe cũ khiến trình duyệt không reload srcdoc). */
     beatId?: string;
+    /** Short video id — cần khi beat dùng model 3D (asset config same-origin). */
+    shortVideoId?: number;
 };
 
 /** Hash ngắn cho chuỗi — dùng làm phần `key` của iframe (tránh key khổng lồ). */
@@ -66,20 +69,22 @@ function detectAuthoredSize(html: string): { w: number; h: number } | null {
  * (`timeSec`). Đặt TRONG khung geometry của editor nên zoom/pan + kéo timeline
  * (playhead) đều áp dụng lên preview.
  */
-export default function BeatHtmlMotionPreview({ html, timeSec, durationSec, beatId }: Props) {
+export default function BeatHtmlMotionPreview({ html, timeSec, durationSec, beatId, shortVideoId = 0 }: Props) {
     const containerRef = React.useRef<HTMLDivElement | null>(null);
     const iframeRef = React.useRef<HTMLIFrameElement | null>(null);
     const latestTimeRef = React.useRef(0);
     const [size, setSize] = React.useState({ w: 0, h: 0 });
 
     const duration = Math.max(0.2, Number(durationSec) || 0.2);
-    const srcDoc = React.useMemo(
-        () => ensureImportHtmlDataDuration(
-            localizeImportHtmlExternalScripts(String(html || '')),
-            duration,
-        ),
-        [html, duration],
-    );
+    const srcDoc = React.useMemo(() => {
+        const raw = String(html || '');
+        // Beat dùng asset library → giữ three/loader CDN (r147) để khớp runtime,
+        // và đổi 2 thẻ assets/ tương đối sang URL same-origin có token.
+        const useAssetLibrary = raw.includes('assets/assets-runtime.js');
+        const localized = useAssetLibrary ? raw : localizeImportHtmlExternalScripts(raw);
+        const withAssets = localizeImportHtmlAssetScripts(localized, { shortVideoId, beatId });
+        return ensureImportHtmlDataDuration(withAssets, duration);
+    }, [html, duration, shortVideoId, beatId]);
     const authored = React.useMemo(() => detectAuthoredSize(String(html || '')), [html]);
 
     // Đổi beat / đổi nội dung HTML → đổi key để React tạo iframe MỚI (buộc reload

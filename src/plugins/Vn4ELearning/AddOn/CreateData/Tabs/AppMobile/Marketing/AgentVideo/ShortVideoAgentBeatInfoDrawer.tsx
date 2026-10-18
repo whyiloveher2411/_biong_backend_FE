@@ -46,6 +46,8 @@ type Props = {
     beatIndex?: number | null;
     clipAspect?: import('./agentVideoClipAspect').ClipAspect;
     saving?: boolean;
+    /** Short video id — cần khi beat dùng model 3D (asset config same-origin). */
+    shortVideoId?: number;
     onSaveVisualDescription: (visualDescription: string, background: string) => Promise<boolean>;
 };
 
@@ -133,6 +135,7 @@ export default function ShortVideoAgentBeatInfoDrawer({
     beatIndex = null,
     clipAspect = '9:16',
     saving = false,
+    shortVideoId = 0,
     onSaveVisualDescription,
 }: Props) {
     const { showMessage } = useFloatingMessages();
@@ -413,6 +416,7 @@ export default function ShortVideoAgentBeatInfoDrawer({
                                         : beat.durationSec)
                                     : beat.durationSec}
                                 clipAspect={clipAspect}
+                                shortVideoId={shortVideoId}
                             />
                         )}
                     </DetailSection>

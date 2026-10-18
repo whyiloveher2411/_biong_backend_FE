@@ -24,7 +24,64 @@ import { stripRepresentedImagePromptSections } from './agentVideoManualBeats';
 import { fetchWorkflowPromptContent } from 'helpers/marketingWorkflowPrompts';
 import type { BeatMapSection } from './agentVideoBeatMap';
 import type { ImportHtmlVisualCatalogItem } from './agentVideoApi';
+import { listShortVideoModel3ds, getShortVideoModel3dBeatIds, type ShortVideoModel3d } from 'helpers/marketingShortVideoModel3dApi';
 import { getClipRenderSpec, normalizeClipAspect, type ClipAspect, type ClipRenderSpec } from './agentVideoClipAspect';
+
+/** Parse field clips: mỗi dòng "Tên gốc" hoặc "Tên gốc | Tên đặt lại | Mô tả". */
+export function parseModelClipsField(text: string): Array<{ name: string; rename: string; desc: string }> {
+    return String(text || '')
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .map((line) => {
+            const parts = line.split('|').map((s) => s.trim());
+            return { name: parts[0] || '', rename: parts[1] || '', desc: parts[2] || '' };
+        })
+        .filter((clip) => clip.name !== '' || clip.rename !== '');
+}
+
+/** 1 dòng catalog model 3D (mirror PHP marketing_short_video_model_3d_catalog_lines). */
+function buildModelCatalogLine(model: ShortVideoModel3d): string {
+    const slug = String(model.slug || '').trim();
+    if (!slug) {
+        return '';
+    }
+    const kind = String(model.kind || 'prop');
+    const height = Number(model.height || 0);
+    const heightLabel = height > 0
+        ? `height ${Number(height.toFixed(2)).toString()} m`
+        : 'original size';
+    const parts = [slug, kind, heightLabel];
+    // Catalog phải 1 dòng/model → gộp mọi khoảng trắng (mô tả nhiều dòng).
+    const desc = String(model.description || '').replace(/\s+/g, ' ').trim();
+    parts.push(desc || '(no description)');
+    if (kind === 'person') {
+        const clips = parseModelClipsField(String(model.clips || ''));
+        const labels: string[] = [];
+        let hasIdle = false;
+        clips.forEach((clip) => {
+            const label = clip.rename || clip.name;
+            if (!label) {
+                return;
+            }
+            if (label.toLowerCase() === 'idle') {
+                hasIdle = true;
+            }
+            labels.push(clip.desc ? `${label} (${clip.desc})` : label);
+        });
+        if (!hasIdle) {
+            labels.push('idle (standing still — no animation)');
+        }
+        if (labels.length) {
+            parts.push(`clips: ${labels.join(', ')}`);
+        }
+    }
+    const materials = String(model.materials || '').split('\n').map((v) => v.trim()).filter(Boolean);
+    if (materials.length) {
+        parts.push(`materials: ${materials.join(', ')}`);
+    }
+    return `- ${parts.join(' | ')}`;
+}
 
 export type ImportHtmlContextPayload = {
     success?: boolean;
@@ -450,7 +507,40 @@ export async function buildBeatHtmlPrompt(
     const durationLabel = `${durationFormatted}s`;
     const clipAspect = normalizeClipAspect(context.agent_clip_aspect);
     const clipSpec = context.clip_render_spec || getClipRenderSpec(clipAspect);
-    const scaffold = buildSingleBeatHtmlScaffold(durationSec, beat.id, clipAspect);
+
+    // Model 3D đã chọn cho beat → catalog block + scaffold asset scripts.
+    // Ưu tiên ids trên beat; nếu trống (vd video 2s không có beat_map section) → đọc từ BE.
+    let beatModelIds = Array.isArray(beat.model_3d_ids) ? beat.model_3d_ids : [];
+    if (beatModelIds.length === 0 && Number(context.short_video_id || 0) > 0) {
+        try {
+            const idsRes = await getShortVideoModel3dBeatIds(Number(context.short_video_id), beat.id);
+            if (idsRes?.success !== false && Array.isArray(idsRes?.model_3d_ids)) {
+                beatModelIds = idsRes.model_3d_ids;
+            }
+        } catch {
+            // im lặng — không có catalog vẫn dựng prompt được.
+        }
+    }
+    let assetCatalogBlock = '';
+    let assetLibrary = false;
+    if (beatModelIds.length > 0) {
+        try {
+            const modelRes = await listShortVideoModel3ds();
+            const all = Array.isArray(modelRes?.models) ? modelRes.models : [];
+            const byId = new Map<number, ShortVideoModel3d>(all.map((m) => [Number(m.id), m]));
+            const selected = beatModelIds
+                .map((id) => byId.get(Number(id)))
+                .filter((m): m is ShortVideoModel3d => Boolean(m));
+            if (selected.length > 0) {
+                assetLibrary = true;
+                assetCatalogBlock = selected.map(buildModelCatalogLine).filter(Boolean).join('\n');
+            }
+        } catch {
+            // im lặng — không có catalog vẫn dựng prompt được (block tự bỏ).
+        }
+    }
+
+    const scaffold = buildSingleBeatHtmlScaffold(durationSec, beat.id, clipAspect, assetLibrary);
     const beatWhisper = filterWhisperForBeat(context.whisper_words || [], beat.startSec, beat.endSec);
     const beatWhisperPrompt = formatWhisperWordsForPrompt(beatWhisper, { timeOffsetSec: beat.startSec });
     const clipTotal = formatDurationSec(Number(context.audio_file_duration_sec || 0));
@@ -537,6 +627,7 @@ export async function buildBeatHtmlPrompt(
             WHISPER_WORDS: beatWhisper.length ? beatWhisperPrompt : '',
             BEAT_HTML_SCAFFOLD: scaffold,
             BEAT_IMAGE_PROMPT_BLOCK: cleanImagePromptBlock,
+            ASSET_CATALOG_BLOCK: assetCatalogBlock,
         });
         if (filled) {
             return filled;

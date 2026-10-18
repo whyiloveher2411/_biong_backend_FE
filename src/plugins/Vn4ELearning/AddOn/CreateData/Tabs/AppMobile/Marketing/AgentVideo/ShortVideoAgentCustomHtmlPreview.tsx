@@ -7,7 +7,11 @@ import {
     getClipStageDimensions,
     type ClipAspect,
 } from './agentVideoHtmlBeatPreviewScale';
-import { localizeImportHtmlExternalScripts, seekCustomHtmlIframe } from './agentVideoCustomHtmlPreview';
+import {
+    localizeImportHtmlAssetScripts,
+    localizeImportHtmlExternalScripts,
+    seekCustomHtmlIframe,
+} from './agentVideoCustomHtmlPreview';
 import ShortVideoAgentAvatarPipOverlay from './ShortVideoAgentAvatarPipOverlay';
 import type { AvatarPipAnchor } from './agentVideoApi';
 import type { BeatImageEntry } from './agentVideoBeatMap';
@@ -25,6 +29,8 @@ type Props = {
     avatarAnchor?: AvatarPipAnchor | string;
     showKaraoke?: boolean;
     clipAspect?: ClipAspect;
+    /** Short video id — cần khi beat dùng model 3D (asset config same-origin). */
+    shortVideoId?: number;
 };
 
 const EMPTY_HTML = '<html><body style="margin:0;background:#111;color:#666;display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif">Chưa có HTML beat</body></html>';
@@ -42,6 +48,7 @@ export default function ShortVideoAgentCustomHtmlPreview({
     avatarAnchor = 'bottom_right',
     showKaraoke = true,
     clipAspect = '9:16',
+    shortVideoId = 0,
 }: Props) {
     const containerRef = React.useRef<HTMLDivElement | null>(null);
     const iframeRef = React.useRef<HTMLIFrameElement | null>(null);
@@ -71,10 +78,15 @@ export default function ShortVideoAgentCustomHtmlPreview({
     );
 
     const activeHtml = activeBeat ? (beatHtml[activeBeat.id]?.html || '') : '';
-    const activeHtmlLocalized = React.useMemo(
-        () => localizeImportHtmlExternalScripts(activeHtml),
-        [activeHtml],
-    );
+    const activeHtmlLocalized = React.useMemo(() => {
+        // Beat dùng asset library → giữ three/loader CDN (khớp runtime) + rewrite 2 thẻ assets/ tương đối.
+        const useAssetLibrary = activeHtml.includes('assets/assets-runtime.js');
+        const localized = useAssetLibrary ? activeHtml : localizeImportHtmlExternalScripts(activeHtml);
+        return localizeImportHtmlAssetScripts(localized, {
+            shortVideoId,
+            beatId: activeBeat?.id || '',
+        });
+    }, [activeHtml, shortVideoId, activeBeat?.id]);
     const activeImageUrl = activeBeat ? (beatImage[activeBeat.id]?.image_url || '') : '';
     const activeHtmlRevision = activeBeat
         ? `${activeBeat.id}:${beatHtml[activeBeat.id]?.updated_at || ''}:${activeHtml.length}`

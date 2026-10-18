@@ -54,6 +54,7 @@ import { isKeyboardEditableTarget } from 'helpers/shortVideoEditorKeyboard';
 import type { useAgentVideoContent } from './useAgentVideoContent';
 import ShortVideoAgentImageAnimationControls from './ShortVideoAgentImageAnimationControls';
 import ShortVideoAgentBeatAddPanel from './ShortVideoAgentBeatAddPanel';
+import BeatModel3dPicker from './BeatModel3dPicker';
 import WhiteboardBeatImageReplaceControl from './WhiteboardBeatImageReplaceControl';
 import WhiteboardBeatImageControl from './WhiteboardBeatImageControl';
 import WhiteboardBeatImagePromptControl from './WhiteboardBeatImagePromptControl';
@@ -5707,6 +5708,7 @@ export default function ShortVideoAgentBeatRegionEditor({
                                             timeSec={playheadSec}
                                             durationSec={beatTimeline.beatDurationSec}
                                             beatId={beatId}
+                                            shortVideoId={shortVideoId}
                                         />
                                     ) : (
                                         <WhiteboardBeatTimingPreview
@@ -6305,6 +6307,15 @@ export default function ShortVideoAgentBeatRegionEditor({
                             </Box>
                         );
                     })() : null}
+                    {!selectedEffect && !selectedOverlay && !selectedRegion ? (
+                        <BeatModel3dPicker
+                            shortVideoId={shortVideoId}
+                            beatId={beatId}
+                            initialIds={
+                                beatMapForUi?.sections?.find((sec) => sec.id === beatId)?.model_3d_ids || []
+                            }
+                        />
+                    ) : null}
                     {!selectedEffect && bgSampleMode ? (
                         <Typography variant="caption" color="secondary.main" display="block" sx={{ mb: 0.5 }}>
                             Đang chọn <strong>background</strong> cho vùng đang chọn: <strong>click 1 phát</strong>

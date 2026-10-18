@@ -12,6 +12,7 @@ import {
     DialogContentText,
     DialogTitle,
     IconButton,
+    MenuItem,
     Stack,
     TextField,
     Tooltip,
@@ -54,6 +55,10 @@ type ModelMedia = {
 type ModelFormState = {
     id: number;
     title: string;
+    slug: string;
+    kind: string;
+    license: string;
+    source: string;
     height: string;
     description: string;
     materials: string;
@@ -65,6 +70,10 @@ type ModelFormState = {
 const EMPTY_FORM: ModelFormState = {
     id: 0,
     title: '',
+    slug: '',
+    kind: 'prop',
+    license: '',
+    source: '',
     height: '',
     description: '',
     materials: '',
@@ -118,6 +127,116 @@ function listPreview(text: string, max = 6): string[] {
         .slice(0, max);
 }
 
+type ClipRow = { name: string; rename: string; desc: string };
+
+/** Parse field clips → rows {name, rename, desc}. */
+function parseClipRows(text: string): ClipRow[] {
+    return String(text || '')
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .map((line) => {
+            const parts = line.split('|').map((s) => s.trim());
+            return { name: parts[0] || '', rename: parts[1] || '', desc: parts[2] || '' };
+        })
+        .filter((row) => row.name !== '' || row.rename !== '');
+}
+
+/** Serialize rows → text: "Tên gốc" hoặc "Tên gốc | Tên đặt lại | Mô tả". */
+function serializeClipRows(rows: ClipRow[]): string {
+    return rows
+        .map((row) => {
+            const name = row.name.trim();
+            const rename = row.rename.trim();
+            const desc = row.desc.trim();
+            if (!name && !rename && !desc) {
+                return '';
+            }
+            if (!rename && !desc) {
+                return name;
+            }
+            return `${name} | ${rename} | ${desc}`;
+        })
+        .filter(Boolean)
+        .join('\n');
+}
+
+/** Editor đặt lại tên + mô tả cho từng clip. Tên gốc rỗng = trạng thái ĐỨNG YÊN. */
+function ClipsEditor({
+    value,
+    onChange,
+    disabled,
+}: {
+    value: string;
+    onChange: (next: string) => void;
+    disabled?: boolean;
+}) {
+    const rows = React.useMemo(() => parseClipRows(value), [value]);
+
+    const update = (index: number, patch: Partial<ClipRow>) => {
+        const next = rows.map((row, i) => (i === index ? { ...row, ...patch } : row));
+        onChange(serializeClipRows(next));
+    };
+    const addStatic = () => {
+        if (rows.some((row) => row.name === '' && row.rename.trim().toLowerCase() === 'idle')) {
+            return;
+        }
+        onChange(serializeClipRows([...rows, { name: '', rename: 'idle', desc: 'standing still' }]));
+    };
+
+    return (
+        <Box>
+            <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 0.75 }}>
+                <Typography variant="subtitle2">Clip (đặt lại tên + mô tả)</Typography>
+                <Button size="small" onClick={addStatic} disabled={disabled} sx={{ textTransform: 'none' }}>
+                    + Đứng yên (idle)
+                </Button>
+            </Stack>
+            {rows.length === 0 ? (
+                <Typography variant="caption" color="text.secondary">
+                    Model chưa có clip. Nếu là person, nó sẽ đứng yên (bind pose).
+                </Typography>
+            ) : (
+                <Stack spacing={0.75}>
+                    {rows.map((row, index) => (
+                        <Stack key={`${row.name}-${index}`} direction="row" spacing={0.75} alignItems="center">
+                            <TextField
+                                size="small"
+                                label="Clip gốc"
+                                value={row.name}
+                                placeholder="— đứng yên —"
+                                disabled
+                                sx={{ flex: 1, minWidth: 0 }}
+                            />
+                            <TextField
+                                size="small"
+                                label="Đặt lại tên"
+                                value={row.rename}
+                                onChange={(e) => update(index, { rename: e.target.value })}
+                                disabled={disabled}
+                                placeholder="idle, walk…"
+                                sx={{ flex: 1, minWidth: 0 }}
+                            />
+                            <TextField
+                                size="small"
+                                label="Mô tả"
+                                value={row.desc}
+                                onChange={(e) => update(index, { desc: e.target.value })}
+                                disabled={disabled}
+                                placeholder="đi bộ, chạy…"
+                                sx={{ flex: 1.3, minWidth: 0 }}
+                            />
+                        </Stack>
+                    ))}
+                </Stack>
+            )}
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                Prompt dùng <b>tên đặt lại</b> (nếu có), else tên gốc. Dòng có Clip gốc rỗng = đứng yên (bind pose).
+            </Typography>
+        </Box>
+    );
+}
+
 function ModelForm({
     form,
     onFormChange,
@@ -160,6 +279,52 @@ function ModelForm({
                 placeholder="VD: robot, tree_pine"
                 helperText="Tự điền từ tên file khi upload — sửa được."
             />
+            <Stack direction="row" spacing={2}>
+                <TextField
+                    label="ID (slug)"
+                    value={form.slug}
+                    onChange={(e) => onFormChange({ slug: e.target.value })}
+                    disabled={saving || uploading}
+                    size="small"
+                    fullWidth
+                    placeholder="VD: tree_pine (để trống = tự sinh từ tên)"
+                    inputProps={{ pattern: '[a-z0-9_]*' }}
+                    helperText="Duy nhất, chỉ a-z 0-9 _ — dùng trong catalog/runtime."
+                />
+                <TextField
+                    select
+                    label="Loại"
+                    value={form.kind}
+                    onChange={(e) => onFormChange({ kind: e.target.value })}
+                    disabled={saving || uploading}
+                    size="small"
+                    fullWidth
+                    helperText="person → có animation (Assets.person)."
+                >
+                    <MenuItem value="prop">Prop (vật thể tĩnh)</MenuItem>
+                    <MenuItem value="person">Person (nhân vật)</MenuItem>
+                </TextField>
+            </Stack>
+            <Stack direction="row" spacing={2}>
+                <TextField
+                    label="Giấy phép"
+                    value={form.license}
+                    onChange={(e) => onFormChange({ license: e.target.value })}
+                    disabled={saving || uploading}
+                    size="small"
+                    fullWidth
+                    placeholder="CC0, CC-BY…"
+                />
+                <TextField
+                    label="Nguồn"
+                    value={form.source}
+                    onChange={(e) => onFormChange({ source: e.target.value })}
+                    disabled={saving || uploading}
+                    size="small"
+                    fullWidth
+                    placeholder="pack / tác giả / URL"
+                />
+            </Stack>
             <TextField
                 label="Chiều cao (mét)"
                 value={form.height}
@@ -194,17 +359,10 @@ function ModelForm({
                 placeholder={'Mỗi dòng 1 tên material\nVD: Body\nMetal'}
                 helperText="Danh sách tên material — mỗi dòng 1 tên. Tự điền khi upload."
             />
-            <TextField
-                label="Tên clip"
+            <ClipsEditor
                 value={form.clips}
-                onChange={(e) => onFormChange({ clips: e.target.value })}
+                onChange={(next) => onFormChange({ clips: next })}
                 disabled={saving || uploading}
-                size="small"
-                fullWidth
-                multiline
-                minRows={3}
-                placeholder={'Mỗi dòng 1 tên clip/animation\nVD: Idle\nWalk'}
-                helperText="Danh sách tên clip/animation — mỗi dòng 1 tên. Tự điền khi upload."
             />
             <Box>
                 <Typography variant="subtitle2" sx={{ mb: 0.75 }}>
@@ -389,6 +547,10 @@ export default function ShortVideoModel3dManageDrawer({ open, onClose }: Props) 
         setForm({
             id: model.id,
             title: model.title || '',
+            slug: model.slug || '',
+            kind: model.kind || 'prop',
+            license: model.license || '',
+            source: model.source || '',
             height: model.height ? String(model.height) : '',
             description: model.description || '',
             materials: model.materials || '',
@@ -533,6 +695,10 @@ export default function ShortVideoModel3dManageDrawer({ open, onClose }: Props) 
         saveShortVideoModel3d({
             id: form.id > 0 ? form.id : 0,
             title,
+            slug: form.slug.trim(),
+            kind: form.kind || 'prop',
+            license: form.license,
+            source: form.source,
             height: Number.isFinite(heightNumber) && heightNumber > 0 ? heightNumber : 0,
             description: form.description,
             materials: form.materials,
@@ -919,7 +1085,8 @@ export default function ShortVideoModel3dManageDrawer({ open, onClose }: Props) 
                     >
                         {models.map((model) => {
                             const materialCount = countLines(model.materials);
-                            const clipCount = countLines(model.clips);
+                            const clipLabels = parseClipRows(model.clips).map((row) => row.rename || row.name).filter(Boolean);
+                            const clipCount = clipLabels.length;
                             return (
                                 <Box
                                     key={model.id}
@@ -1000,6 +1167,21 @@ export default function ShortVideoModel3dManageDrawer({ open, onClose }: Props) 
                                     </Box>
                                     <Box sx={{ minWidth: 0, flex: 1 }}>
                                         <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
+                                            {model.slug ? (
+                                                <Chip
+                                                    size="small"
+                                                    label={model.slug}
+                                                    color="primary"
+                                                    variant="outlined"
+                                                    sx={{ fontWeight: 700, maxWidth: 200 }}
+                                                />
+                                            ) : null}
+                                            <Chip
+                                                size="small"
+                                                color={model.kind === 'person' ? 'secondary' : 'default'}
+                                                variant="outlined"
+                                                label={model.kind === 'person' ? 'person' : 'prop'}
+                                            />
                                             {model.height > 0 ? (
                                                 <Chip
                                                     size="small"
@@ -1039,10 +1221,10 @@ export default function ShortVideoModel3dManageDrawer({ open, onClose }: Props) 
                                                 {materialCount > 3 ? '…' : ''}
                                             </Typography>
                                         ) : null}
-                                        {listPreview(model.clips, 3).length ? (
+                                        {clipLabels.length ? (
                                             <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }} noWrap>
-                                                Clip: {listPreview(model.clips, 3).join(', ')}
-                                                {clipCount > 3 ? '…' : ''}
+                                                Clip: {clipLabels.slice(0, 4).join(', ')}
+                                                {clipCount > 4 ? '…' : ''}
                                             </Typography>
                                         ) : null}
                                     </Box>

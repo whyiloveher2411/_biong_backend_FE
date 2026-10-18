@@ -10,6 +10,12 @@ const MODEL_3D_BASE_PATH = 'plugin/vn4-e-learning/app-mobile/marketing/short-vid
 export type ShortVideoModel3d = {
     id: number;
     title: string;
+    /** ID catalog (^[a-z0-9_]+$) dùng cho runtime Assets. */
+    slug: string;
+    /** prop (vật thể) | person (nhân vật có animation). */
+    kind: 'prop' | 'person' | string;
+    license: string;
+    source: string;
     /** Chiều cao (mét) — auto điền từ bounding box khi upload. */
     height: number;
     description: string;
@@ -32,6 +38,10 @@ export type ShortVideoModel3d = {
 export type ShortVideoModel3dSavePayload = {
     id?: number;
     title: string;
+    slug?: string;
+    kind?: string;
+    license?: string;
+    source?: string;
     height?: number;
     description?: string;
     materials?: string;
@@ -101,6 +111,10 @@ export function saveShortVideoModel3d(payload: ShortVideoModel3dSavePayload): Pr
         data: {
             id: payload.id ?? 0,
             title: payload.title,
+            slug: payload.slug ?? '',
+            kind: payload.kind ?? 'prop',
+            license: payload.license ?? '',
+            source: payload.source ?? '',
             height: payload.height ?? 0,
             description: payload.description ?? '',
             materials: payload.materials ?? '',
@@ -109,6 +123,41 @@ export function saveShortVideoModel3d(payload: ShortVideoModel3dSavePayload): Pr
             thumbnail: thumbnail && typeof thumbnail === 'object' ? JSON.stringify(thumbnail) : thumbnail,
         },
     }) as Promise<{ success?: boolean; model?: ShortVideoModel3d; model_id?: number }>;
+}
+
+/** Lấy danh sách model 3D đã chọn cho 1 beat (đọc từ BE — không phụ thuộc beat_map phía FE). */
+export function getShortVideoModel3dBeatIds(shortVideoId: number, beatId: string): Promise<{
+    success?: boolean;
+    beat_id?: string;
+    model_3d_ids?: number[];
+}> {
+    return ajax({
+        url: `${MODEL_3D_BASE_PATH}/get-beat`,
+        method: 'POST',
+        loading: false,
+        data: {
+            short_video_id: shortVideoId,
+            beat_id: beatId,
+        },
+    }) as Promise<{ success?: boolean; beat_id?: string; model_3d_ids?: number[] }>;
+}
+
+/** Lưu danh sách model 3D đã chọn cho 1 beat (field model_3d_ids trong beat_map section). */
+export function saveShortVideoModel3dBeatIds(shortVideoId: number, beatId: string, modelIds: number[]): Promise<{
+    success?: boolean;
+    beat_id?: string;
+    model_3d_ids?: number[];
+}> {
+    return ajax({
+        url: `${MODEL_3D_BASE_PATH}/save-beat`,
+        method: 'POST',
+        loading: false,
+        data: {
+            short_video_id: shortVideoId,
+            beat_id: beatId,
+            model_3d_ids: modelIds,
+        },
+    }) as Promise<{ success?: boolean; beat_id?: string; model_3d_ids?: number[] }>;
 }
 
 export function deleteShortVideoModel3ds(ids: number[]): Promise<{
@@ -217,4 +266,31 @@ export async function uploadShortVideoModel3dThumbnail(
         throw new Error('Upload thumbnail thất bại');
     }
     return (result || {}) as { success?: boolean; url?: string; s3_key?: string; model?: ShortVideoModel3d };
+}
+
+/** URL tuyệt đối tới assets-runtime.js (same-origin, có access_token) cho preview. */
+export function buildModel3dRuntimeAssetUrl(): string {
+    const url = convertToURL(
+        getAdminApiPrefix(),
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/model-3d/runtime',
+    );
+    const token = getAccessToken() || '';
+    const separator = url.includes('?') ? '&' : '?';
+    return token ? `${url}${separator}access_token=${encodeURIComponent(token)}` : url;
+}
+
+/** URL tuyệt đối tới asset-config (window.HF_ASSETS) cho 1 beat (same-origin, có token). */
+export function buildModel3dAssetConfigUrl(shortVideoId: number, beatId: string): string {
+    const url = convertToURL(
+        getAdminApiPrefix(),
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/model-3d/asset-config',
+    );
+    const params = new URLSearchParams();
+    params.set('short_video_id', String(shortVideoId || 0));
+    params.set('beat_id', String(beatId || ''));
+    const token = getAccessToken() || '';
+    if (token) {
+        params.set('access_token', token);
+    }
+    return `${url}?${params.toString()}`;
 }

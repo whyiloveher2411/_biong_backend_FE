@@ -515,6 +515,7 @@ export default function ShortVideoAgentVideoPreview({
                                     avatarAnchor={avatarAnchor}
                                     showKaraoke={showKaraoke}
                                     clipAspect={state.agentClipAspect}
+                                    shortVideoId={Number(state.shortVideoId || 0)}
                                 />
                             ) : activeSource === 'html_beat' ? (
                                 <HtmlBeatMissingPlaceholder isWhiteboardMode={isWhiteboardMode} />

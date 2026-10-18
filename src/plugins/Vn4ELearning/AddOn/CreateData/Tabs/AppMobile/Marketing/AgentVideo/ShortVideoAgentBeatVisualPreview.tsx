@@ -6,7 +6,11 @@ import {
     getClipStageDimensions,
     type ClipAspect,
 } from './agentVideoHtmlBeatPreviewScale';
-import { localizeImportHtmlExternalScripts, seekCustomHtmlIframe } from './agentVideoCustomHtmlPreview';
+import {
+    localizeImportHtmlAssetScripts,
+    localizeImportHtmlExternalScripts,
+    seekCustomHtmlIframe,
+} from './agentVideoCustomHtmlPreview';
 
 type Props = {
     beatId: string;
@@ -16,6 +20,8 @@ type Props = {
     startSec: number;
     durationSec: number;
     clipAspect?: ClipAspect;
+    /** Short video id — cần khi beat dùng model 3D (asset config same-origin). */
+    shortVideoId?: number;
 };
 
 function muteIframeMedia(iframe: HTMLIFrameElement | null): void {
@@ -37,6 +43,7 @@ export default function ShortVideoAgentBeatVisualPreview({
     startSec,
     durationSec,
     clipAspect = '9:16',
+    shortVideoId = 0,
 }: Props) {
     const containerRef = React.useRef<HTMLDivElement | null>(null);
     const iframeRef = React.useRef<HTMLIFrameElement | null>(null);
@@ -49,10 +56,11 @@ export default function ShortVideoAgentBeatVisualPreview({
 
     const safeDurationSec = Math.max(0.1, Number(durationSec) || 0.1);
     const hasHtml = Boolean(html.trim());
-    const localHtml = React.useMemo(
-        () => localizeImportHtmlExternalScripts(html),
-        [html],
-    );
+    const localHtml = React.useMemo(() => {
+        const useAssetLibrary = html.includes('assets/assets-runtime.js');
+        const localized = useAssetLibrary ? html : localizeImportHtmlExternalScripts(html);
+        return localizeImportHtmlAssetScripts(localized, { shortVideoId, beatId });
+    }, [html, shortVideoId, beatId]);
     const stage = getClipStageDimensions(clipAspect);
     const containScale = computeContainScale(containerWidth || 360, undefined, clipAspect);
     const scaledStageHeight = computeScaledStageHeight(containScale, clipAspect);

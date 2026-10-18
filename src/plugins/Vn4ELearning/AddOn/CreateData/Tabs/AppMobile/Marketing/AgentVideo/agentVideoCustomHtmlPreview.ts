@@ -1,4 +1,8 @@
 import { normalizeImportHtmlForAudio } from './agentVideoImportHtmlNormalize';
+import {
+    buildModel3dAssetConfigUrl,
+    buildModel3dRuntimeAssetUrl,
+} from 'helpers/marketingShortVideoModel3dApi';
 
 export {
     isImportHtmlDurationMismatch,
@@ -39,4 +43,32 @@ export function localizeImportHtmlExternalScripts(html: string): string {
         return source;
     }
     return source.replace(EXTERNAL_THREE_SCRIPT_RE, '<script src="/three.min.js"></script>');
+}
+
+/**
+ * Preview asset library: thay 2 thẻ script tương đối của scaffold
+ * (`assets/dist/assets-config.js`, `assets/assets-runtime.js`) bằng URL tuyệt đối
+ * same-origin (có access_token) để GLB + runtime tải được trong iframe preview.
+ * Giữ nguyên các thẻ three/loader (CDN r147) để khớp phiên bản với runtime.
+ */
+export function localizeImportHtmlAssetScripts(
+    html: string,
+    ctx: { shortVideoId?: number; beatId?: string } = {},
+): string {
+    const source = String(html || '');
+    if (!source || source.indexOf('assets/') === -1) {
+        return source;
+    }
+    const runtimeUrl = buildModel3dRuntimeAssetUrl();
+    const configUrl = buildModel3dAssetConfigUrl(Number(ctx.shortVideoId || 0), String(ctx.beatId || ''));
+
+    return source
+        .replace(
+            /<script\b[^>]*\bsrc\s*=\s*["']assets\/dist\/assets-config\.js["'][^>]*>\s*<\/script>/gi,
+            () => `<script src="${configUrl}"></script>`,
+        )
+        .replace(
+            /<script\b[^>]*\bsrc\s*=\s*["']assets\/assets-runtime\.js["'][^>]*>\s*<\/script>/gi,
+            () => `<script src="${runtimeUrl}"></script>`,
+        );
 }
