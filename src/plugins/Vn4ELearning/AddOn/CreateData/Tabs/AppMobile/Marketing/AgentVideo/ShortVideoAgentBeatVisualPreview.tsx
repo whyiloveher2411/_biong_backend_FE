@@ -6,7 +6,7 @@ import {
     getClipStageDimensions,
     type ClipAspect,
 } from './agentVideoHtmlBeatPreviewScale';
-import { seekCustomHtmlIframe } from './agentVideoCustomHtmlPreview';
+import { localizeImportHtmlExternalScripts, seekCustomHtmlIframe } from './agentVideoCustomHtmlPreview';
 
 type Props = {
     beatId: string;
@@ -49,6 +49,10 @@ export default function ShortVideoAgentBeatVisualPreview({
 
     const safeDurationSec = Math.max(0.1, Number(durationSec) || 0.1);
     const hasHtml = Boolean(html.trim());
+    const localHtml = React.useMemo(
+        () => localizeImportHtmlExternalScripts(html),
+        [html],
+    );
     const stage = getClipStageDimensions(clipAspect);
     const containScale = computeContainScale(containerWidth || 360, undefined, clipAspect);
     const scaledStageHeight = computeScaledStageHeight(containScale, clipAspect);
@@ -294,7 +298,7 @@ export default function ShortVideoAgentBeatVisualPreview({
                             ref={iframeRef}
                             title={`Preview visual ${beatId}`}
                             sandbox="allow-scripts allow-same-origin"
-                            srcDoc={html}
+                            srcDoc={localHtml}
                             onLoad={handleIframeLoad}
                             sx={{
                                 width: stage.width,

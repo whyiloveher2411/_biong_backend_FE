@@ -7,7 +7,7 @@ import {
     getClipStageDimensions,
     type ClipAspect,
 } from './agentVideoHtmlBeatPreviewScale';
-import { seekCustomHtmlIframe } from './agentVideoCustomHtmlPreview';
+import { localizeImportHtmlExternalScripts, seekCustomHtmlIframe } from './agentVideoCustomHtmlPreview';
 import ShortVideoAgentAvatarPipOverlay from './ShortVideoAgentAvatarPipOverlay';
 import type { AvatarPipAnchor } from './agentVideoApi';
 import type { BeatImageEntry } from './agentVideoBeatMap';
@@ -71,6 +71,10 @@ export default function ShortVideoAgentCustomHtmlPreview({
     );
 
     const activeHtml = activeBeat ? (beatHtml[activeBeat.id]?.html || '') : '';
+    const activeHtmlLocalized = React.useMemo(
+        () => localizeImportHtmlExternalScripts(activeHtml),
+        [activeHtml],
+    );
     const activeImageUrl = activeBeat ? (beatImage[activeBeat.id]?.image_url || '') : '';
     const activeHtmlRevision = activeBeat
         ? `${activeBeat.id}:${beatHtml[activeBeat.id]?.updated_at || ''}:${activeHtml.length}`
@@ -190,7 +194,7 @@ export default function ShortVideoAgentCustomHtmlPreview({
             ref={iframeRef}
             title="HTML beat preview"
             sandbox="allow-scripts allow-same-origin"
-            srcDoc={activeHtml || EMPTY_HTML}
+            srcDoc={activeHtmlLocalized || EMPTY_HTML}
             sx={{
                 width: stage.width,
                 height: stage.height,

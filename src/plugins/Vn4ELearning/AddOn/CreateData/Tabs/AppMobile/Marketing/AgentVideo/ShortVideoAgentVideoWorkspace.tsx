@@ -800,6 +800,7 @@ export default function ShortVideoAgentVideoWorkspace({
                     >
                         {canEditRegion ? (
                             <ShortVideoAgentBeatRegionEditor
+                                key={`beat-editor:${currentBeatId}`}
                                 state={state}
                                 beatId={currentBeatId}
                                 imageUrl={currentBeatImageUrl}

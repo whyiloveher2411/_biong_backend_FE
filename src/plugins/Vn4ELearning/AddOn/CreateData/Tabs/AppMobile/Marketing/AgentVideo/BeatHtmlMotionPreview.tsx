@@ -3,6 +3,7 @@ import { Box, Typography } from '@mui/material';
 import CodeIcon from '@mui/icons-material/Code';
 import {
     ensureImportHtmlDataDuration,
+    localizeImportHtmlExternalScripts,
     seekCustomHtmlIframe,
 } from './agentVideoCustomHtmlPreview';
 
@@ -13,7 +14,19 @@ type Props = {
     timeSec: number;
     /** Window audio của beat (giây). */
     durationSec: number;
+    /** ID beat — dùng để đổi `key` của iframe khi chuyển beat (tránh tái dùng
+     *  node iframe cũ khiến trình duyệt không reload srcdoc). */
+    beatId?: string;
 };
+
+/** Hash ngắn cho chuỗi — dùng làm phần `key` của iframe (tránh key khổng lồ). */
+function quickHash(input: string): string {
+    let hash = 5381;
+    for (let i = 0; i < input.length; i += 1) {
+        hash = ((hash << 5) + hash + input.charCodeAt(i)) | 0;
+    }
+    return (hash >>> 0).toString(36);
+}
 
 /** Đoán kích thước canvas beat HTML được thiết kế (khớp runner render). */
 function detectAuthoredSize(html: string): { w: number; h: number } | null {
@@ -53,7 +66,7 @@ function detectAuthoredSize(html: string): { w: number; h: number } | null {
  * (`timeSec`). Đặt TRONG khung geometry của editor nên zoom/pan + kéo timeline
  * (playhead) đều áp dụng lên preview.
  */
-export default function BeatHtmlMotionPreview({ html, timeSec, durationSec }: Props) {
+export default function BeatHtmlMotionPreview({ html, timeSec, durationSec, beatId }: Props) {
     const containerRef = React.useRef<HTMLDivElement | null>(null);
     const iframeRef = React.useRef<HTMLIFrameElement | null>(null);
     const latestTimeRef = React.useRef(0);
@@ -61,10 +74,17 @@ export default function BeatHtmlMotionPreview({ html, timeSec, durationSec }: Pr
 
     const duration = Math.max(0.2, Number(durationSec) || 0.2);
     const srcDoc = React.useMemo(
-        () => ensureImportHtmlDataDuration(String(html || ''), duration),
+        () => ensureImportHtmlDataDuration(
+            localizeImportHtmlExternalScripts(String(html || '')),
+            duration,
+        ),
         [html, duration],
     );
     const authored = React.useMemo(() => detectAuthoredSize(String(html || '')), [html]);
+
+    // Đổi beat / đổi nội dung HTML → đổi key để React tạo iframe MỚI (buộc reload
+    // srcDoc). Không có key, trình duyệt có thể giữ document cũ → preview dính beat trước.
+    const iframeKey = `${beatId || 'beat'}:${quickHash(srcDoc)}`;
 
     React.useEffect(() => {
         const container = containerRef.current;
@@ -125,6 +145,7 @@ export default function BeatHtmlMotionPreview({ html, timeSec, durationSec }: Pr
         >
             <Box
                 component="iframe"
+                key={iframeKey}
                 ref={iframeRef}
                 title="HTML motion beat"
                 srcDoc={srcDoc}

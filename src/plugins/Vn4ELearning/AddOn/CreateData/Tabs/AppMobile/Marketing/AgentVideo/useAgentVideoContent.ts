@@ -1638,42 +1638,35 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         const nextBeatMapJson = nextBeatMap ? beatMapToJson(nextBeatMap) : '';
         setBeatMapJsonDraft(nextBeatMapJson);
         savedBeatMapJsonRef.current = nextBeatMapJson;
-        setBeatHtml((prev) => {
-            const beatHtmlRaw = importSummary?.beat_html ?? {};
-            const nextBeatHtml: Record<string, BeatHtmlEntry> = {};
-            Object.entries(beatHtmlRaw).forEach(([beatId, entry]) => {
-                const parsed = parseBeatHtmlEntry(entry);
-                if (parsed) {
-                    nextBeatHtml[beatId] = parsed;
-                }
+        // MERGE (không replace): poll/save có thể trả object thiếu beat vừa lưu (race)
+        // → replace sẽ xóa beat_html/beat_image của beat khác, preview HTML trắng +
+        // "Beat chưa có ảnh". Merge giữ entry cũ, server chỉ ghi đè key có mặt.
+        if (importSummary && Object.prototype.hasOwnProperty.call(importSummary, 'beat_html')) {
+            setBeatHtml((prev) => {
+                const beatHtmlRaw = importSummary?.beat_html ?? {};
+                const nextBeatHtml: Record<string, BeatHtmlEntry> = { ...prev };
+                Object.entries(beatHtmlRaw).forEach(([beatId, entry]) => {
+                    const parsed = parseBeatHtmlEntry(entry);
+                    if (parsed) {
+                        nextBeatHtml[beatId] = parsed;
+                    }
+                });
+                return nextBeatHtml;
             });
-            Object.keys(beatHtmlSaveTimerRef.current).forEach((beatId) => {
-                // Giữ local chỉ khi debounce save; không ghi đè HTML server khi đang iterate.
-                if (beatIterateSessionRef.current[beatId]) {
-                    return;
-                }
-                if (prev[beatId]?.html?.trim()) {
-                    nextBeatHtml[beatId] = prev[beatId];
-                }
+        }
+        if (importSummary && Object.prototype.hasOwnProperty.call(importSummary, 'beat_image')) {
+            setBeatImage((prev) => {
+                const beatImageRaw = importSummary?.beat_image ?? {};
+                const nextBeatImage: Record<string, BeatImageEntry> = { ...prev };
+                Object.entries(beatImageRaw).forEach(([beatId, entry]) => {
+                    const parsed = parseBeatImageEntry(entry);
+                    if (parsed) {
+                        nextBeatImage[beatId] = parsed;
+                    }
+                });
+                return nextBeatImage;
             });
-            return nextBeatHtml;
-        });
-        setBeatImage((prev) => {
-            const beatImageRaw = importSummary?.beat_image ?? {};
-            const nextBeatImage: Record<string, BeatImageEntry> = {};
-            Object.entries(beatImageRaw).forEach(([beatId, entry]) => {
-                const parsed = parseBeatImageEntry(entry);
-                if (parsed) {
-                    nextBeatImage[beatId] = parsed;
-                }
-            });
-            Object.keys(beatImageSaveTimerRef.current).forEach((beatId) => {
-                if (prev[beatId]?.image_url?.trim() || prev[beatId]?.video_url?.trim()) {
-                    nextBeatImage[beatId] = prev[beatId];
-                }
-            });
-            return nextBeatImage;
-        });
+        }
         setBeatVersions(parseBeatVersionsBlock(importSummary?.beat_versions));
         setBeatActiveVersionId(
             importSummary?.beat_active_version_id
@@ -2799,20 +2792,11 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }
         if (summary.beat_html) {
             setBeatHtml((prev) => {
-                const nextBeatHtml: Record<string, BeatHtmlEntry> = {};
+                const nextBeatHtml: Record<string, BeatHtmlEntry> = { ...prev };
                 Object.entries(summary.beat_html ?? {}).forEach(([beatId, entry]) => {
                     const parsed = parseBeatHtmlEntry(entry);
                     if (parsed) {
                         nextBeatHtml[beatId] = parsed;
-                    }
-                });
-                Object.keys(beatHtmlSaveTimerRef.current).forEach((beatId) => {
-                    // Giữ local chỉ khi debounce save; không ghi đè HTML server khi đang iterate.
-                    if (beatIterateSessionRef.current[beatId]) {
-                        return;
-                    }
-                    if (prev[beatId]?.html?.trim()) {
-                        nextBeatHtml[beatId] = prev[beatId];
                     }
                 });
                 return nextBeatHtml;
@@ -2820,16 +2804,11 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }
         if (summary.beat_image) {
             setBeatImage((prev) => {
-                const nextBeatImage: Record<string, BeatImageEntry> = {};
+                const nextBeatImage: Record<string, BeatImageEntry> = { ...prev };
                 Object.entries(summary.beat_image ?? {}).forEach(([beatId, entry]) => {
                     const parsed = parseBeatImageEntry(entry);
                     if (parsed) {
                         nextBeatImage[beatId] = parsed;
-                    }
-                });
-                Object.keys(beatImageSaveTimerRef.current).forEach((beatId) => {
-                    if (prev[beatId]?.image_url?.trim() || prev[beatId]?.video_url?.trim()) {
-                        nextBeatImage[beatId] = prev[beatId];
                     }
                 });
                 return nextBeatImage;

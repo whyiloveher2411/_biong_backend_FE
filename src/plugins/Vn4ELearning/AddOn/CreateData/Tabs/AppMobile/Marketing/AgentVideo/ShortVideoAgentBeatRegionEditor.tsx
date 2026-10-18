@@ -3889,7 +3889,13 @@ export default function ShortVideoAgentBeatRegionEditor({
         || (beatReplacementVideoUrl ? 'video' : 'image');
     const beatHasHtmlMotion = Boolean(String(state.beatHtml?.[beatId]?.html || '').trim());
     const beatHtmlMotionSource = String(state.beatHtml?.[beatId]?.html || '');
-    const isHtmlMotionPreview = beatReplacementMediaSource === 'html' && Boolean(beatHtmlMotionSource.trim());
+    const beatImageUrl = String(state.beatImage?.[beatId]?.image_url || '').trim();
+    // Chọn preview HTML khi beat đặt media_source='html', HOẶC khi beat chỉ có HTML
+    // (không ảnh/video) — tránh rơi về nhánh ảnh và hiện "Beat chưa có ảnh".
+    const isHtmlMotionPreview = beatHasHtmlMotion && (
+        beatReplacementMediaSource === 'html'
+        || (beatImageUrl === '' && beatReplacementVideoUrl === '')
+    );
     const stageRect = isHtmlMotionPreview ? (containRect ?? htmlMotionFallbackRect) : containRect;
     // Dán toàn bộ ảnh beat lên custom bg (ảnh beat là PNG nền trong suốt) —
     // không cần vùng cutout để thấy nội dung ảnh.
@@ -5668,6 +5674,7 @@ export default function ShortVideoAgentBeatRegionEditor({
 
                         {!previewActive && stageRect && boxSize ? (
                             <Box
+                                key={`beat-preview:${beatId}`}
                                 sx={{
                                     position: 'absolute',
                                     left: stageRect.x + pan.x,
@@ -5695,9 +5702,11 @@ export default function ShortVideoAgentBeatRegionEditor({
                                 >
                                     {isHtmlMotionPreview ? (
                                         <BeatHtmlMotionPreview
+                                            key={`html-motion:${beatId}:${beatHtmlMotionSource.length}`}
                                             html={beatHtmlMotionSource}
                                             timeSec={playheadSec}
                                             durationSec={beatTimeline.beatDurationSec}
+                                            beatId={beatId}
                                         />
                                     ) : (
                                         <WhiteboardBeatTimingPreview
