@@ -28,6 +28,17 @@ export const FULL_AUTO_PIPELINE_WHITEBOARD_ONLY_STEPS = [
     'whiteboard_mux',
 ] as const;
 
+/**
+ * Các bước sản xuất ẢNH beat: Render ảnh resource (8) / Ảnh beat (9) / Animate ảnh (10).
+ * Khi workflow đang chọn của video khai báo `# beatHtmlPrompt:` (dùng HTML beat,
+ * không dùng ảnh beat) → ẩn khỏi UI và pipeline bỏ qua.
+ */
+export const FULL_AUTO_PIPELINE_IMAGE_BEAT_STEPS = [
+    'resource_image_render',
+    'beat_image_fill',
+    'beat_video_animate',
+] as const;
+
 /** Nhóm bước thumbnail (idea → HTML → chụp) — video 2s không dùng nên ẩn/tắt. */
 export const FULL_AUTO_PIPELINE_THUMBNAIL_STEPS = [
     'thumbnail_idea',
@@ -68,12 +79,17 @@ export function isFullAutoPipelineStepRelevantForMode(
     step: string,
     agentVisualMode?: string | null,
     beatAudioMode = false,
+    hasBeatHtmlPrompt = false,
 ): boolean {
     const key = String(step || '').trim();
     if (!key) {
         return false;
     }
     if ((FULL_AUTO_PIPELINE_UI_HIDDEN_EXTRA_STEPS as readonly string[]).includes(key)) {
+        return false;
+    }
+    // Workflow dùng HTML beat → không sản xuất ảnh beat: ẩn Render ảnh resource / Ảnh beat / Animate ảnh.
+    if (hasBeatHtmlPrompt && (FULL_AUTO_PIPELINE_IMAGE_BEAT_STEPS as readonly string[]).includes(key)) {
         return false;
     }
     if (beatAudioMode && (FULL_AUTO_PIPELINE_BEAT_AUDIO_SKIPPED_STEPS as readonly string[]).includes(key)) {
@@ -106,9 +122,10 @@ export function isFullAutoPipelineStepRelevantForMode(
 export function getVisibleFullAutoPipelineStepOrder(
     agentVisualMode?: string | null,
     beatAudioMode = false,
+    hasBeatHtmlPrompt = false,
 ): FullAutoPipelineStepKey[] {
     return FULL_AUTO_PIPELINE_STEP_ORDER.filter((step) => (
-        isFullAutoPipelineStepRelevantForMode(step, agentVisualMode, beatAudioMode)
+        isFullAutoPipelineStepRelevantForMode(step, agentVisualMode, beatAudioMode, hasBeatHtmlPrompt)
     ));
 }
 
@@ -121,6 +138,7 @@ export type VisibleFullAutoPipelineStepGroup = {
 export function getVisibleFullAutoPipelineStepGroups(
     agentVisualMode?: string | null,
     beatAudioMode = false,
+    hasBeatHtmlPrompt = false,
 ): VisibleFullAutoPipelineStepGroup[] {
     const groups = FULL_AUTO_PIPELINE_STEP_GROUPS as ReadonlyArray<{
         key: VisibleFullAutoPipelineStepGroup['key'];
@@ -132,7 +150,7 @@ export function getVisibleFullAutoPipelineStepGroups(
     for (const group of groups) {
         const steps: FullAutoPipelineStepKey[] = [];
         for (const step of group.steps) {
-            if (isFullAutoPipelineStepRelevantForMode(step, agentVisualMode, beatAudioMode)) {
+            if (isFullAutoPipelineStepRelevantForMode(step, agentVisualMode, beatAudioMode, hasBeatHtmlPrompt)) {
                 steps.push(step);
             }
         }
@@ -152,8 +170,9 @@ export function getVisibleFullAutoPipelineStepIndex(
     step: string,
     agentVisualMode?: string | null,
     beatAudioMode = false,
+    hasBeatHtmlPrompt = false,
 ): number {
-    const idx = getVisibleFullAutoPipelineStepOrder(agentVisualMode, beatAudioMode)
+    const idx = getVisibleFullAutoPipelineStepOrder(agentVisualMode, beatAudioMode, hasBeatHtmlPrompt)
         .indexOf(step as FullAutoPipelineStepKey);
     return idx >= 0 ? idx + 1 : 0;
 }

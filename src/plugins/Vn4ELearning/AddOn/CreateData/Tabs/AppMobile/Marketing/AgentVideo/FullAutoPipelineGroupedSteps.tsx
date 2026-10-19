@@ -210,6 +210,7 @@ type PipelineStepTitleProps = {
     stepKey: FullAutoPipelineStepKey;
     agentVisualMode?: string;
     beatAudioMode?: boolean;
+    hasBeatHtmlPrompt?: boolean;
     beatImageFillMode?: BeatImageFillMode;
     variant?: 'light' | 'dark';
     headlessStepSet: Set<string>;
@@ -223,6 +224,7 @@ function PipelineStepTitle({
     stepKey,
     agentVisualMode,
     beatAudioMode = false,
+    hasBeatHtmlPrompt = false,
     beatImageFillMode = 'auto',
     variant = 'dark',
     headlessStepSet,
@@ -235,7 +237,7 @@ function PipelineStepTitle({
         || isFullAutoPipelineHeadlessStep(stepKey)
         || (stepKey === 'beat_image_fill' && beatImageFillMode === 'auto');
     const showAi = aiStepSet.has(stepKey) || isFullAutoPipelineAiStep(stepKey);
-    const stepIndex = getVisibleFullAutoPipelineStepIndex(stepKey, agentVisualMode, beatAudioMode);
+    const stepIndex = getVisibleFullAutoPipelineStepIndex(stepKey, agentVisualMode, beatAudioMode, hasBeatHtmlPrompt);
     const label = `${stepIndex > 0 ? `${stepIndex}. ` : ''}${resolveFullAutoPipelineStepLabel(stepKey, agentVisualMode)}`;
 
     if (compact) {
@@ -422,6 +424,8 @@ type PipelineGroupedCommonProps = {
     qaLoops?: FullAutoPipelineSummary['qa_loops'];
     agentVisualMode?: string;
     beatAudioMode?: boolean;
+    /** Workflow đang chọn dùng HTML beat (`beatHtmlPrompt`) → ẩn bước 8/9/10 (ảnh beat). */
+    hasBeatHtmlPrompt?: boolean;
     pipelineStatus?: string;
     currentStep?: string;
     /** Checkbox Chạy — mặc định true; tắt = full-auto skip. */
@@ -484,6 +488,7 @@ export function PipelineGroupedMenuItems({
     qaLoops,
     agentVisualMode,
     beatAudioMode = false,
+    hasBeatHtmlPrompt = false,
     pipelineStatus,
     currentStep = '',
     stepToggles,
@@ -539,8 +544,8 @@ export function PipelineGroupedMenuItems({
         status: pipelineStatus,
     } as FullAutoPipelineSummary);
     const visibleGroups: VisibleFullAutoPipelineStepGroup[] = React.useMemo(
-        () => getVisibleFullAutoPipelineStepGroups(agentVisualMode, beatAudioMode),
-        [agentVisualMode],
+        () => getVisibleFullAutoPipelineStepGroups(agentVisualMode, beatAudioMode, hasBeatHtmlPrompt),
+        [agentVisualMode, beatAudioMode, hasBeatHtmlPrompt],
     );
 
     const renderMenuStep = (stepKey: string, inLoop = false) => {
@@ -597,6 +602,8 @@ export function PipelineGroupedMenuItems({
                 <PipelineStepTitle
                     stepKey={key}
                     agentVisualMode={agentVisualMode}
+                    beatAudioMode={beatAudioMode}
+                    hasBeatHtmlPrompt={hasBeatHtmlPrompt}
                     beatImageFillMode={beatImageFillMode}
                     variant="light"
                     typographyVariant="body2"
@@ -858,6 +865,7 @@ export function PipelineGroupedStepList({
     qaLoops,
     agentVisualMode,
     beatAudioMode = false,
+    hasBeatHtmlPrompt = false,
     beatImageFillMode = 'auto',
     pipelineStatus,
     currentStep = '',
@@ -880,8 +888,8 @@ export function PipelineGroupedStepList({
         status: pipelineStatus,
     } as FullAutoPipelineSummary);
     const visibleGroups: VisibleFullAutoPipelineStepGroup[] = React.useMemo(
-        () => getVisibleFullAutoPipelineStepGroups(agentVisualMode, beatAudioMode),
-        [agentVisualMode],
+        () => getVisibleFullAutoPipelineStepGroups(agentVisualMode, beatAudioMode, hasBeatHtmlPrompt),
+        [agentVisualMode, beatAudioMode, hasBeatHtmlPrompt],
     );
 
     const renderDarkStep = (stepKey: string, inLoop = false) => {
@@ -920,6 +928,8 @@ export function PipelineGroupedStepList({
                 <PipelineStepTitle
                     stepKey={key}
                     agentVisualMode={agentVisualMode}
+                    beatAudioMode={beatAudioMode}
+                    hasBeatHtmlPrompt={hasBeatHtmlPrompt}
                     beatImageFillMode={beatImageFillMode}
                     variant="dark"
                     headlessStepSet={headlessStepSet}
@@ -1083,6 +1093,7 @@ export function PipelineGroupedWorkflowListV3({
     qaLoops,
     agentVisualMode,
     beatAudioMode = false,
+    hasBeatHtmlPrompt = false,
     currentStep = '',
     pipelineStatus = '',
     stepToggles,
@@ -1138,8 +1149,8 @@ export function PipelineGroupedWorkflowListV3({
         status: pipelineStatus,
     } as FullAutoPipelineSummary);
     const visibleGroups: VisibleFullAutoPipelineStepGroup[] = React.useMemo(
-        () => getVisibleFullAutoPipelineStepGroups(agentVisualMode, beatAudioMode),
-        [agentVisualMode],
+        () => getVisibleFullAutoPipelineStepGroups(agentVisualMode, beatAudioMode, hasBeatHtmlPrompt),
+        [agentVisualMode, beatAudioMode, hasBeatHtmlPrompt],
     );
 
     const renderWorkflowStep = (
@@ -1211,6 +1222,8 @@ export function PipelineGroupedWorkflowListV3({
                 <PipelineStepTitle
                     stepKey={key}
                     agentVisualMode={agentVisualMode}
+                    beatAudioMode={beatAudioMode}
+                    hasBeatHtmlPrompt={hasBeatHtmlPrompt}
                     beatImageFillMode={beatImageFillMode}
                     variant="light"
                     headlessStepSet={headlessStepSet}
@@ -1339,7 +1352,7 @@ export function PipelineGroupedWorkflowListV3({
     const extraSteps = steps
         ? Object.entries(steps).filter(([stepKey]) => (
             !(FULL_AUTO_PIPELINE_STEP_ORDER as readonly string[]).includes(stepKey)
-            && isFullAutoPipelineStepRelevantForMode(stepKey, agentVisualMode, beatAudioMode)
+            && isFullAutoPipelineStepRelevantForMode(stepKey, agentVisualMode, beatAudioMode, hasBeatHtmlPrompt)
         ))
         : [];
 

@@ -90,6 +90,12 @@ export const WORKFLOW_AUDIO_SCRIPT_KEY = 'AUDIO-SCRIPT';
 export const MANUAL_BEAT_PROMPTS_SAVED_EVENT = 'vn4-manual-beat-prompts-saved';
 
 /**
+ * Workflow đang chọn của short video vừa thay đổi → workspace reload lại để cập nhật
+ * ẩn/hiện các bước pipeline (vd workflow có `beatHtmlPrompt` → ẩn bước ảnh beat 8/9/10).
+ */
+export const WORKFLOW_ACTIVE_SAVED_EVENT = 'vn4-workflow-active-saved';
+
+/**
  * Key output đặc biệt lưu giá trị các biến inputPrompt của 1 workflow (JSON {name: value}).
  * Không trùng với updateField nào — dùng nội bộ để bền hoá biến user nhập.
  */
@@ -111,6 +117,11 @@ export type WorkflowDefinition = {
     documentFilePath: string;
     /** File master prompt có tồn tại trên server. */
     documentFileExists: boolean;
+    /**
+     * Workflow khai báo `# beatHtmlPrompt:` (dùng HTML beat, không dùng ảnh beat).
+     * Video chọn workflow này sẽ ẩn các bước pipeline sản xuất ảnh beat (8/9/10).
+     */
+    hasBeatHtmlPrompt: boolean;
     steps: WorkflowPromptStep[];
 };
 
@@ -250,6 +261,7 @@ function normalizeWorkflow(raw: ANY): WorkflowDefinition | null {
         documentFile: String(raw?.document_file || '').trim(),
         documentFilePath: String(raw?.document_file_path || '').trim(),
         documentFileExists: raw?.document_file_exists === true,
+        hasBeatHtmlPrompt: raw?.has_beat_html_prompt === true,
         steps,
     };
 }
@@ -531,6 +543,13 @@ export async function saveWorkflowActive(
         });
         if (!res?.success) {
             return { ok: false, message: parseApiMessage(res?.message) || 'Không lưu được workflow đang chọn' };
+        }
+        try {
+            document.dispatchEvent(new CustomEvent(WORKFLOW_ACTIVE_SAVED_EVENT, {
+                detail: { shortVideoId, short_video_id: shortVideoId, workflow: key },
+            }));
+        } catch {
+            // bỏ qua — chỉ là thông báo refresh UI
         }
         return { ok: true };
     } catch {

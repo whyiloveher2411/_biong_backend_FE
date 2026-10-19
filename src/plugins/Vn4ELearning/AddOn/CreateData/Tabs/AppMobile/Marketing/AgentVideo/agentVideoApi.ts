@@ -2172,6 +2172,11 @@ export type FullAutoPipelineSummary = {
     headless_steps?: FullAutoPipelineStepKey[];
     /** Danh sách step key dùng AI — mirror PHP. */
     ai_steps?: FullAutoPipelineStepKey[];
+    /**
+     * Workflow đang chọn của video khai báo `# beatHtmlPrompt:` → dùng HTML beat,
+     * KHÔNG dùng ảnh beat ⇒ ẩn bước 8/9/10 (Render ảnh resource / Ảnh beat / Animate ảnh).
+     */
+    workflow_has_beat_html_prompt?: boolean;
     /** Vòng lặp QA (mirror full_auto_pipeline.qa_loops). */
     qa_loops?: Record<string, FullAutoPipelineScriptQaLoop>;
 };

@@ -20,6 +20,7 @@ import {
     sanitizeUniversalComposerForFill,
 } from './agentVideoImportHtmlFillPrompts';
 import { formatWhisperWordsForPrompt } from './agentVideoWhisperPromptFormat';
+import { stripScriptMarkers, tokenizeScript } from './captionAlign/captionScriptAlign';
 import { stripRepresentedImagePromptSections } from './agentVideoManualBeats';
 import { fetchWorkflowPromptContent } from 'helpers/marketingWorkflowPrompts';
 import type { BeatMapSection } from './agentVideoBeatMap';
@@ -102,6 +103,10 @@ export type ImportHtmlContextPayload = {
     audio_file?: string;
     audio_file_duration_sec?: number;
     whisper_words?: Array<{ text: string; start: number; end: number }>;
+    /** Video 2s: whisper riêng từng beat (local time) theo beatId. */
+    beat_whisper_words?: Record<string, Array<{ text: string; start: number; end: number }>>;
+    caption_words_list?: Array<{ text: string; start: number; end: number }>;
+    caption_words?: Record<string, unknown>;
     whisper_status?: string;
     markers?: unknown[];
     timeline?: Record<string, unknown> | null;
@@ -419,6 +424,154 @@ function filterWhisperForBeat(
         }));
 }
 
+/** Chuẩn hoá 1 từ để neo script ↔ whisper: bỏ dấu, dấu câu, về chữ thường. */
+function foldKaraokeToken(token: string): string {
+    return String(token || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/đ/g, 'd')
+        .replace(/Đ/g, 'D')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '');
+}
+
+function formatKaraokeSec(seconds: number): string {
+    const value = Math.max(0, Number(seconds) || 0);
+    const fixed = value.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
+    return fixed === '' ? '0' : fixed;
+}
+
+/**
+ * KARAOKE_TEXT cho 1 beat: chữ lấy từ AUDIO SCRIPT của beat (đúng chính tả),
+ * mốc thời gian map từ Whisper. Không dùng text Whisper làm chữ hiển thị.
+ * Mirror backend `marketing_short_video_import_html_beat_karaoke_text()`.
+ */
+export function buildImportHtmlBeatKaraokeText(
+    beat: BeatMapSection,
+    context: ImportHtmlContextPayload,
+): string {
+    const beatStart = Number(beat.startSec || 0);
+    const beatEnd = Number(beat.endSec || 0);
+    const durationSec = Math.max(0.1, Number(beat.durationSec || 0) || (beatEnd - beatStart));
+    const beatText = stripScriptMarkers(String(beat.phrase_anchor || ''));
+    const beatTokens = tokenizeScript(beatText);
+    if (beatTokens.length === 0) {
+        return '';
+    }
+    const foldJoin = (tokens: string[]) => tokens.map(foldKaraokeToken).join('');
+    const beatFlat = foldJoin(beatTokens);
+
+    // 1) caption_words đã review: script text + timing Whisper (toàn clip).
+    const captionWords = Array.isArray(context.caption_words_list) ? context.caption_words_list : [];
+    if (captionWords.length > 0) {
+        const selected = captionWords
+            .filter((word) => {
+                const start = Number(word.start || 0);
+                const end = Number(word.end || start);
+                const midpoint = (start + end) / 2;
+                return String(word.text || '').trim() !== '' && midpoint >= beatStart && midpoint < beatEnd;
+            });
+        if (selected.length > 0 && foldJoin(selected.map((w) => String(w.text))) === beatFlat) {
+            return selected
+                .map((word) => {
+                    const local = Math.max(0, Math.min(durationSec, Number(word.start || 0) - beatStart));
+                    return `${formatKaraokeSec(local)}: ${String(word.text)}`;
+                })
+                .join('\n');
+        }
+    }
+
+    // 2) Neo chữ script vào mốc Whisper của beat (local time), nội suy chỗ thiếu.
+    // Video 2s: whisper riêng từng beat (đã local) → ưu tiên dùng, không lọc theo cửa sổ clip.
+    const perBeatWhisper = context.beat_whisper_words?.[String(beat.id || '')] || [];
+    const whisperWords = (perBeatWhisper.length > 0
+        ? perBeatWhisper.map((word) => ({
+            fold: foldKaraokeToken(word.text),
+            start: Math.max(0, Number(word.start || 0)),
+            end: Math.max(0, Number(word.end || 0)),
+        }))
+        : filterWhisperForBeat(context.whisper_words || [], beatStart, beatEnd).map((word) => ({
+            fold: foldKaraokeToken(word.text),
+            start: Math.max(0, Number(word.start || 0) - beatStart),
+            end: Math.max(0, Number(word.end || 0) - beatStart),
+        })))
+        .filter((word) => word.fold !== '');
+
+    const anchors = new Map<number, { start: number; end: number }>();
+    let cursor = 0;
+    for (let i = 0; i < beatTokens.length && cursor < whisperWords.length; i++) {
+        const needle = foldKaraokeToken(beatTokens[i]);
+        if (!needle) {
+            continue;
+        }
+        const limit = Math.min(whisperWords.length, cursor + 40);
+        for (let j = cursor; j < limit; j++) {
+            if (whisperWords[j].fold !== needle) {
+                continue;
+            }
+            if (needle.length <= 2) {
+                const nextScript = foldKaraokeToken(beatTokens[i + 1] || '');
+                const nextWhisper = whisperWords[j + 1]?.fold || '';
+                if (!nextScript || nextScript !== nextWhisper) {
+                    continue;
+                }
+            }
+            anchors.set(i, { start: whisperWords[j].start, end: whisperWords[j].end });
+            cursor = j + 1;
+            break;
+        }
+    }
+
+    const timings: Array<{ start: number; end: number }> = new Array(beatTokens.length);
+    if (anchors.size === 0) {
+        const slot = durationSec / beatTokens.length;
+        beatTokens.forEach((_token, index) => {
+            timings[index] = { start: index * slot, end: (index + 1) * slot };
+        });
+    } else {
+        const anchorIndexes = Array.from(anchors.keys()).sort((a, b) => a - b);
+        anchorIndexes.forEach((index) => {
+            const anchor = anchors.get(index);
+            if (!anchor) {
+                return;
+            }
+            timings[index] = { start: anchor.start, end: Math.max(anchor.end, anchor.start + 0.05) };
+        });
+        const fill = (from: number, to: number, startSec: number, endSec: number) => {
+            const count = to - from + 1;
+            if (count <= 0) {
+                return;
+            }
+            const slot = Math.max(0, endSec - startSec) / count;
+            for (let k = 0; k < count; k++) {
+                timings[from + k] = { start: startSec + k * slot, end: startSec + (k + 1) * slot };
+            }
+        };
+        const first = anchorIndexes[0];
+        if (first > 0) {
+            fill(0, first - 1, 0, timings[first].start);
+        }
+        for (let a = 0; a < anchorIndexes.length - 1; a++) {
+            const left = anchorIndexes[a];
+            const right = anchorIndexes[a + 1];
+            if (right - left > 1) {
+                fill(left + 1, right - 1, timings[left].end, timings[right].start);
+            }
+        }
+        const last = anchorIndexes[anchorIndexes.length - 1];
+        if (last < beatTokens.length - 1) {
+            fill(last + 1, beatTokens.length - 1, timings[last].end, durationSec);
+        }
+    }
+
+    return beatTokens
+        .map((word, index) => {
+            const start = Math.max(0, Math.min(durationSec, timings[index]?.start ?? 0));
+            return `${formatKaraokeSec(start)}: ${word}`;
+        })
+        .join('\n');
+}
+
 const GITHUB_TOP_FORMATS = new Set([
     'github_top',
     'github_top_daily',
@@ -522,7 +675,6 @@ export async function buildBeatHtmlPrompt(
         }
     }
     let assetCatalogBlock = '';
-    let assetLibrary = false;
     if (beatModelIds.length > 0) {
         try {
             const modelRes = await listShortVideoModel3ds();
@@ -532,7 +684,6 @@ export async function buildBeatHtmlPrompt(
                 .map((id) => byId.get(Number(id)))
                 .filter((m): m is ShortVideoModel3d => Boolean(m));
             if (selected.length > 0) {
-                assetLibrary = true;
                 assetCatalogBlock = selected.map(buildModelCatalogLine).filter(Boolean).join('\n');
             }
         } catch {
@@ -540,9 +691,19 @@ export async function buildBeatHtmlPrompt(
         }
     }
 
-    const scaffold = buildSingleBeatHtmlScaffold(durationSec, beat.id, clipAspect, assetLibrary);
-    const beatWhisper = filterWhisperForBeat(context.whisper_words || [], beat.startSec, beat.endSec);
-    const beatWhisperPrompt = formatWhisperWordsForPrompt(beatWhisper, { timeOffsetSec: beat.startSec });
+    const scaffold = buildSingleBeatHtmlScaffold(durationSec, beat.id, clipAspect, true);
+    const perBeatWhisperForPrompt = context.beat_whisper_words?.[String(beat.id || '')] || [];
+    const beatWhisper = perBeatWhisperForPrompt.length > 0
+        ? perBeatWhisperForPrompt
+        : filterWhisperForBeat(context.whisper_words || [], beat.startSec, beat.endSec);
+    const beatWhisperOffsetSec = perBeatWhisperForPrompt.length > 0 ? 0 : Number(beat.startSec || 0);
+    const beatWhisperPrompt = formatWhisperWordsForPrompt(beatWhisper, { timeOffsetSec: beatWhisperOffsetSec });
+    // Pacing: chỉ mốc thời gian (không đưa text Whisper — dễ sai chính tả).
+    const beatWhisperTimingPrompt = beatWhisper.length > 0
+        ? beatWhisper
+            .map((word) => `${Math.max(0, word.start - beatWhisperOffsetSec).toFixed(1)}–${Math.max(0, word.end - beatWhisperOffsetSec).toFixed(1)}`)
+            .join('\n')
+        : '';
     const clipTotal = formatDurationSec(Number(context.audio_file_duration_sec || 0));
     const sourceFormat = String(context.source_format || '').trim();
     const isGithubTop = GITHUB_TOP_FORMATS.has(sourceFormat);
@@ -624,7 +785,9 @@ export async function buildBeatHtmlPrompt(
             LAYOUT_REFERENCE_PATH: `layout-${clipAspect}`,
             BEAT_CONTENT_LANGUAGE_BLOCK: buildBeatHtmlContentLanguageBlock(context.language),
             VISUAL_LIBRARY_BLOCK: visualBlock,
-            WHISPER_WORDS: beatWhisper.length ? beatWhisperPrompt : '',
+            WHISPER_WORDS: beatWhisper.length ? beatWhisperTimingPrompt : '',
+            KARAOKE_TEXT: buildImportHtmlBeatKaraokeText(beat, context),
+            KARAOKE_STYLE_HINT: '',
             BEAT_HTML_SCAFFOLD: scaffold,
             BEAT_IMAGE_PROMPT_BLOCK: cleanImagePromptBlock,
             ASSET_CATALOG_BLOCK: assetCatalogBlock,

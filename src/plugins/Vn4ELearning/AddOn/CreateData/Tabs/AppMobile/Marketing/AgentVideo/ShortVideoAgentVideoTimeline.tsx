@@ -1323,6 +1323,7 @@ export default function ShortVideoAgentVideoTimeline({
                                 qaLoops={fullAutoPipeline?.qa_loops}
                                 agentVisualMode={agentVisualMode}
                                 beatAudioMode={agentState?.agentBeatAudio}
+                                hasBeatHtmlPrompt={Boolean(fullAutoPipeline?.workflow_has_beat_html_prompt)}
                                 pipelineStatus={fullAutoPipeline?.status}
                                 currentStep={fullAutoPipeline?.current_step}
                                 stepToggles={fullAutoStepToggles}

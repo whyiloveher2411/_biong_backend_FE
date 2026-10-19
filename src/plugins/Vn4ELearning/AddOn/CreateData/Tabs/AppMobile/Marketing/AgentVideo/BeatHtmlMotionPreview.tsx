@@ -6,6 +6,8 @@ import {
     localizeImportHtmlAssetScripts,
     localizeImportHtmlExternalScripts,
     seekCustomHtmlIframe,
+    useModel3dBeatAssetRevision,
+    useModel3dLocateAsset,
 } from './agentVideoCustomHtmlPreview';
 
 type Props = {
@@ -76,20 +78,22 @@ export default function BeatHtmlMotionPreview({ html, timeSec, durationSec, beat
     const [size, setSize] = React.useState({ w: 0, h: 0 });
 
     const duration = Math.max(0.2, Number(durationSec) || 0.2);
+    const assetRevision = useModel3dBeatAssetRevision(shortVideoId, beatId || '');
+    useModel3dLocateAsset(iframeRef, shortVideoId, beatId || '');
     const srcDoc = React.useMemo(() => {
         const raw = String(html || '');
         // Beat dùng asset library → giữ three/loader CDN (r147) để khớp runtime,
         // và đổi 2 thẻ assets/ tương đối sang URL same-origin có token.
         const useAssetLibrary = raw.includes('assets/assets-runtime.js');
         const localized = useAssetLibrary ? raw : localizeImportHtmlExternalScripts(raw);
-        const withAssets = localizeImportHtmlAssetScripts(localized, { shortVideoId, beatId });
+        const withAssets = localizeImportHtmlAssetScripts(localized, { shortVideoId, beatId, revision: assetRevision });
         return ensureImportHtmlDataDuration(withAssets, duration);
-    }, [html, duration, shortVideoId, beatId]);
+    }, [html, duration, shortVideoId, beatId, assetRevision]);
     const authored = React.useMemo(() => detectAuthoredSize(String(html || '')), [html]);
 
     // Đổi beat / đổi nội dung HTML → đổi key để React tạo iframe MỚI (buộc reload
     // srcDoc). Không có key, trình duyệt có thể giữ document cũ → preview dính beat trước.
-    const iframeKey = `${beatId || 'beat'}:${quickHash(srcDoc)}`;
+    const iframeKey = `${beatId || 'beat'}:${assetRevision}:${quickHash(srcDoc)}`;
 
     React.useEffect(() => {
         const container = containerRef.current;

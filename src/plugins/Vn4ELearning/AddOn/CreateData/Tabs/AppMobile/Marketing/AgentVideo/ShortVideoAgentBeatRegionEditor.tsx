@@ -55,6 +55,7 @@ import type { useAgentVideoContent } from './useAgentVideoContent';
 import ShortVideoAgentImageAnimationControls from './ShortVideoAgentImageAnimationControls';
 import ShortVideoAgentBeatAddPanel from './ShortVideoAgentBeatAddPanel';
 import BeatModel3dPicker from './BeatModel3dPicker';
+import BeatAssetMapPanel from './BeatAssetMapPanel';
 import WhiteboardBeatImageReplaceControl from './WhiteboardBeatImageReplaceControl';
 import WhiteboardBeatImageControl from './WhiteboardBeatImageControl';
 import WhiteboardBeatImagePromptControl from './WhiteboardBeatImagePromptControl';
@@ -297,6 +298,11 @@ type Props = {
     imageUrl: string;
     /** Mở popup nhập/sửa HTML motion cho beat (beat_html). */
     onEditHtml?: (beatId: string) => void;
+    /**
+     * Playhead (giây, toàn video) của timeline video dưới cùng. Dùng để preview
+     * HTML motion seek theo khi user kéo thanh timeline — giống chế độ Motion HTML.
+     */
+    timelinePlayheadSec?: number | null;
 };
 
 const REGION_COLORS = [
@@ -500,6 +506,7 @@ export default function ShortVideoAgentBeatRegionEditor({
     beatId,
     imageUrl: primaryImageUrl,
     onEditHtml,
+    timelinePlayheadSec = null,
 }: Props) {
     const currentOverride = state.agentWhiteboardBeatOverrides?.[beatId] || {};
 
@@ -574,6 +581,13 @@ export default function ShortVideoAgentBeatRegionEditor({
     const [groupDialogName, setGroupDialogName] = React.useState('');
     const [rightPanelTab, setRightPanelTab] = React.useState<'edit' | 'add'>('edit');
     const [playheadSec, setPlayheadSec] = React.useState(0);
+    /**
+     * Nguồn thời gian đang được ưu tiên cho preview HTML motion:
+     * - `'external'`: timeline video dưới cùng (vừa được kéo/seek).
+     * - `'internal'`: timeline audio trong editor (vừa được kéo/play).
+     * Timeline nào thay đổi sau cùng thì thắng.
+     */
+    const [previewTimeSource, setPreviewTimeSource] = React.useState<'external' | 'internal'>('external');
     const [imgNatural, setImgNatural] = React.useState<{ w: number; h: number } | null>(null);
     const [imageError, setImageError] = React.useState(false);
     const [saving, setSaving] = React.useState(false);
@@ -3898,12 +3912,57 @@ export default function ShortVideoAgentBeatRegionEditor({
         || (beatImageUrl === '' && beatReplacementVideoUrl === '')
     );
     const stageRect = isHtmlMotionPreview ? (containRect ?? htmlMotionFallbackRect) : containRect;
+
+    // Mốc bắt đầu beat trên timeline video (giây, toàn video) — quy chiếu playhead
+    // của thanh timeline về beat-local để seek preview HTML motion.
+    const mainTimelineBeatStartSec = React.useMemo(() => {
+        const section = beatMapForUi?.sections?.find((sec) => sec.id === beatId);
+        const start = Number(section?.startSec);
+        return Number.isFinite(start) ? start : beatTimeline.beatStartSec;
+    }, [beatId, beatMapForUi?.sections, beatTimeline.beatStartSec]);
+
+    // Beat render bằng HTML motion → preview seek theo playhead của thanh timeline
+    // video (giống chế độ Motion HTML). Beat khác giữ nguyên playhead nội bộ editor.
+    const htmlMotionPreviewSec = React.useMemo(() => {
+        if (!isHtmlMotionPreview) {
+            return playheadSec;
+        }
+        if (previewTimeSource === 'internal') {
+            return playheadSec;
+        }
+        const raw = Number(timelinePlayheadSec);
+        if (timelinePlayheadSec == null || !Number.isFinite(raw)) {
+            return playheadSec;
+        }
+        const local = raw - mainTimelineBeatStartSec;
+        return Math.max(0, Math.min(beatTimeline.beatDurationSec, local));
+    }, [
+        beatTimeline.beatDurationSec,
+        isHtmlMotionPreview,
+        mainTimelineBeatStartSec,
+        playheadSec,
+        previewTimeSource,
+        timelinePlayheadSec,
+    ]);
+
+    // Timeline video thay đổi (kéo/seek) → ưu tiên lại nguồn external.
+    const lastExternalPlayheadSecRef = React.useRef<number | null>(timelinePlayheadSec);
+    React.useEffect(() => {
+        if (timelinePlayheadSec == null || !Number.isFinite(Number(timelinePlayheadSec))) {
+            return;
+        }
+        if (lastExternalPlayheadSecRef.current === timelinePlayheadSec) {
+            return;
+        }
+        lastExternalPlayheadSecRef.current = timelinePlayheadSec;
+        setPreviewTimeSource('external');
+    }, [timelinePlayheadSec]);
     // Dán toàn bộ ảnh beat lên custom bg (ảnh beat là PNG nền trong suốt) —
     // không cần vùng cutout để thấy nội dung ảnh.
     const beatImageOverBg = useCustomBg && Boolean(currentOverride.beat_image_over_background);
     const effectFocusX = selectedEffect?.type === 'zoom' ? selectedEffect.focus_x : focusX;
     const effectFocusY = selectedEffect?.type === 'zoom' ? selectedEffect.focus_y : focusY;
-    const timelineZoomPreview = resolveZoomTransformAt(playheadSec, timelineEffects, sceneBudgetSec);
+    const timelineZoomPreview = resolveZoomTransformAt(htmlMotionPreviewSec, timelineEffects, sceneBudgetSec);
     const timelineZoomCss = zoomTransformToCss(timelineZoomPreview);
 
     const selectedZoomOverlay = React.useMemo(() => {
@@ -5705,7 +5764,7 @@ export default function ShortVideoAgentBeatRegionEditor({
                                         <BeatHtmlMotionPreview
                                             key={`html-motion:${beatId}:${beatHtmlMotionSource.length}`}
                                             html={beatHtmlMotionSource}
-                                            timeSec={playheadSec}
+                                            timeSec={htmlMotionPreviewSec}
                                             durationSec={beatTimeline.beatDurationSec}
                                             beatId={beatId}
                                             shortVideoId={shortVideoId}
@@ -5887,8 +5946,12 @@ export default function ShortVideoAgentBeatRegionEditor({
                         beatTotal={beatSegments.length}
                         onGoToBeat={handleGoToBeat}
                         onCopyError={(msg) => notify(msg, 'error')}
-                        onPlayheadChange={(sec, isPlaying) => {
+                        onPlayheadChange={(sec, isPlaying, origin) => {
                             setPlayheadSec(sec);
+                            // Người dùng vừa kéo/play timeline audio → ưu tiên nguồn internal.
+                            if (origin === 'user') {
+                                setPreviewTimeSource('internal');
+                            }
                             playheadRef.current = { sec, playing: isPlaying };
                             videoPreviewRef.current?.seekTo(sec, isPlaying);
                         }}
@@ -6308,13 +6371,20 @@ export default function ShortVideoAgentBeatRegionEditor({
                         );
                     })() : null}
                     {!selectedEffect && !selectedOverlay && !selectedRegion ? (
-                        <BeatModel3dPicker
-                            shortVideoId={shortVideoId}
-                            beatId={beatId}
-                            initialIds={
-                                beatMapForUi?.sections?.find((sec) => sec.id === beatId)?.model_3d_ids || []
-                            }
-                        />
+                        <>
+                            <BeatAssetMapPanel
+                                shortVideoId={shortVideoId}
+                                beatId={beatId}
+                                htmlSource={beatHtmlMotionSource}
+                            />
+                            <BeatModel3dPicker
+                                shortVideoId={shortVideoId}
+                                beatId={beatId}
+                                initialIds={
+                                    beatMapForUi?.sections?.find((sec) => sec.id === beatId)?.model_3d_ids || []
+                                }
+                            />
+                        </>
                     ) : null}
                     {!selectedEffect && bgSampleMode ? (
                         <Typography variant="caption" color="secondary.main" display="block" sx={{ mb: 0.5 }}>

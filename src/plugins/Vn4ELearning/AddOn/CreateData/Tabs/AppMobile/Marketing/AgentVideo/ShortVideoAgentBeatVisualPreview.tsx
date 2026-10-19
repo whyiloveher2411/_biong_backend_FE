@@ -10,6 +10,8 @@ import {
     localizeImportHtmlAssetScripts,
     localizeImportHtmlExternalScripts,
     seekCustomHtmlIframe,
+    useModel3dBeatAssetRevision,
+    useModel3dLocateAsset,
 } from './agentVideoCustomHtmlPreview';
 
 type Props = {
@@ -56,11 +58,13 @@ export default function ShortVideoAgentBeatVisualPreview({
 
     const safeDurationSec = Math.max(0.1, Number(durationSec) || 0.1);
     const hasHtml = Boolean(html.trim());
+    const assetRevision = useModel3dBeatAssetRevision(shortVideoId, beatId);
+    useModel3dLocateAsset(iframeRef, shortVideoId, beatId);
     const localHtml = React.useMemo(() => {
         const useAssetLibrary = html.includes('assets/assets-runtime.js');
         const localized = useAssetLibrary ? html : localizeImportHtmlExternalScripts(html);
-        return localizeImportHtmlAssetScripts(localized, { shortVideoId, beatId });
-    }, [html, shortVideoId, beatId]);
+        return localizeImportHtmlAssetScripts(localized, { shortVideoId, beatId, revision: assetRevision });
+    }, [html, shortVideoId, beatId, assetRevision]);
     const stage = getClipStageDimensions(clipAspect);
     const containScale = computeContainScale(containerWidth || 360, undefined, clipAspect);
     const scaledStageHeight = computeScaledStageHeight(containScale, clipAspect);
@@ -302,7 +306,7 @@ export default function ShortVideoAgentBeatVisualPreview({
                     >
                         <Box
                             component="iframe"
-                            key={`${beatId}:${revision}:${html.length}`}
+                            key={`${beatId}:${revision}:${assetRevision}:${html.length}`}
                             ref={iframeRef}
                             title={`Preview visual ${beatId}`}
                             sandbox="allow-scripts allow-same-origin"

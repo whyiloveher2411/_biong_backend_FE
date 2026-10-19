@@ -1,7 +1,8 @@
 import React from 'react';
-import { Box, Chip, CircularProgress, Stack, Tooltip, Typography } from '@mui/material';
+import { Box, Chip, CircularProgress, IconButton, Stack, Tooltip, Typography } from '@mui/material';
+import AddOutlinedIcon from '@mui/icons-material/AddOutlined';
+import CloseIcon from '@mui/icons-material/Close';
 import ViewInArOutlinedIcon from '@mui/icons-material/ViewInArOutlined';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import { useFloatingMessages } from 'hook/useFloatingMessages';
 import {
     getShortVideoModel3dBeatIds,
@@ -10,233 +11,159 @@ import {
     saveShortVideoModel3dBeatIds,
     type ShortVideoModel3d,
 } from 'helpers/marketingShortVideoModel3dApi';
+import Model3dLibraryPickerDrawer from './Model3dLibraryPickerDrawer';
 
 type Props = {
     shortVideoId: number;
     beatId: string;
-    /** Danh sách id model 3D đang gắn với beat (từ beat_map section). */
     initialIds?: number[];
 };
 
-function formatHeight(height: number): string {
-    if (!height || height <= 0) {
-        return '';
-    }
-    return `${Number(height).toFixed(2).replace(/\.?0+$/, '')} m`;
-}
-
 /**
- * Chọn model 3D (thư viện dùng chung) cho 1 beat. Lưu ngay vào beat_map section
- * (`model_3d_ids`) — dùng để build catalog block + scaffold khi sinh HTML beat.
+ * Chọn trước model 3D cho beat (tuỳ chọn). Chỉ hiện model ĐÃ CHỌN; thêm qua drawer
+ * danh sách model (không load hết ra ngoài).
  */
 export default function BeatModel3dPicker({ shortVideoId, beatId, initialIds = [] }: Props) {
     const { showMessage } = useFloatingMessages();
     const [models, setModels] = React.useState<ShortVideoModel3d[]>([]);
+    const [ids, setIds] = React.useState<number[]>(initialIds);
     const [loading, setLoading] = React.useState(false);
-    const [error, setError] = React.useState<string | null>(null);
-    const [selected, setSelected] = React.useState<number[]>(initialIds);
     const [saving, setSaving] = React.useState(false);
+    const [drawerOpen, setDrawerOpen] = React.useState(false);
 
     const initialKey = initialIds.join(',');
 
     React.useEffect(() => {
-        setSelected(initialIds);
+        setIds(initialIds);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [beatId, initialKey]);
 
-    // Nguồn truth: đọc ids đã lưu cho beat từ BE (không phụ thuộc beat_map phía FE).
+    React.useEffect(() => {
+        setLoading(true);
+        listShortVideoModel3ds()
+            .then((res) => setModels(Array.isArray(res?.models) ? res.models : []))
+            .catch(() => setModels([]))
+            .finally(() => setLoading(false));
+    }, []);
+
     React.useEffect(() => {
         if (shortVideoId <= 0 || !beatId) {
             return undefined;
         }
         let cancelled = false;
         getShortVideoModel3dBeatIds(shortVideoId, beatId)
-            .then((result) => {
-                if (cancelled || result?.success === false) {
-                    return;
+            .then((res) => {
+                if (!cancelled && res?.success !== false && Array.isArray(res?.model_3d_ids)) {
+                    setIds(res.model_3d_ids);
                 }
-                setSelected(Array.isArray(result?.model_3d_ids) ? result.model_3d_ids : []);
             })
-            .catch(() => {
-                // giữ giá trị initialIds
-            });
+            .catch(() => undefined);
         return () => {
             cancelled = true;
         };
     }, [shortVideoId, beatId]);
 
-    React.useEffect(() => {
-        let cancelled = false;
-        setLoading(true);
-        setError(null);
-        listShortVideoModel3ds()
-            .then((result) => {
-                if (cancelled) {
-                    return;
-                }
-                setLoading(false);
-                if (result?.success === false) {
-                    setError(parseShortVideoModel3dApiMessage(result, 'Không tải được thư viện model 3D'));
-                    setModels([]);
-                    return;
-                }
-                setModels(Array.isArray(result?.models) ? result.models : []);
-            })
-            .catch((err: unknown) => {
-                if (cancelled) {
-                    return;
-                }
-                setLoading(false);
-                setError(err instanceof Error ? err.message : 'Không tải được thư viện model 3D');
-            });
-        return () => {
-            cancelled = true;
-        };
-    }, []);
+    const modelById = React.useMemo(() => {
+        const out = new Map<number, ShortVideoModel3d>();
+        models.forEach((m) => out.set(Number(m.id), m));
+        return out;
+    }, [models]);
 
-    const persist = (nextIds: number[], prevIds: number[]) => {
+    const persist = (next: number[]) => {
+        const prev = ids;
+        setIds(next);
         if (shortVideoId <= 0 || !beatId) {
-            showMessage('Thiếu short video / beat', 'warning');
-            setSelected(prevIds);
             return;
         }
         setSaving(true);
-        saveShortVideoModel3dBeatIds(shortVideoId, beatId, nextIds)
-            .then((result) => {
+        saveShortVideoModel3dBeatIds(shortVideoId, beatId, next)
+            .then((res) => {
                 setSaving(false);
-                if (result?.success === false) {
-                    showMessage(parseShortVideoModel3dApiMessage(result, 'Không lưu được model 3D cho beat'), 'error');
-                    setSelected(prevIds);
-                    return;
+                if (res?.success === false) {
+                    showMessage(parseShortVideoModel3dApiMessage(res, 'Không lưu được model cho beat'), 'error');
+                    setIds(prev);
                 }
-                setSelected(Array.isArray(result?.model_3d_ids) ? result.model_3d_ids : nextIds);
             })
             .catch((err: unknown) => {
                 setSaving(false);
-                showMessage(err instanceof Error ? err.message : 'Không lưu được model 3D cho beat', 'error');
-                setSelected(prevIds);
+                showMessage(err instanceof Error ? err.message : 'Không lưu được model cho beat', 'error');
+                setIds(prev);
             });
-    };
-
-    const toggle = (modelId: number) => {
-        if (saving) {
-            return;
-        }
-        const prev = selected;
-        const next = prev.includes(modelId)
-            ? prev.filter((id) => id !== modelId)
-            : [...prev, modelId];
-        setSelected(next);
-        persist(next, prev);
     };
 
     return (
         <Box sx={{ mt: 1.5 }}>
             <Stack direction="row" alignItems="center" spacing={0.75} sx={{ mb: 0.75 }}>
-                <ViewInArOutlinedIcon fontSize="small" color="primary" />
-                <Typography variant="subtitle2">Model 3D</Typography>
-                {selected.length > 0 ? (
-                    <Chip size="small" color="primary" variant="outlined" label={`${selected.length} đã chọn`} />
-                ) : null}
+                <ViewInArOutlinedIcon fontSize="small" color="secondary" />
+                <Typography variant="subtitle2">Model 3D chọn trước</Typography>
+                <Chip size="small" variant="outlined" label="tuỳ chọn" />
+                {ids.length > 0 ? <Chip size="small" color="secondary" variant="outlined" label={`${ids.length}`} /> : null}
                 {saving ? <CircularProgress size={14} sx={{ ml: 'auto' }} /> : null}
             </Stack>
 
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-                Chọn model cho beat này — HTML beat sẽ dùng qua API <code>Assets</code>{' '}
-                (chỉ các model được chọn mới có trong catalog).
-            </Typography>
+            <Box sx={{ display: 'grid', gap: 0.75, gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))' }}>
+                {ids.map((id) => {
+                    const model = modelById.get(id);
+                    return (
+                        <Stack
+                            key={id}
+                            direction="row"
+                            spacing={0.75}
+                            alignItems="center"
+                            sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1.5, p: 0.5, bgcolor: 'background.paper' }}
+                        >
+                            <Box sx={{ width: 34, height: 34, flexShrink: 0, borderRadius: 1, bgcolor: 'grey.100', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                {model?.thumbnail_url ? (
+                                    <Box component="img" src={model.thumbnail_url} alt={model.title || ''} sx={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                                ) : (
+                                    <ViewInArOutlinedIcon fontSize="small" color="disabled" />
+                                )}
+                            </Box>
+                            <Typography variant="caption" sx={{ fontWeight: 700, minWidth: 0, flex: 1 }} noWrap>
+                                {model?.slug || `#${id}`}
+                            </Typography>
+                            <Tooltip title="Bỏ khỏi beat">
+                                <span>
+                                    <IconButton size="small" onClick={() => persist(ids.filter((x) => x !== id))} disabled={saving}>
+                                        <CloseIcon sx={{ fontSize: 16 }} />
+                                    </IconButton>
+                                </span>
+                            </Tooltip>
+                        </Stack>
+                    );
+                })}
 
-            {error ? (
-                <Typography variant="caption" color="error.main" sx={{ display: 'block' }}>
-                    {error}
-                </Typography>
-            ) : null}
-
-            {loading ? (
-                <Box sx={{ py: 2, display: 'flex', justifyContent: 'center' }}>
-                    <CircularProgress size={20} />
-                </Box>
-            ) : null}
-
-            {!loading && models.length === 0 && !error ? (
-                <Typography variant="caption" color="text.secondary">
-                    Thư viện chưa có model 3D. Thêm ở nút “Quản lý model 3D” trên header.
-                </Typography>
-            ) : null}
-
-            {!loading && models.length > 0 ? (
                 <Box
+                    onClick={() => setDrawerOpen(true)}
                     sx={{
-                        display: 'grid',
-                        gap: 1,
-                        gridTemplateColumns: 'repeat(auto-fill, minmax(104px, 1fr))',
+                        border: '1px dashed',
+                        borderColor: 'divider',
+                        borderRadius: 1.5,
+                        minHeight: 44,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 0.5,
+                        cursor: 'pointer',
+                        color: 'text.secondary',
+                        '&:hover': { borderColor: 'primary.main', color: 'primary.main' },
                     }}
                 >
-                    {models.map((model) => {
-                        const active = selected.includes(model.id);
-                        return (
-                            <Tooltip
-                                key={model.id}
-                                title={[model.title, model.slug, model.kind, formatHeight(model.height)]
-                                    .filter(Boolean)
-                                    .join(' · ')}
-                            >
-                                <Box
-                                    onClick={() => toggle(model.id)}
-                                    sx={{
-                                        position: 'relative',
-                                        border: '2px solid',
-                                        borderColor: active ? 'primary.main' : 'divider',
-                                        borderRadius: 1.5,
-                                        bgcolor: 'background.paper',
-                                        overflow: 'hidden',
-                                        cursor: saving ? 'wait' : 'pointer',
-                                        transition: 'border-color .15s',
-                                        '&:hover': { borderColor: active ? 'primary.main' : 'text.disabled' },
-                                    }}
-                                >
-                                    <Box
-                                        sx={{
-                                            width: '100%',
-                                            aspectRatio: '1 / 1',
-                                            bgcolor: 'grey.100',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            overflow: 'hidden',
-                                        }}
-                                    >
-                                        {model.thumbnail_url ? (
-                                            <Box
-                                                component="img"
-                                                src={model.thumbnail_url}
-                                                alt={model.title || model.slug}
-                                                sx={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                                            />
-                                        ) : (
-                                            <ViewInArOutlinedIcon color="disabled" />
-                                        )}
-                                    </Box>
-                                    <Box sx={{ px: 0.75, py: 0.5 }}>
-                                        <Typography variant="caption" sx={{ fontWeight: 700, display: 'block' }} noWrap>
-                                            {model.slug || model.title || `#${model.id}`}
-                                        </Typography>
-                                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }} noWrap>
-                                            {model.kind === 'person' ? 'person' : 'prop'}
-                                        </Typography>
-                                    </Box>
-                                    {active ? (
-                                        <CheckCircleIcon
-                                            color="primary"
-                                            sx={{ position: 'absolute', top: 4, right: 4, fontSize: 20, bgcolor: 'background.paper', borderRadius: '50%' }}
-                                        />
-                                    ) : null}
-                                </Box>
-                            </Tooltip>
-                        );
-                    })}
+                    <AddOutlinedIcon fontSize="small" />
+                    <Typography variant="caption">Thêm model</Typography>
                 </Box>
-            ) : null}
+            </Box>
+
+            <Model3dLibraryPickerDrawer
+                open={drawerOpen}
+                onClose={() => setDrawerOpen(false)}
+                models={models}
+                loading={loading}
+                mode="multi"
+                selectedIds={ids}
+                title="Chọn model 3D chọn trước"
+                onConfirm={(next) => persist(next)}
+            />
         </Box>
     );
 }

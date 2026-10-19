@@ -781,6 +781,7 @@ export default function ShortVideoAgentHeadlessPreview({
                         qaLoops={pipeline.qa_loops}
                         agentVisualMode={agentVisualMode}
                         beatAudioMode={beatAudioMode}
+                        hasBeatHtmlPrompt={Boolean(pipeline.workflow_has_beat_html_prompt)}
                         pipelineStatus={pipeline.status}
                         currentStep={currentStep}
                         stepToggles={stepToggles}

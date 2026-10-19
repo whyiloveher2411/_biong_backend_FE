@@ -12,6 +12,7 @@ import {
 } from 'helpers/marketingAgentAudioScriptGeminiWorkflow';
 import {
     MANUAL_BEAT_PROMPTS_SAVED_EVENT,
+    WORKFLOW_ACTIVE_SAVED_EVENT,
 } from 'helpers/marketingWorkflowPrompts';
 import {
     IMPORT_HTML_BEAT_HTML_SAVED_EVENT,
@@ -1862,13 +1863,26 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 loadRow();
             }
         };
+        const onWorkflowActiveSaved = (event: Event) => {
+            const custom = event as CustomEvent<{
+                shortVideoId?: number;
+                short_video_id?: number;
+            }>;
+            const detail = custom.detail || {};
+            const savedShortVideoId = Number(detail.shortVideoId ?? detail.short_video_id ?? 0);
+            if (savedShortVideoId > 0 && savedShortVideoId === shortVideoId) {
+                loadRow();
+            }
+        };
         document.addEventListener(IMPORT_HTML_BEAT_HTML_SAVED_EVENT, onImportHtmlBeatHtmlSaved);
         document.addEventListener(AGENT_AUDIO_SCRIPT_SAVED_EVENT, onAgentAudioScriptSaved);
         document.addEventListener(MARKETING_POST_SAVED_EVENT, onMarketingPostSaved);
+        document.addEventListener(WORKFLOW_ACTIVE_SAVED_EVENT, onWorkflowActiveSaved);
         return () => {
             document.removeEventListener(IMPORT_HTML_BEAT_HTML_SAVED_EVENT, onImportHtmlBeatHtmlSaved);
             document.removeEventListener(AGENT_AUDIO_SCRIPT_SAVED_EVENT, onAgentAudioScriptSaved);
             document.removeEventListener(MARKETING_POST_SAVED_EVENT, onMarketingPostSaved);
+            document.removeEventListener(WORKFLOW_ACTIVE_SAVED_EVENT, onWorkflowActiveSaved);
         };
     }, [loadRow, marketingPostId, open, shortVideoId]);
 

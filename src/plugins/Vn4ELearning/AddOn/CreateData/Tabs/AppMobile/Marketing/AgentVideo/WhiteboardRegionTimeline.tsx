@@ -137,8 +137,12 @@ type Props = {
      */
     onGoToBeat?: (beatNumber: number) => void;
     onCopyError?: (message: string) => void;
-    /** Playhead scene-relative (0 → beatDuration) + đang phát — đồng bộ preview phía trên. */
-    onPlayheadChange?: (sec: number, playing: boolean) => void;
+    /**
+     * Playhead scene-relative (0 → beatDuration) + đang phát — đồng bộ preview phía trên.
+     * `origin = 'user'` khi thay đổi đến từ thao tác người dùng (kéo / play trên
+     * timeline audio); `'auto'` khi do editor tự seek (reset beat, chọn vùng → về 0).
+     */
+    onPlayheadChange?: (sec: number, playing: boolean, origin?: 'user' | 'auto') => void;
     /**
      * Khi `token` đổi — timeline seek tới `sec` (vd chọn vùng → về 0).
      * Parent tăng token mỗi lần cần seek.
@@ -383,8 +387,8 @@ export default function WhiteboardRegionTimeline({
     const playingRef = React.useRef(false);
     playingRef.current = playing;
 
-    const emitPlayhead = (sec: number, isPlaying: boolean) => {
-        onPlayheadChangeRef.current?.(sec, isPlaying);
+    const emitPlayhead = (sec: number, isPlaying: boolean, origin: 'user' | 'auto' = 'auto') => {
+        onPlayheadChangeRef.current?.(sec, isPlaying, origin);
     };
 
     React.useEffect(() => {
@@ -414,11 +418,11 @@ export default function WhiteboardRegionTimeline({
         const t = Math.max(beatStartSec, Math.min(beatStartSec + duration, audio.currentTime));
         const local = t - beatStartSec;
         setPlayhead(local);
-        emitPlayhead(local, true);
+        emitPlayhead(local, true, 'user');
         if (t >= beatStartSec + duration - 0.02) {
             audio.pause();
             setPlaying(false);
-            emitPlayhead(local, false);
+            emitPlayhead(local, false, 'user');
             return;
         }
         rafRef.current = requestAnimationFrame(updatePlayhead);
@@ -430,7 +434,7 @@ export default function WhiteboardRegionTimeline({
         if (playing) {
             audio.pause();
             setPlaying(false);
-            emitPlayhead(playhead, false);
+            emitPlayhead(playhead, false, 'user');
             return;
         }
         const cur = audio.currentTime;
@@ -439,20 +443,20 @@ export default function WhiteboardRegionTimeline({
         }
         void audio.play().then(() => {
             setPlaying(true);
-            emitPlayhead(Math.max(0, audio.currentTime - beatStartSec), true);
+            emitPlayhead(Math.max(0, audio.currentTime - beatStartSec), true, 'user');
             if (rafRef.current) cancelAnimationFrame(rafRef.current);
             rafRef.current = requestAnimationFrame(updatePlayhead);
         }).catch(() => setPlaying(false));
     };
 
-    const seekToSec = (sec: number) => {
+    const seekToSec = (sec: number, origin: 'user' | 'auto' = 'auto') => {
         const audio = audioRef.current;
         const next = Math.max(0, Math.min(duration, sec));
         if (audio && audioUrl) {
             audio.currentTime = Math.max(0, beatStartSec + next);
         }
         setPlayhead(next);
-        emitPlayhead(next, playingRef.current);
+        emitPlayhead(next, playingRef.current, origin);
     };
 
     React.useEffect(() => {
@@ -474,7 +478,7 @@ export default function WhiteboardRegionTimeline({
         if (!audio) return;
         audio.currentTime = beatStartSec;
         setPlayhead(0);
-        emitPlayhead(0, true);
+        emitPlayhead(0, true, 'user');
         void audio.play().then(() => {
             setPlaying(true);
             if (rafRef.current) cancelAnimationFrame(rafRef.current);
@@ -823,7 +827,7 @@ export default function WhiteboardRegionTimeline({
 
     const handlePointerMove = (e: React.PointerEvent) => {
         if (scrubRef.current) {
-            seekToSec(posToSec(e.clientX));
+            seekToSec(posToSec(e.clientX), 'user');
             return;
         }
         const drag = dragRef.current;
@@ -938,7 +942,7 @@ export default function WhiteboardRegionTimeline({
 
     const handleWordClick = (word: Word) => {
         const t = Math.max(0, Math.min(duration, word.start - beatStartSec));
-        seekToSec(t);
+        seekToSec(t, 'user');
         const region = selectedRegionId ? regions.find((r) => r.id === selectedRegionId) : undefined;
         if (!region) return;
         const minStart = minStartOf(region);
@@ -1423,7 +1427,7 @@ export default function WhiteboardRegionTimeline({
                             }}
                             onPointerDown={(e) => {
                                 scrubRef.current = true;
-                                seekToSec(posToSec(e.clientX));
+                                seekToSec(posToSec(e.clientX), 'user');
                                 (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
                             }}
                             onPointerMove={handlePointerMove}
@@ -1689,7 +1693,7 @@ export default function WhiteboardRegionTimeline({
                         }}
                         onPointerDown={(e) => {
                             scrubRef.current = true;
-                            seekToSec(posToSec(e.clientX));
+                            seekToSec(posToSec(e.clientX), 'user');
                             (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
                         }}
                         onPointerMove={handlePointerMove}

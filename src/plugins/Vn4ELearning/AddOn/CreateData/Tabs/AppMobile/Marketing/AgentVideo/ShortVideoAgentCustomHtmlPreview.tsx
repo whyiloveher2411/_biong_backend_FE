@@ -11,6 +11,8 @@ import {
     localizeImportHtmlAssetScripts,
     localizeImportHtmlExternalScripts,
     seekCustomHtmlIframe,
+    useModel3dBeatAssetRevision,
+    useModel3dLocateAsset,
 } from './agentVideoCustomHtmlPreview';
 import ShortVideoAgentAvatarPipOverlay from './ShortVideoAgentAvatarPipOverlay';
 import type { AvatarPipAnchor } from './agentVideoApi';
@@ -78,6 +80,8 @@ export default function ShortVideoAgentCustomHtmlPreview({
     );
 
     const activeHtml = activeBeat ? (beatHtml[activeBeat.id]?.html || '') : '';
+    const assetRevision = useModel3dBeatAssetRevision(shortVideoId, activeBeat?.id || '');
+    useModel3dLocateAsset(iframeRef, shortVideoId, activeBeat?.id || '');
     const activeHtmlLocalized = React.useMemo(() => {
         // Beat dùng asset library → giữ three/loader CDN (khớp runtime) + rewrite 2 thẻ assets/ tương đối.
         const useAssetLibrary = activeHtml.includes('assets/assets-runtime.js');
@@ -85,8 +89,9 @@ export default function ShortVideoAgentCustomHtmlPreview({
         return localizeImportHtmlAssetScripts(localized, {
             shortVideoId,
             beatId: activeBeat?.id || '',
+            revision: assetRevision,
         });
-    }, [activeHtml, shortVideoId, activeBeat?.id]);
+    }, [activeHtml, shortVideoId, activeBeat?.id, assetRevision]);
     const activeImageUrl = activeBeat ? (beatImage[activeBeat.id]?.image_url || '') : '';
     const activeHtmlRevision = activeBeat
         ? `${activeBeat.id}:${beatHtml[activeBeat.id]?.updated_at || ''}:${activeHtml.length}`
@@ -202,7 +207,7 @@ export default function ShortVideoAgentCustomHtmlPreview({
     ) : (
         <Box
             component="iframe"
-            key={activeHtmlRevision}
+            key={`${activeHtmlRevision}:${assetRevision}`}
             ref={iframeRef}
             title="HTML beat preview"
             sandbox="allow-scripts allow-same-origin"
