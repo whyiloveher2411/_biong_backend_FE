@@ -55,6 +55,8 @@ import {
     fetchAgentTtsGlobalDefault,
     saveAgentVisualStyle,
     saveAgentImportHtml,
+    openDeepseekHtmlBeatSession,
+    fetchDeepseekHtmlBeatSessionStatus,
     bulkDeleteBeatAssets,
     type BulkDeleteBeatAssetsTarget,
     saveAgentOmnivoiceVoice,
@@ -95,6 +97,7 @@ import {
     saveAgentVisualMode,
     saveAgentVideoSettings,
     saveAgentBeatFrequency,
+    saveAgentVfxLevel,
     saveAgentImageTextLang,
     type AgentImageTextLang,
     normalizeAgentImageTextLang,
@@ -292,6 +295,7 @@ import {
 } from './agentVideoSfxProgress';
 import { normalizeClipAspect, type ClipAspect } from './agentVideoClipAspect';
 import { normalizeAgentBeatFrequency, type AgentBeatFrequency } from './agentVideoBeatFrequency';
+import { normalizeAgentVfxLevel, type AgentVfxLevel } from './agentVideoVfxLevel';
 import { normalizeImportHtmlForAudio } from './agentVideoCustomHtmlPreview';
 import { formatDurationSec } from './agentVideoHfPromptDuration';
 import { beatImageAspectSuffix, beatImageStyleSuffix, imageTextLangSuffixRule, resolveBeatVoiceContent } from './agentVideoBeatDivisionWhiteboard';
@@ -685,6 +689,11 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [savingClipAspect, setSavingClipAspect] = React.useState(false);
     const [agentBeatFrequency, setAgentBeatFrequency] = React.useState<AgentBeatFrequency>('free');
     const [savingBeatFrequency, setSavingBeatFrequency] = React.useState(false);
+    const [agentVfxLevel, setAgentVfxLevel] = React.useState<AgentVfxLevel>('medium');
+    const [savingVfxLevel, setSavingVfxLevel] = React.useState(false);
+    const [workflowActive, setWorkflowActive] = React.useState('');
+    const [workflowHasBeatHtmlPrompt, setWorkflowHasBeatHtmlPrompt] = React.useState(false);
+    const [openingBeatDeepSeekChatBeatIds, setOpeningBeatDeepSeekChatBeatIds] = React.useState<string[]>([]);
     const [agentVisualMode, setAgentVisualMode] = React.useState<AgentVisualMode>('hyperframes');
     // Settings toàn video — field parse từ prompts/{folder}/setting-field.md theo visual type,
     // value lưu agent_video_json.video_settings. Key mới trong md tự hiện UI, không hard-code.
@@ -1317,6 +1326,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         videoSettingsRef.current = nextVideoSettings;
         setAgentImageTextLang(normalizeAgentImageTextLang(res?.agent_image_text_lang));
         setAgentBeatFrequency(normalizeAgentBeatFrequency(res?.agent_beat_frequency));
+        setAgentVfxLevel(normalizeAgentVfxLevel(res?.agent_vfx_level));
+        setWorkflowActive(String(res?.workflow_active || '').trim());
+        setWorkflowHasBeatHtmlPrompt(Boolean(res?.workflow_has_beat_html_prompt));
         setAgentWhiteboardConfig(res?.agent_whiteboard_config ?? {});
         setAgentWhiteboardDefault(
             res?.agent_whiteboard_default && typeof res.agent_whiteboard_default === 'object'
@@ -2856,6 +2868,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         beatMap?: BeatMap;
         beatId?: string;
         beatHtml?: string;
+        beatHtmlChatUrl?: string;
+        beatHtmlCookieId?: number;
         beatImageUrl?: string;
         beatImagePrompt?: string;
         beatVideoUrl?: string;
@@ -2880,6 +2894,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 beatMap: payload.beatMap,
                 beatId: payload.beatId,
                 beatHtml: payload.beatHtml,
+                beatHtmlChatUrl: payload.beatHtmlChatUrl,
+                beatHtmlCookieId: payload.beatHtmlCookieId,
                 beatImageUrl: payload.beatImageUrl,
                 beatImagePrompt: payload.beatImagePrompt,
                 beatVideoUrl: payload.beatVideoUrl,
@@ -5273,7 +5289,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const commitBeatHtmlChange = React.useCallback(async (
         beatId: string,
         value: string,
-        options?: { immediate?: boolean; creativePrompt?: string },
+        options?: { immediate?: boolean; creativePrompt?: string; activateHtml?: boolean },
     ): Promise<boolean> => {
         let next = value;
         const section = beatMap?.sections.find((item) => item.id === beatId);
@@ -5306,24 +5322,47 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             delete beatHtmlSaveTimerRef.current[beatId];
         }
 
+        // Lưu HTML motion: đọc chat DeepSeek của beat để ghi kèm URL + cookie.
+        // Chỉ làm khi user bấm Lưu (activateHtml) — auto-save khi gõ không đổi nguồn render.
+        let beatHtmlChatUrl: string | undefined;
+        let beatHtmlCookieId: number | undefined;
+        if (options?.activateHtml) {
+            try {
+                const session = await fetchDeepseekHtmlBeatSessionStatus(shortVideoId, beatId);
+                if (session?.success) {
+                    const chatUrl = String(session.chat_url || '').trim();
+                    const cookieId = Number(session.cookie_id || 0);
+                    if (chatUrl !== '') {
+                        beatHtmlChatUrl = chatUrl;
+                    }
+                    if (Number.isFinite(cookieId) && cookieId > 0) {
+                        beatHtmlCookieId = cookieId;
+                    }
+                }
+            } catch {
+                // Không có phiên DeepSeek vẫn lưu HTML bình thường.
+            }
+        }
+
+        const persistPayload = {
+            beatId,
+            beatHtml: next,
+            ...(options?.activateHtml ? { beatMediaSource: 'html' as const } : {}),
+            ...(beatHtmlChatUrl !== undefined ? { beatHtmlChatUrl } : {}),
+            ...(beatHtmlCookieId !== undefined ? { beatHtmlCookieId } : {}),
+            ...(creativePrompt !== undefined ? { creativePrompt } : {}),
+        };
+
         if (options?.immediate) {
-            return persistImportHtml({
-                beatId,
-                beatHtml: next,
-                ...(creativePrompt !== undefined ? { creativePrompt } : {}),
-            });
+            return persistImportHtml(persistPayload);
         }
 
         beatHtmlSaveTimerRef.current[beatId] = window.setTimeout(() => {
             delete beatHtmlSaveTimerRef.current[beatId];
-            void persistImportHtml({
-                beatId,
-                beatHtml: next,
-                ...(creativePrompt !== undefined ? { creativePrompt } : {}),
-            });
+            void persistImportHtml(persistPayload);
         }, 1000);
         return true;
-    }, [beatMap, persistImportHtml, showMessage]);
+    }, [beatMap, persistImportHtml, shortVideoId, showMessage]);
 
     const handleRefineBeatHtmlViaGemini = React.useCallback(async (
         beatId: string,
@@ -5564,7 +5603,10 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 showMessage('Clipboard trống hoặc không có HTML hợp lệ', 'warning');
                 return;
             }
-            const saved = await commitBeatHtmlChange(beatId, text, { immediate: true });
+            const saved = await commitBeatHtmlChange(beatId, text, {
+                immediate: true,
+                activateHtml: true,
+            });
             if (!saved) {
                 return;
             }
@@ -5577,7 +5619,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                     nonce: Date.now(),
                 });
             }
-            showMessage(`Đã dán và lưu HTML ${beatId}`, 'success');
+            showMessage(`Đã dán, lưu HTML và bật HTML motion cho ${beatId}`, 'success');
         } catch (e) {
             showMessage(e instanceof Error ? e.message : String(e), 'error');
         } finally {
@@ -5899,6 +5941,47 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 setOpeningBeatMetaAiBrowserBeatIds((prev) => prev.filter((x) => x !== id));
             }
         })();
+    };
+
+    const handleOpenBeatDeepSeekChat = (
+        beatId: string,
+        mode: 'new' | 'reopen' = 'new',
+    ) => {
+        const id = String(beatId || '').trim();
+        if (!id || openingBeatDeepSeekChatBeatIds.includes(id)) {
+            return;
+        }
+        setOpeningBeatDeepSeekChatBeatIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+        void (async () => {
+            try {
+                const res = await openDeepseekHtmlBeatSession(shortVideoId, id, mode);
+                if (!res?.success) {
+                    showMessage(
+                        parseApiMessage(res?.message)
+                            || (mode === 'reopen'
+                                ? 'Không mở lại được chat DeepSeek đã lưu'
+                                : 'Không mở được DeepSeek cho beat'),
+                        'error',
+                    );
+                    return;
+                }
+                focusBeatEditor(id);
+                showMessage(
+                    mode === 'reopen'
+                        ? `Đã mở lại chat DeepSeek của ${id} (đúng cookie đã lưu)`
+                        : `Đã mở DeepSeek cho ${id} — prompt đã dán sẵn, bấm Enter để gửi rồi copy HTML`,
+                    'success',
+                );
+            } catch (e) {
+                showMessage(e instanceof Error ? e.message : String(e), 'error');
+            } finally {
+                setOpeningBeatDeepSeekChatBeatIds((prev) => prev.filter((x) => x !== id));
+            }
+        })();
+    };
+
+    const handleOpenBeatDeepSeekSavedChat = (beatId: string) => {
+        handleOpenBeatDeepSeekChat(beatId, 'reopen');
     };
 
     const handleOpenBeatGeminiHeadless = (beatId: string) => {
@@ -7310,6 +7393,33 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             showMessage(e instanceof Error ? e.message : String(e), 'error');
         } finally {
             setSavingBeatFrequency(false);
+        }
+    };
+
+    const handleAgentVfxLevelChange = async (nextLevel: AgentVfxLevel) => {
+        if (savingVfxLevel || nextLevel === agentVfxLevel) {
+            return;
+        }
+        const previousLevel = agentVfxLevel;
+        setAgentVfxLevel(nextLevel);
+        setSavingVfxLevel(true);
+        try {
+            const res = await saveAgentVfxLevel(shortVideoId, nextLevel);
+            if (!res?.success) {
+                setAgentVfxLevel(previousLevel);
+                showMessage(
+                    parseApiMessage(res?.message) || 'Không lưu được mức VFX',
+                    'error',
+                );
+                return;
+            }
+            setAgentVfxLevel(normalizeAgentVfxLevel(res?.agent_vfx_level || nextLevel));
+            showMessage(parseApiMessage(res?.message) || 'Đã lưu mức VFX', 'success');
+        } catch (e) {
+            setAgentVfxLevel(previousLevel);
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setSavingVfxLevel(false);
         }
     };
 
@@ -10053,6 +10163,16 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         agentBeatFrequency,
         savingBeatFrequency,
         handleAgentBeatFrequencyChange,
+        agentVfxLevel,
+        savingVfxLevel,
+        handleAgentVfxLevelChange,
+        workflowActive,
+        workflowHasBeatHtmlPrompt,
+        // Workflow khai báo HTML beat hoặc đang ở chế độ Motion HTML → không dùng ảnh beat.
+        isHtmlBeatWorkflow: workflowHasBeatHtmlPrompt || agentVisualMode === 'hyperframes',
+        openingBeatDeepSeekChatBeatIds,
+        handleOpenBeatDeepSeekChat,
+        handleOpenBeatDeepSeekSavedChat,
         agentVisualMode,
         settingFields,
         videoSettings,

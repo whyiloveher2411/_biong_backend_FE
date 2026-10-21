@@ -328,6 +328,7 @@ export default function ShortVideoAgentVideoWorkspace({
         return state.commitBeatHtmlChange(editBeatHtmlId, payload.html, {
             immediate: true,
             creativePrompt: payload.creativePrompt,
+            activateHtml: true,
         });
     }, [
         editBeatHtmlId,

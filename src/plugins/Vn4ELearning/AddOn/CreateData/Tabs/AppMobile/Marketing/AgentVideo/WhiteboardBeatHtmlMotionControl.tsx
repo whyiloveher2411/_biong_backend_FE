@@ -19,6 +19,9 @@ type Props = {
     onOpenEditor: () => Promise<void> | void;
     /** Tick/bỏ tick checkbox chọn nguồn render HTML motion. */
     onSelectChange: (selected: boolean) => Promise<boolean> | void;
+    /** Mở DeepSeek với prompt HTML beat dán sẵn (không Enter). */
+    onOpenDeepSeek?: () => Promise<void> | void;
+    openingDeepSeek?: boolean;
 };
 
 /**
@@ -33,6 +36,8 @@ export default function WhiteboardBeatHtmlMotionControl({
     disabled = false,
     onOpenEditor,
     onSelectChange,
+    onOpenDeepSeek,
+    openingDeepSeek = false,
 }: Props) {
     const busy = Boolean(saving);
 
@@ -124,6 +129,68 @@ export default function WhiteboardBeatHtmlMotionControl({
                     ) : null}
                 </Box>
             </Tooltip>
+
+            {onOpenDeepSeek ? (
+                <Tooltip
+                    placement="bottom"
+                    title="Mở DeepSeek với prompt HTML beat dán sẵn (chưa Enter)"
+                >
+                    <Box
+                        role="button"
+                        tabIndex={0}
+                        onMouseDown={(event) => event.stopPropagation()}
+                        onClick={(event) => {
+                            event.stopPropagation();
+                            event.preventDefault();
+                            if (busy || disabled || openingDeepSeek) return;
+                            void onOpenDeepSeek();
+                        }}
+                        onKeyDown={(event) => {
+                            if (event.key === 'Enter' || event.key === ' ') {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                if (busy || disabled || openingDeepSeek) return;
+                                void onOpenDeepSeek();
+                            }
+                        }}
+                        sx={{
+                            position: 'absolute',
+                            bottom: -8,
+                            left: '50%',
+                            transform: 'translateX(-50%)',
+                            zIndex: 2,
+                            width: 26,
+                            height: 17,
+                            borderRadius: 1,
+                            bgcolor: 'rgba(25,118,210,0.95)',
+                            border: '1px solid rgba(255,255,255,0.35)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            cursor: busy || disabled || openingDeepSeek ? 'wait' : 'pointer',
+                            boxShadow: '0 2px 6px rgba(0,0,0,0.45)',
+                            '&:hover': { bgcolor: 'rgba(25,118,210,1)' },
+                        }}
+                    >
+                        {openingDeepSeek ? (
+                            <CircularProgress size={10} sx={{ color: 'common.white' }} />
+                        ) : (
+                            <Typography
+                                sx={{
+                                    fontSize: 8,
+                                    fontWeight: 900,
+                                    color: 'common.white',
+                                    lineHeight: 1,
+                                    letterSpacing: '0.02em',
+                                    userSelect: 'none',
+                                }}
+                            >
+                                DS
+                            </Typography>
+                        )}
+                    </Box>
+                </Tooltip>
+            ) : null}
 
             {hasHtml && !busy ? (
                 <Tooltip

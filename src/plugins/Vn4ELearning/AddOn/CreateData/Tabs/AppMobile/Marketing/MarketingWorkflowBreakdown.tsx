@@ -628,7 +628,7 @@ export default function MarketingWorkflowBreakdown({
                                                 onClick={() => { void openChunkChat(chunk.index); }}
                                                 sx={{ textTransform: 'none' }}
                                             >
-                                                Mở chat đúng cookie
+                                                Mở URL
                                             </Button>
                                         </span>
                                     </Tooltip>

@@ -20,6 +20,7 @@ import {
     sanitizeUniversalComposerForFill,
 } from './agentVideoImportHtmlFillPrompts';
 import { formatWhisperWordsForPrompt } from './agentVideoWhisperPromptFormat';
+import { normalizeAgentVfxLevel } from './agentVideoVfxLevel';
 import { stripScriptMarkers, tokenizeScript } from './captionAlign/captionScriptAlign';
 import { stripRepresentedImagePromptSections } from './agentVideoManualBeats';
 import { fetchWorkflowPromptContent } from 'helpers/marketingWorkflowPrompts';
@@ -96,6 +97,7 @@ export type ImportHtmlContextPayload = {
     agent_visual_mode?: 'hyperframes' | 'whiteboard' | string;
     agent_image_text_lang?: 'vi' | 'en' | string;
     agent_beat_frequency?: import('./agentVideoBeatFrequency').AgentBeatFrequency | string;
+    agent_vfx_level?: import('./agentVideoVfxLevel').AgentVfxLevel | string;
     agent_whiteboard_config?: Record<string, unknown>;
     /** @deprecated Transitional read fallback only. */
     hf_theme?: string;
@@ -736,6 +738,7 @@ export async function buildBeatHtmlPrompt(
     const resolvedStyle = visualStyle === 'auto' ? 'vignelli' : visualStyle;
     const artDirection = VISUAL_STYLE_ART_DIRECTION[resolvedStyle]
         || VISUAL_STYLE_ART_DIRECTION.vignelli;
+    const vfxLevel = normalizeAgentVfxLevel(context.agent_vfx_level);
     const githubIntroRules = isGithubIntro ? buildGithubTopIntroRankRulesBlock(context) : '';
     const visualBlock = githubIntroRules
         ? githubIntroRules
@@ -771,6 +774,7 @@ export async function buildBeatHtmlPrompt(
             RESOLVED_ART_DIRECTION: resolveImportHtmlArtDirection(resolvedStyle),
             VISUAL_DESCRIPTION: visualDescription,
             BACKGROUND: background,
+            VFX_LEVEL: vfxLevel,
             PHRASE_ANCHOR: String(beat.phrase_anchor || ''),
             BEAT_START_SEC: formatDurationSec(Number(beat.startSec || 0)),
             BEAT_END_SEC: formatDurationSec(Number(beat.endSec || 0)),
@@ -810,6 +814,7 @@ export async function buildBeatHtmlPrompt(
         `RESOLVED_ART_DIRECTION=${artDirection}`,
         `VISUAL_DESCRIPTION=${visualDescription}`,
         background ? `BACKGROUND=${background}` : '',
+        `VFX_LEVEL=${vfxLevel}`,
         '',
         `CLIP_ASPECT=${clipAspect}`,
         `CANVAS=${clipSpec.width}x${clipSpec.height}`,

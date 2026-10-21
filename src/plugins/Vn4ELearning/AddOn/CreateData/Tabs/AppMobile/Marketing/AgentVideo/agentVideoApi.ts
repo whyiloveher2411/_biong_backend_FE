@@ -1822,12 +1822,16 @@ export type AgentVideoContentResponse = {
     agent_clip_aspect?: '9:16' | '16:9';
     clip_render_spec?: import('./agentVideoClipAspect').ClipRenderSpec;
     agent_visual_mode?: AgentVisualMode | string;
+    workflow_active?: string;
+    /** Workflow đang chọn dùng HTML beat → ẩn toàn bộ control ảnh beat. */
+    workflow_has_beat_html_prompt?: boolean;
     /** Setting fields theo visual type (parse từ prompts/{folder}/setting-field.md). */
     setting_fields?: AgentVideoSettingField[];
     /** Giá trị settings đã lưu của toàn video (agent_video_json.video_settings). */
     setting_values?: Record<string, string>;
     agent_image_text_lang?: AgentImageTextLang | string;
     agent_beat_frequency?: import('./agentVideoBeatFrequency').AgentBeatFrequency | string;
+    agent_vfx_level?: import('./agentVideoVfxLevel').AgentVfxLevel | string;
     agent_whiteboard_config?: AgentWhiteboardConfig;
     /** Cấu hình CHUNG render whiteboard (beats_per_job áp cho toàn bộ short video). */
     agent_whiteboard_default?: {
@@ -3196,6 +3200,52 @@ export async function saveAgentBeatFrequency(
         'plugin/vn4-e-learning/app-mobile/marketing/short-video/save-agent-beat-frequency',
         shortVideoBody(shortVideoId, { agent_beat_frequency: frequency }),
     ) as Promise<JsonResponse & { agent_beat_frequency?: string }>;
+}
+
+export async function saveAgentVfxLevel(
+    shortVideoId: number,
+    level: import('./agentVideoVfxLevel').AgentVfxLevel,
+): Promise<JsonResponse & { agent_vfx_level?: string }> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/save-agent-vfx-level',
+        shortVideoBody(shortVideoId, { agent_vfx_level: level }),
+    ) as Promise<JsonResponse & { agent_vfx_level?: string }>;
+}
+
+export type DeepseekHtmlBeatSessionResponse = JsonResponse & {
+    session_id?: string;
+    chat_url?: string;
+    cookie_id?: number;
+    beat_id?: string;
+    mode?: 'new' | 'reopen' | string;
+    prompt_chars?: number;
+    session_status?: string;
+    has_chat_url?: boolean;
+    saved_chat_url?: string;
+    saved_cookie_id?: number;
+};
+
+/** Mở DeepSeek cho HTML motion của beat: new = dán prompt (không Enter), reopen = chat đã lưu. */
+export async function openDeepseekHtmlBeatSession(
+    shortVideoId: number,
+    beatId: string,
+    mode: 'new' | 'reopen' = 'new',
+): Promise<DeepseekHtmlBeatSessionResponse> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/deepseek-html-beat-open',
+        shortVideoBody(shortVideoId, { beat_id: beatId, mode }),
+    ) as Promise<DeepseekHtmlBeatSessionResponse>;
+}
+
+/** Trạng thái phiên DeepSeek của beat + chat_url/cookie_id đã lưu. */
+export async function fetchDeepseekHtmlBeatSessionStatus(
+    shortVideoId: number,
+    beatId: string,
+): Promise<DeepseekHtmlBeatSessionResponse> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/deepseek-html-beat-status',
+        shortVideoBody(shortVideoId, { beat_id: beatId }),
+    ) as Promise<DeepseekHtmlBeatSessionResponse>;
 }
 
 export type AgentImageTextLang = 'vi' | 'en';
@@ -5073,6 +5123,9 @@ export async function saveAgentImportHtml(
         beatMap?: import('./agentVideoBeatMap').BeatMap;
         beatId?: string;
         beatHtml?: string;
+        /** Chat DeepSeek đã tạo HTML motion (mở lại đúng luồng chat). */
+        beatHtmlChatUrl?: string;
+        beatHtmlCookieId?: number;
         beatImageUrl?: string;
         beatImagePrompt?: string;
         /** Video thay thế ảnh beat (render bằng video khi media_source = 'video'). */
@@ -5127,6 +5180,8 @@ export async function saveAgentImportHtml(
     }
     if (payload.beatId !== undefined && (
         payload.beatHtml !== undefined
+        || payload.beatHtmlChatUrl !== undefined
+        || payload.beatHtmlCookieId !== undefined
         || payload.beatImageUrl !== undefined
         || payload.beatImagePrompt !== undefined
         || payload.beatVideoUrl !== undefined
@@ -5144,6 +5199,12 @@ export async function saveAgentImportHtml(
         body.beat_id = payload.beatId;
         if (payload.beatHtml !== undefined) {
             body.beat_html = payload.beatHtml;
+        }
+        if (payload.beatHtmlChatUrl !== undefined) {
+            body.beat_html_chat_url = payload.beatHtmlChatUrl;
+        }
+        if (payload.beatHtmlCookieId !== undefined) {
+            body.beat_html_cookie_id = payload.beatHtmlCookieId;
         }
         if (payload.beatImageUrl !== undefined) {
             body.beat_image_url = payload.beatImageUrl;

@@ -39,6 +39,11 @@ export type BeatHtmlEntry = {
     updated_at?: string;
     /** Prompt sáng tạo / refine — user hoặc pipeline AI ghi để dùng lại. */
     creative_prompt?: string;
+    /** Chat DeepSeek đã tạo HTML motion — mở lại đúng luồng chat. */
+    chat_url?: string;
+    cookie_id?: number;
+    chat_provider?: string;
+    chat_updated_at?: string;
     qa_status?: BeatQaStatus;
     qa_refine_note?: string;
     render_status?: 'error' | 'ok' | string;
@@ -315,10 +320,16 @@ export function parseBeatHtmlEntry(entry: unknown): BeatHtmlEntry | null {
     const qaRefineNote = raw.qa_refine_note != null
         ? String(raw.qa_refine_note)
         : undefined;
+    const chatUrl = raw.chat_url != null ? String(raw.chat_url).trim() : '';
+    const cookieId = Number(raw.cookie_id);
     return {
         html: String(raw.html || ''),
         updated_at: raw.updated_at ? String(raw.updated_at) : undefined,
         creative_prompt: creativePrompt !== undefined ? creativePrompt : undefined,
+        chat_url: chatUrl || undefined,
+        cookie_id: Number.isFinite(cookieId) && cookieId > 0 ? cookieId : undefined,
+        chat_provider: raw.chat_provider != null ? String(raw.chat_provider) : undefined,
+        chat_updated_at: raw.chat_updated_at != null ? String(raw.chat_updated_at) : undefined,
         qa_status: qaStatus !== undefined && qaStatus !== '' ? qaStatus : undefined,
         qa_refine_note: qaRefineNote !== undefined ? qaRefineNote : undefined,
         render_status: raw.render_status ? String(raw.render_status) : undefined,

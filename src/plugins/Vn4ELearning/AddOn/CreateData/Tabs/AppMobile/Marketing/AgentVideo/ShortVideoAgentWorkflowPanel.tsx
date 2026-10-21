@@ -51,6 +51,7 @@ import ShortVideoAgentAvatarDrawer, {
 } from './ShortVideoAgentAvatarDrawer';
 import { WorkflowSection, workflowFieldSurfaceSx } from './workflowPanelSection';
 import { AGENT_BEAT_FREQUENCY_OPTIONS, type AgentBeatFrequency } from './agentVideoBeatFrequency';
+import { AGENT_VFX_LEVEL_OPTIONS, type AgentVfxLevel } from './agentVideoVfxLevel';
 import type { useAgentVideoContent } from './useAgentVideoContent';
 
 type AgentVideoState = ReturnType<typeof useAgentVideoContent>;
@@ -992,6 +993,33 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                                     Image nhịp nhanh: nên chọn "Không vẽ tay" ở Cách đưa ảnh vào khung để ảnh hiện đầy đủ từ frame đầu.
                                 </Typography>
                             )}
+                        </Box>
+                        <Box sx={{ px: 1.25, py: 1 }}>
+                            <Typography variant="caption" color="text.primary" display="block" fontWeight={600} sx={{ mb: 0.75 }}>
+                                Mức hiệu ứng (VFX) — HTML beat
+                            </Typography>
+                            <FormControl fullWidth size="small" disabled={state.savingVfxLevel}>
+                                <Select
+                                    value={state.agentVfxLevel}
+                                    onChange={(e) => {
+                                        const value = String(e.target.value || '').trim() as AgentVfxLevel;
+                                        if (value) {
+                                            void state.handleAgentVfxLevelChange(value);
+                                        }
+                                    }}
+                                    inputProps={{ 'aria-label': 'Mức hiệu ứng VFX cho HTML beat' }}
+                                >
+                                    {AGENT_VFX_LEVEL_OPTIONS.map((option) => (
+                                        <MenuItem key={option.key} value={option.key}>
+                                            {option.label}
+                                        </MenuItem>
+                                    ))}
+                                </Select>
+                            </FormControl>
+                            <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.75, lineHeight: 1.35 }}>
+                                {AGENT_VFX_LEVEL_OPTIONS.find((option) => option.key === state.agentVfxLevel)?.description || ''}
+                                {' '}Áp dụng khi tạo prompt HTML beat mới; HTML đã tạo giữ nguyên.
+                            </Typography>
                         </Box>
                         <FormControlLabel
                             sx={{

@@ -58,6 +58,7 @@ import BeatModel3dPicker from './BeatModel3dPicker';
 import BeatAssetMapPanel from './BeatAssetMapPanel';
 import WhiteboardBeatImageReplaceControl from './WhiteboardBeatImageReplaceControl';
 import WhiteboardBeatImageControl from './WhiteboardBeatImageControl';
+import WhiteboardBeatHtmlChatControl from './WhiteboardBeatHtmlChatControl';
 import WhiteboardBeatImagePromptControl from './WhiteboardBeatImagePromptControl';
 import WhiteboardBeatAudioControl from './WhiteboardBeatAudioControl';
 import WhiteboardCustomBackgroundControl from './WhiteboardCustomBackgroundControl';
@@ -4785,6 +4786,8 @@ export default function ShortVideoAgentBeatRegionEditor({
                                 onSelectChange={(next) => {
                                     void state.handleSetBeatMediaSource(beatId, next ? 'html' : 'image');
                                 }}
+                                onOpenDeepSeek={() => state.handleOpenBeatDeepSeekChat(beatId)}
+                                openingDeepSeek={state.openingBeatDeepSeekChatBeatIds.includes(beatId)}
                             />
                         ) : null}
                         </Stack>
@@ -5829,7 +5832,11 @@ export default function ShortVideoAgentBeatRegionEditor({
                                     Tạo group ({groupableSelectionCount})
                                 </Button>
                             ) : null}
-                            <WhiteboardBeatImageControl state={state} beatId={beatId} />
+                            {state.isHtmlBeatWorkflow ? (
+                                <WhiteboardBeatHtmlChatControl state={state} beatId={beatId} />
+                            ) : (
+                                <WhiteboardBeatImageControl state={state} beatId={beatId} />
+                            )}
                             {state.agentBeatAudio ? (
                                 <WhiteboardBeatAudioControl state={state} beatId={beatId} />
                             ) : null}
