@@ -76,6 +76,10 @@ export type DeepseekStep2ChunkStatus = {
     start_order: number;
     /** Link chat DeepSeek của phần này (để mở kiểm tra khi lỗi). */
     chat_url?: string;
+    /** Cookie account đã tạo đúng chat này — dùng để mở lại bằng headless. */
+    cookie_id?: number;
+    /** Tên account cookie (hiển thị cho user). */
+    cookie_title?: string;
 };
 
 export type DeepseekStep2StatusResponse = {
@@ -126,6 +130,43 @@ export function fetchDeepseekStep2Status(shortVideoId: number): Promise<Deepseek
         loading: false,
         data: { short_video_id: shortVideoId, id: shortVideoId },
     }) as Promise<DeepseekStep2StatusResponse>;
+}
+
+/**
+ * Mở lại đúng chat của 1 phần visual beat bằng URL + cookie_id đã lưu trong
+ * step2_chunk_<index>. Dùng khi phần đó lỗi để xem/tiếp tục đúng account,
+ * không phải mò cookie thủ công.
+ */
+export function openDeepseekChunkChat(payload: {
+    shortVideoId: number;
+    chatUrl: string;
+    cookieId: number;
+}): Promise<{
+    success?: boolean;
+    session_id?: string;
+    chat_url?: string;
+    cookie_id?: number;
+    warnings?: string[];
+    message?: string | { content?: string };
+}> {
+    return ajax({
+        url: `${BASE_PATH}/deepseek-video-image-chat-open`,
+        method: 'POST',
+        loading: false,
+        data: {
+            short_video_id: payload.shortVideoId,
+            id: payload.shortVideoId,
+            chat_url: payload.chatUrl,
+            cookie_id: payload.cookieId,
+        },
+    }) as Promise<{
+        success?: boolean;
+        session_id?: string;
+        chat_url?: string;
+        cookie_id?: number;
+        warnings?: string[];
+        message?: string | { content?: string };
+    }>;
 }
 
 // ---------------------------------------------------------------------------

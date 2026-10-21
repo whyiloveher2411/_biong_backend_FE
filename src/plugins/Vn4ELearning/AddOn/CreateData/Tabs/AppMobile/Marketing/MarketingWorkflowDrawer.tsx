@@ -42,13 +42,16 @@ import {
     fetchWorkflowPromptContent,
     fetchWorkflowPromptText,
     fetchSfxPromptContext,
+    formatWorkflowBeatScript,
     getWorkflowContrastTextColor,
     MANUAL_BEAT_PROMPTS_SAVED_EVENT,
     parseWorkflowPromptChoiceValues,
     resolveWorkflowPromptChoiceFile,
     saveWorkflowOutput,
     splitWorkflowBeatBlocks,
+    splitWorkflowBeats,
     splitWorkflowStepTitle,
+    WORKFLOW_AUDIO_SCRIPT_BEATS_KEY,
     WORKFLOW_AUDIO_SCRIPT_KEY,
     WORKFLOW_INPUT_PROMPT_KEY,
     WORKFLOW_PROMPT_CHOICE_KEY,
@@ -554,6 +557,12 @@ export default function MarketingWorkflowDrawer({
     ): WorkflowPromptContext => {
         const currentBucket = (workflow && allOutputs[workflow.key]) || {};
         const audioScriptText = String(audioScript || '');
+        // Bản có cấu trúc "BEAT 01: ..." để prompt biết chính xác ranh giới beat
+        // (beat nhiều dòng không bị chatbot chia lại theo newline).
+        const audioBeats = splitWorkflowBeats(audioScriptText);
+        const audioBeatsText = audioBeats.length > 0
+            ? formatWorkflowBeatScript(audioBeats, 1)
+            : '';
         // Biến input: default của định nghĩa, ghi đè bởi giá trị đã lưu (hoặc draft đang sửa).
         const variableValues: Record<string, string> = {};
         (workflow?.steps || []).forEach((step) => {
@@ -605,6 +614,9 @@ export default function MarketingWorkflowDrawer({
             ...(promptContext || {}),
             ...(audioScriptText.trim()
                 ? { [WORKFLOW_AUDIO_SCRIPT_KEY]: audioScriptText }
+                : {}),
+            ...(audioBeatsText
+                ? { [WORKFLOW_AUDIO_SCRIPT_BEATS_KEY]: audioBeatsText }
                 : {}),
             ...(originalAudio
                 ? { 'PASTE ORIGINAL AUDIO HERE': originalAudio }
@@ -808,17 +820,21 @@ export default function MarketingWorkflowDrawer({
      * audio script của phần + output block BEAT cắt theo dải beat của phần.
      */
     const getFreshChunkContext = React.useCallback(async (
-        chunk: Pick<WorkflowBreakdownChunk, 'beatStart' | 'beatEnd' | 'audioScript'>,
+        chunk: Pick<WorkflowBreakdownChunk, 'beatStart' | 'beatEnd' | 'beats' | 'audioScript'>,
         totalBeats: number,
     ): Promise<WorkflowPromptContext> => {
         const fresh = await refreshWorkflowOutputs();
         const base = buildBaseContext(fresh.outputs, fresh.sfxContext);
+        const chunkBeats = Array.isArray(chunk.beats) && chunk.beats.length > 0
+            ? chunk.beats
+            : splitWorkflowBeats(chunk.audioScript);
         const context: WorkflowPromptContext = {
             ...base,
             [WORKFLOW_AUDIO_SCRIPT_KEY]: chunk.audioScript,
+            [WORKFLOW_AUDIO_SCRIPT_BEATS_KEY]: formatWorkflowBeatScript(chunkBeats, 1),
         };
         Object.entries(base).forEach(([key, value]) => {
-            if (key === WORKFLOW_AUDIO_SCRIPT_KEY) {
+            if (key === WORKFLOW_AUDIO_SCRIPT_KEY || key === WORKFLOW_AUDIO_SCRIPT_BEATS_KEY) {
                 return;
             }
             const blocks = splitWorkflowBeatBlocks(value);
@@ -1321,7 +1337,7 @@ export default function MarketingWorkflowDrawer({
                                 {workflow.title}
                             </Typography>
                             <Typography variant="caption" sx={{ color: accentText, opacity: 0.85, display: 'block', mt: 0.25 }}>
-                                {workflow.steps.length} bước · Copy prompt tự thay [topic], [AUDIO-SCRIPT] và các key output đã lưu
+                                {workflow.steps.length} bước · Copy prompt tự thay [topic], [AUDIO-SCRIPT], [AUDIO-SCRIPT-BEATS] và các key output đã lưu
                             </Typography>
                         </Box>
                     )}

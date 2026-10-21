@@ -1,5 +1,12 @@
 import { ajax } from 'hook/useApi';
 import { writePromptTextToClipboard } from 'helpers/marketingShortVideoAgentPrompt';
+import {
+    formatWorkflowBeatScript,
+    splitWorkflowBeats,
+    WORKFLOW_AUDIO_SCRIPT_BEATS_KEY,
+} from './marketingWorkflowBeats';
+
+export { formatWorkflowBeatScript, splitWorkflowBeats, WORKFLOW_AUDIO_SCRIPT_BEATS_KEY };
 
 /** 1 lựa chọn prompt của nhóm choice (dòng option trong index.md): "Nhãn | file.md". */
 export type WorkflowPromptChoiceOption = {
@@ -638,20 +645,17 @@ export async function copyWorkflowPromptToClipboard(
 /**
  * ---- scriptBreakdown: chia audio script thành nhiều phần để chạy từng lần ----
  *
- * index.md có thể khai báo `scriptBreakdown: N` cho 1 prompt: mỗi lần chỉ chạy N beat
- * (beat = dòng non-empty của audio script, khớp BEAT RULE trong prompt bước 3). UI tự
- * tính số phần và render nhiều button copy; user dán kết quả từng phần rồi nối lại.
+ * index.md có thể khai báo `scriptBreakdown: N` cho 1 prompt: mỗi lần chỉ chạy N beat.
+ * Beat được tách theo splitWorkflowBeats (BEAT header / paragraph nhiều dòng / dòng).
+ * UI tự tính số phần và render nhiều button copy; user dán kết quả từng phần rồi nối lại.
  * Với prompt cần cả [AUDIO-SCRIPT] lẫn output dạng block BEAT (vd plan-prompt), các
  * output đó cũng được cắt theo đúng dải beat của từng phần.
  */
 
-/** Mỗi dòng non-empty của audio script = 1 beat. */
-export function splitWorkflowBeats(text: string): string[] {
-    return String(text || '')
-        .split(/\r\n|\r|\n/)
-        .map((line) => line.trim())
-        .filter((line) => line.length > 0);
-}
+/**
+ * splitWorkflowBeats + formatWorkflowBeatScript nằm ở helpers/marketingWorkflowBeats.ts
+ * (pure, test độc lập). Re-export ở đầu file để các import cũ giữ nguyên.
+ */
 
 /** Chia list thành các đoạn size phần tử. */
 export function chunkWorkflowList<T>(list: T[], size: number): T[][] {
@@ -715,6 +719,8 @@ export type WorkflowBreakdownChunk = {
     /** Beat kết thúc (1-based, inclusive). */
     beatEnd: number;
     beatCount: number;
+    /** Các beat (có thể nhiều dòng) của phần này — giữ nguyên ranh giới beat. */
+    beats: string[];
     /** Đoạn audio script của phần này. */
     audioScript: string;
     /** Context thay key cho phần này: [AUDIO-SCRIPT] + output block BEAT đã cắt theo dải beat. */
@@ -751,7 +757,7 @@ export function buildWorkflowBreakdownPlan(
 
     // Các key output chứa block BEAT (vd plan-prompt) → cắt theo dải beat tương ứng.
     const blockSources = Object.entries(baseContext)
-        .filter(([key]) => key !== WORKFLOW_AUDIO_SCRIPT_KEY)
+        .filter(([key]) => key !== WORKFLOW_AUDIO_SCRIPT_KEY && key !== WORKFLOW_AUDIO_SCRIPT_BEATS_KEY)
         .map(([key, value]) => ({ key, blocks: splitWorkflowBeatBlocks(value) }))
         .filter((entry) => entry.blocks.length === beats.length);
 
@@ -763,6 +769,7 @@ export function buildWorkflowBreakdownPlan(
 
         const context: WorkflowPromptContext = { ...baseContext };
         context[WORKFLOW_AUDIO_SCRIPT_KEY] = group.join('\n');
+        context[WORKFLOW_AUDIO_SCRIPT_BEATS_KEY] = formatWorkflowBeatScript(group, 1);
         blockSources.forEach(({ key, blocks }) => {
             context[key] = blocks.slice(beatStart - 1, beatEnd).join('\n\n');
         });
@@ -773,6 +780,7 @@ export function buildWorkflowBreakdownPlan(
             beatStart,
             beatEnd,
             beatCount: group.length,
+            beats: group,
             audioScript: group.join('\n'),
             context,
         };

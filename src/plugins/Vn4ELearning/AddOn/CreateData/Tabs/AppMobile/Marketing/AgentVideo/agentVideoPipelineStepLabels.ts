@@ -88,6 +88,14 @@ export function isFullAutoPipelineStepRelevantForMode(
     if ((FULL_AUTO_PIPELINE_UI_HIDDEN_EXTRA_STEPS as readonly string[]).includes(key)) {
         return false;
     }
+    // Workflow dùng HTML beat → bước HTML beat chạy SAU Sound effect (DeepSeek),
+    // thay cho bước beat_fill cũ (Gemini) chạy trước audio.
+    if (key === 'beat_html' && !hasBeatHtmlPrompt) {
+        return false;
+    }
+    if (key === 'beat_fill' && hasBeatHtmlPrompt) {
+        return false;
+    }
     // Workflow dùng HTML beat → không sản xuất ảnh beat: ẩn Render ảnh resource / Ảnh beat / Animate ảnh.
     if (hasBeatHtmlPrompt && (FULL_AUTO_PIPELINE_IMAGE_BEAT_STEPS as readonly string[]).includes(key)) {
         return false;

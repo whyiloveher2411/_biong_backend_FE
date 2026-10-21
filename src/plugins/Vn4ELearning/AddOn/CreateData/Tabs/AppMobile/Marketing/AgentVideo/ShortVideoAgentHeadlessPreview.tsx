@@ -58,6 +58,7 @@ type Props = {
         current?: number;
         total?: number;
         succeeded?: number;
+        failed?: string[];
     } | null;
     /** Tiến độ animate ảnh beat → video (vibes.ai). */
     vibesFillProgress?: {
@@ -237,17 +238,36 @@ export default function ShortVideoAgentHeadlessPreview({
             || (pipelineRunning && wbPipelineStep)
         ),
     );
+    const beatAudioStepRunning = String(pipeline?.steps?.beat_audio?.status || '').trim() === 'running';
     const showBeatAudioProgress = Boolean(
-        pipelineRunning && currentStep === 'beat_audio',
+        pipelineRunning && (currentStep === 'beat_audio' || beatAudioStepRunning),
     );
     const beatAudioTitle = showBeatAudioProgress && beatAudioProgress
         ? beatAudioProgressLabel(beatAudioProgress)
         : '';
+    const sfxStepRunning = String(pipeline?.steps?.sfx?.status || '').trim() === 'running';
     const showSfxProgress = Boolean(
-        pipelineRunning && currentStep === 'sfx',
+        pipelineRunning && (currentStep === 'sfx' || sfxStepRunning),
     );
     const sfxTitle = showSfxProgress && sfxProgress
         ? sfxProgressLabel(sfxProgress)
+        : '';
+    const beatHtmlStepRunning = String(pipeline?.steps?.beat_html?.status || '').trim() === 'running';
+    const showBeatHtmlProgress = Boolean(
+        pipelineRunning && (currentStep === 'beat_html' || beatHtmlStepRunning),
+    );
+    const beatHtmlDone = Number(geminiFillProgress?.succeeded || geminiFillProgress?.current || 0);
+    const beatHtmlTotal = Number(geminiFillProgress?.total || 0);
+    const beatHtmlPercent = beatHtmlTotal > 0
+        ? Math.min(100, Math.round((Math.min(beatHtmlDone, beatHtmlTotal) / beatHtmlTotal) * 100))
+        : 0;
+    const beatHtmlTitle = showBeatHtmlProgress
+        ? `HTML beat · ${beatHtmlDone}/${beatHtmlTotal > 0 ? beatHtmlTotal : '?'} (${beatHtmlPercent}%)`
+        : '';
+    const beatHtmlSubtitle = showBeatHtmlProgress
+        ? (geminiFillProgress?.beatId
+            ? `Đang tạo: ${geminiFillProgress.beatId}`
+            : 'Đang chuẩn bị tạo HTML beat…')
         : '';
     const beatImageProgress = deriveBeatImageProgress({
         progress: geminiFillProgress,
@@ -464,6 +484,9 @@ export default function ShortVideoAgentHeadlessPreview({
         if (showSfxProgress && sfxTitle) {
             return sfxTitle;
         }
+        if (showBeatHtmlProgress && beatHtmlTitle) {
+            return beatHtmlTitle;
+        }
         if (isImageFillStep) {
             return imageFillProgressLabel;
         }
@@ -646,14 +669,15 @@ export default function ShortVideoAgentHeadlessPreview({
                                 ? beatAudioSubtitle
                                 : (showSfxProgress && sfxSubtitle
                                     ? sfxSubtitle
-                                    : (pipelineRunning ? pipelineProgressLabel(currentStep) : (
+                                    : (showBeatHtmlProgress && beatHtmlSubtitle
+                                        ? beatHtmlSubtitle
+                                        : (pipelineRunning ? pipelineProgressLabel(currentStep) : (
                                         isActiveJobStatus(geminiScriptPhoneticStatus)
                                             ? pipelineProgressLabel('script_phonetic_normalize')
                                             : (chatgptTtsActive
                                                 ? 'ChatGPT Web TTS'
                                                 : `Short video #${shortVideoId}`)
-                                    ))))}
-                        {!isImageFillStep && !showBeatAudioProgress && !showSfxProgress && beatId ? ` · ${beatId}` : ''}
+                                    )))))}                        {!isImageFillStep && !showBeatAudioProgress && !showSfxProgress && beatId ? ` · ${beatId}` : ''}
                     </Typography>
                 </Box>
                 {browserStep && !minimized ? (
@@ -922,6 +946,41 @@ export default function ShortVideoAgentHeadlessPreview({
                                     size="small"
                                     color="error"
                                     label={`${sfxProgress.failed.length} cue lỗi`}
+                                    sx={{ mt: 1, height: 22, '& .MuiChip-label': { px: 0.75, fontSize: 11 } }}
+                                />
+                            ) : null}
+                        </Box>
+                    ) : showBeatHtmlProgress ? (
+                        <Box sx={{ px: 3, width: '100%', maxWidth: 420, textAlign: 'center' }}>
+                            {running ? <CircularProgress size={30} color="inherit" sx={{ mb: 1.5 }} /> : null}
+                            <Typography variant="body2" fontWeight={600}>
+                                {beatHtmlTitle || stepLabel('beat_html', agentVisualMode)}
+                            </Typography>
+                            {beatHtmlTotal > 0 ? (
+                                <LinearProgress
+                                    variant="determinate"
+                                    value={beatHtmlPercent}
+                                    sx={{
+                                        mt: 1.5,
+                                        mb: 1,
+                                        height: 8,
+                                        borderRadius: 1,
+                                        bgcolor: 'rgba(255,255,255,0.12)',
+                                        '& .MuiLinearProgress-bar': { bgcolor: 'info.light' },
+                                    }}
+                                />
+                            ) : null}
+                            <Typography
+                                variant="caption"
+                                sx={{ display: 'block', mt: 0.75, color: 'rgba(255,255,255,0.72)' }}
+                            >
+                                {beatHtmlSubtitle}
+                            </Typography>
+                            {Number(geminiFillProgress?.failed?.length || 0) > 0 ? (
+                                <Chip
+                                    size="small"
+                                    color="error"
+                                    label={`${Number(geminiFillProgress?.failed?.length || 0)} beat lỗi`}
                                     sx={{ mt: 1, height: 22, '& .MuiChip-label': { px: 0.75, fontSize: 11 } }}
                                 />
                             ) : null}

@@ -28,7 +28,9 @@ import DoneAllOutlinedIcon from '@mui/icons-material/DoneAllOutlined';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import StopOutlinedIcon from '@mui/icons-material/StopOutlined';
 import UploadFileOutlinedIcon from '@mui/icons-material/UploadFileOutlined';
+import FiberManualRecordOutlinedIcon from '@mui/icons-material/FiberManualRecordOutlined';
 import LoadingButton from 'components/atoms/LoadingButton';
+import { parseShortVideoCookieApiMessage, recordDeepseekFlow } from 'helpers/marketingShortVideoCookieApi';
 import { AgentOptionToggleGroup } from './AgentOptionToggleGroup';
 import { convertToURL, validURL } from 'helpers/url';
 import {
@@ -314,6 +316,7 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
     const { openCreateScriptGemini, openImproveScriptGemini } = useAgentVideoOpenGeminiScriptActions();
     const [openingCreateScriptGemini, setOpeningCreateScriptGemini] = React.useState(false);
     const [openingImproveScriptGemini, setOpeningImproveScriptGemini] = React.useState(false);
+    const [recordingDeepseek, setRecordingDeepseek] = React.useState(false);
     const geminiScriptStatus = String(state.geminiScriptStatus || 'none');
     const geminiScriptQueueActive = geminiScriptStatus === 'queued'
         || geminiScriptStatus === 'processing';
@@ -356,6 +359,39 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
         } finally {
             setOpeningImproveScriptGemini(false);
         }
+    };
+
+    const handleRecordDeepseekFlow = () => {
+        if (recordingDeepseek) {
+            return;
+        }
+        setRecordingDeepseek(true);
+        recordDeepseekFlow(state.shortVideoId)
+            .then((result) => {
+                setRecordingDeepseek(false);
+                if (result?.success === false) {
+                    state.showMessage(
+                        parseShortVideoCookieApiMessage(result, 'Không mở được recorder DeepSeek'),
+                        'error',
+                    );
+                    return;
+                }
+                const baseMessage = parseShortVideoCookieApiMessage(
+                    result,
+                    'Đã mở Chrome recorder DeepSeek — thao tác gõ prompt → gửi → đợi phản hồi (bấm Continue nếu có) rồi bấm "End test"',
+                );
+                state.showMessage(
+                    result?.out_dir ? `${baseMessage} — log: ${result.out_dir}` : baseMessage,
+                    'success',
+                );
+            })
+            .catch((err: unknown) => {
+                setRecordingDeepseek(false);
+                state.showMessage(
+                    err instanceof Error ? err.message : 'Không mở được recorder DeepSeek',
+                    'error',
+                );
+            });
     };
 
     const chainDisplay = state.ttsChain.length > 0
@@ -988,6 +1024,24 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                                 </Box>
                             )}
                         />
+                        <Box sx={{ px: 1.25, py: 1 }}>
+                            <Button
+                                size="small"
+                                variant="outlined"
+                                color="error"
+                                startIcon={<FiberManualRecordOutlinedIcon fontSize="small" />}
+                                disabled={recordingDeepseek}
+                                onClick={handleRecordDeepseekFlow}
+                                sx={{ textTransform: 'none' }}
+                            >
+                                {recordingDeepseek ? 'Đang mở recorder…' : 'Record DeepSeek'}
+                            </Button>
+                            <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.75, lineHeight: 1.35 }}>
+                                Mở Chrome + cookie DeepSeek để ghi lại thao tác (gõ prompt → gửi → đợi phản hồi,
+                                bấm Continue nếu DeepSeek chia nhỏ). Bấm “End test” trong overlay khi xong;
+                                log lưu tại <b>storage/logs/deepseek-record/</b> để gửi lại cho dev.
+                            </Typography>
+                        </Box>
                         </Stack>
 
                         {state.isWhiteboardMode ? (

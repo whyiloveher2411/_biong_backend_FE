@@ -5,6 +5,7 @@ import CheckIcon from '@mui/icons-material/Check';
 import ContentPasteIcon from '@mui/icons-material/ContentPaste';
 import CloseIcon from '@mui/icons-material/Close';
 import CloudUploadOutlinedIcon from '@mui/icons-material/CloudUploadOutlined';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 import {
     copyWorkflowPromptToClipboard,
@@ -21,6 +22,7 @@ import {
 } from 'helpers/marketingWorkflowPrompts';
 import {
     fetchDeepseekStep2Status,
+    openDeepseekChunkChat,
     startDeepseekStep2Chunk,
     type DeepseekStep2ChunkStatus,
 } from 'helpers/marketingDeepseekVideoImage';
@@ -91,6 +93,7 @@ export default function MarketingWorkflowBreakdown({
     const [deepseekStatus, setDeepseekStatus] = React.useState<Record<number, DeepseekStep2ChunkStatus>>({});
     const [deepseekStarting, setDeepseekStarting] = React.useState(-1);
     const [deepseekAllRunning, setDeepseekAllRunning] = React.useState(false);
+    const [openingChatIndex, setOpeningChatIndex] = React.useState(-1);
     // Giữ showMessage trong ref để effect poll không phụ thuộc hàm (tránh restart liên tục).
     const showMessageRef = React.useRef(showMessage);
     showMessageRef.current = showMessage;
@@ -111,7 +114,10 @@ export default function MarketingWorkflowBreakdown({
 
     const validations = React.useMemo<WorkflowBreakdownPartValidation[]>(
         () => plan.chunks.map((chunk, index) => (
-            validateWorkflowBreakdownPart(parts[index] || '', splitWorkflowBeats(chunk.audioScript))
+            validateWorkflowBreakdownPart(
+                parts[index] || '',
+                chunk.beats && chunk.beats.length ? chunk.beats : splitWorkflowBeats(chunk.audioScript),
+            )
         )),
         [plan, parts],
     );
@@ -229,7 +235,10 @@ export default function MarketingWorkflowBreakdown({
             return next;
         });
 
-        const validation = validateWorkflowBreakdownPart(text, splitWorkflowBeats(chunk.audioScript));
+        const validation = validateWorkflowBreakdownPart(
+            text,
+            chunk.beats && chunk.beats.length ? chunk.beats : splitWorkflowBeats(chunk.audioScript),
+        );
         if (!validation.ok) {
             showMessage(`Phần ${index + 1} chưa hợp lệ — xem lỗi bên dưới, chưa cập nhật beat`, 'error');
             return;
@@ -399,6 +408,41 @@ export default function MarketingWorkflowBreakdown({
         }
     }, [deepseekStarting, deepseekAllRunning, enqueueChunk, showMessage]);
 
+    const openChunkChat = React.useCallback(async (index: number) => {
+        const ds = deepseekStatus[index];
+        if (!shortVideoId || !ds?.chat_url) {
+            showMessage('Phần này chưa có URL chat để mở', 'warning');
+            return;
+        }
+        const cookieId = Number(ds.cookie_id || 0);
+        if (!cookieId) {
+            showMessage('Phần này chưa lưu cookie account — không thể mở đúng chat', 'warning');
+            return;
+        }
+        setOpeningChatIndex(index);
+        try {
+            const res = await openDeepseekChunkChat({
+                shortVideoId,
+                chatUrl: ds.chat_url,
+                cookieId,
+            });
+            const warnings = Array.isArray(res?.warnings) ? res.warnings.filter(Boolean) : [];
+            if (res?.success) {
+                const account = ds.cookie_title ? ` (${ds.cookie_title})` : '';
+                showMessage(
+                    `Đã mở chat phần ${index + 1} đúng cookie${account}${warnings.length ? ` — ${warnings.join('; ')}` : ''}`,
+                    warnings.length ? 'warning' : 'success',
+                );
+            } else {
+                showMessage(readApiMessage(res, 'Không mở được chat đúng cookie'), 'error');
+            }
+        } catch (error) {
+            showMessage(error instanceof Error ? error.message : 'Không mở được chat đúng cookie', 'error');
+        } finally {
+            setOpeningChatIndex(-1);
+        }
+    }, [deepseekStatus, shortVideoId, showMessage]);
+
     const runAllDeepseek = React.useCallback(async () => {
         if (deepseekAllRunning || deepseekStarting >= 0) {
             return;
@@ -525,7 +569,15 @@ export default function MarketingWorkflowBreakdown({
                                     sx={{ height: 20, fontSize: 11 }}
                                 />
                                 {ds && (
-                                    <Tooltip title={ds.message || ''} placement="top">
+                                    <Tooltip
+                                        title={[
+                                            ds.message || '',
+                                            ds.cookie_title || ds.cookie_id
+                                                ? `Cookie: ${ds.cookie_title || `#${ds.cookie_id}`}${ds.cookie_title && ds.cookie_id ? ` (#${ds.cookie_id})` : ''}`
+                                                : '',
+                                        ].filter(Boolean).join('\n')}
+                                        placement="top"
+                                    >
                                         <Chip
                                             size="small"
                                             variant="outlined"
@@ -541,16 +593,45 @@ export default function MarketingWorkflowBreakdown({
                                     </Tooltip>
                                 )}
                                 {ds?.chat_url ? (
-                                    <Button
-                                        size="small"
-                                        color="inherit"
-                                        href={ds.chat_url}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        sx={{ textTransform: 'none', minWidth: 0, px: 0.5, fontSize: 11 }}
+                                    <Tooltip title="Mở URL trên browser hiện tại — cần đúng account cookie">
+                                        <Button
+                                            size="small"
+                                            color="inherit"
+                                            href={ds.chat_url}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            sx={{ textTransform: 'none', minWidth: 0, px: 0.5, fontSize: 11 }}
+                                        >
+                                            Chat
+                                        </Button>
+                                    </Tooltip>
+                                ) : null}
+                                {ds?.chat_url ? (
+                                    <Tooltip
+                                        title={
+                                            ds.cookie_id
+                                                ? `Mở đúng chat + cookie ${ds.cookie_title || `#${ds.cookie_id}`} (không cần chọn account)`
+                                                : 'Phần này chưa lưu cookie — chạy lại để lưu URL + cookie'
+                                        }
                                     >
-                                        Chat
-                                    </Button>
+                                        <span>
+                                            <Button
+                                                size="small"
+                                                variant="outlined"
+                                                color={hasError ? 'error' : 'primary'}
+                                                disabled={openingChatIndex >= 0 || !ds.cookie_id}
+                                                startIcon={
+                                                    openingChatIndex === chunk.index
+                                                        ? <CircularProgress size={12} color="inherit" />
+                                                        : <OpenInNewIcon fontSize="small" />
+                                                }
+                                                onClick={() => { void openChunkChat(chunk.index); }}
+                                                sx={{ textTransform: 'none' }}
+                                            >
+                                                Mở chat đúng cookie
+                                            </Button>
+                                        </span>
+                                    </Tooltip>
                                 ) : null}
                                 {(() => {
                                     const copyButton = (

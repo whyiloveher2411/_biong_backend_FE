@@ -2065,6 +2065,7 @@ export const FULL_AUTO_PIPELINE_STEP_ORDER = [
     'beat_refine_html',
     'beat_audio',
     'sfx',
+    'beat_html',
     'bgm',
     'render',
     'whiteboard_mux',
@@ -2093,6 +2094,7 @@ export const FULL_AUTO_PIPELINE_HEADLESS_STEPS = [
     'beat_video_animate',
     'beat_refine_visual',
     'beat_refine_html',
+    'beat_html',
     'render',
     'thumbnail_idea',
     'thumbnail_fill',
@@ -2286,6 +2288,7 @@ export const FULL_AUTO_PIPELINE_STEP_LABELS: Record<FullAutoPipelineStepKey, str
     beat_fill: 'Fill HTML beat',
     beat_image_fill: 'Ảnh beat',
     beat_video_animate: 'Animate ảnh',
+    beat_html: 'HTML beat',
     beat_refine_visual: 'Refine visual',
     beat_refine_html: 'Refine HTML beat',
     bgm: 'BGM',
@@ -2326,7 +2329,7 @@ export const FULL_AUTO_PIPELINE_STEP_GROUPS = [
     {
         key: 'audio',
         label: 'Audio',
-        steps: ['beat_audio', 'sfx'],
+        steps: ['beat_audio', 'sfx', 'beat_html'],
     },
     {
         key: 'audio_background',
