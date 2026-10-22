@@ -1,3 +1,4 @@
+import StoryV2Editor from './StoryV2Editor';
 import React from 'react';
 import {
     Alert,
@@ -150,7 +151,15 @@ function resolveWhisperPipelineState(state: AgentVideoState): { step: PipelineSt
     return { step: 'active', label: 'Chưa chạy' };
 }
 
-export default function ShortVideoAgentScriptPanel({ state }: Props) {
+export default function ShortVideoAgentScriptPanel({state}: Props) {
+    const onStorySaved = React.useCallback(() => {void state.loadRow();}, [state.loadRow]);
+    if (state.workflowActive === 'video-html-2d') {
+        return <Box sx={{height: '100%', overflow: 'auto', p: 2}}><StoryV2Editor shortVideoId={state.shortVideoId} initialScript={state.audioScript} onSaved={onStorySaved} /></Box>;
+    }
+    return <LegacyShortVideoAgentScriptPanel state={state} />;
+}
+
+function LegacyShortVideoAgentScriptPanel({ state }: Props) {
     const fileInputRef = React.useRef<HTMLInputElement | null>(null);
     const scriptFieldRef = React.useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
     const phoneticZoneRef = React.useRef<HTMLDivElement | null>(null);

@@ -1,3 +1,4 @@
+import StoryV2Preview from './StoryV2Preview';
 import React from 'react';
 import AccessTimeOutlinedIcon from '@mui/icons-material/AccessTimeOutlined';
 import ContentCopyOutlinedIcon from '@mui/icons-material/ContentCopyOutlined';
@@ -32,6 +33,7 @@ import ShortVideoAgentBeatVisualPreview from './ShortVideoAgentBeatVisualPreview
 import ShortVideoAgentBeatImagePreview from './ShortVideoAgentBeatImagePreview';
 
 type Props = {
+    storyV2?: boolean;
     open: boolean;
     onClose: () => void;
     beatMap: BeatMap | null;
@@ -122,6 +124,7 @@ function MetadataItem({
 }
 
 export default function ShortVideoAgentBeatInfoDrawer({
+    storyV2 = false,
     open,
     onClose,
     beatMap,
@@ -393,7 +396,7 @@ export default function ShortVideoAgentBeatInfoDrawer({
                         }
                         title="Preview visual"
                     >
-                        {isWhiteboardMode
+                        {storyV2 ? <StoryV2Preview shortVideoId={shortVideoId} beatId={beat.id} revision={beatHtml?.updated_at || ''} /> : isWhiteboardMode
                             && !(beatImage?.media_source === 'html' && String(beatHtml?.html || '').trim()) ? (
                             <ShortVideoAgentBeatImagePreview
                                 beatId={beat.id}

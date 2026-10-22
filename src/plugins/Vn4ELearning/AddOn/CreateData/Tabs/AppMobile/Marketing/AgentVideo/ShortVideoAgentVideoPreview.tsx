@@ -1,3 +1,4 @@
+import StoryV2Preview from './StoryV2Preview';
 import React from 'react';
 import {
     Alert,
@@ -149,7 +150,19 @@ function PortraitPreviewFrame({
     );
 }
 
-export default function ShortVideoAgentVideoPreview({
+export default function ShortVideoAgentVideoPreview(props: Props) {
+    if (props.state.workflowActive === 'video-html-2d') {
+        const finalUrl = props.state.localFinalMp4OpenUrl || props.state.localFinalMp4Url || props.state.agentVideoUrl;
+        return <Box sx={{display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0}}>
+            <Box sx={{display: 'flex', gap: 1, p: 1}}><Button onClick={() => props.onPreviewSourceChange('html_beat')}>Preview hình + audio nhiều người</Button><Button disabled={!finalUrl} onClick={() => props.onPreviewSourceChange('final')}>MP4 đã xuất</Button></Box>
+            {props.previewSource === 'final' && finalUrl ? <Box component="video" controls ref={props.videoRef} src={finalUrl} sx={{width: '100%', maxHeight: '80vh'}} />
+                : <StoryV2Preview shortVideoId={props.state.shortVideoId} beatId={props.currentBeatId || undefined} defaultWhole revision={props.state.audioScript + JSON.stringify(props.state.beatHtml)} />}
+        </Box>;
+    }
+    return <LegacyShortVideoAgentVideoPreview {...props} />;
+}
+
+function LegacyShortVideoAgentVideoPreview({
     state,
     videoRef,
     previewSource,

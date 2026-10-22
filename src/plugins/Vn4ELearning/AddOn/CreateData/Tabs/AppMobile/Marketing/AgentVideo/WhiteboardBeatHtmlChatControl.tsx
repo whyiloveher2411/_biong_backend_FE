@@ -15,6 +15,7 @@ type Props = {
     state: ReturnType<typeof useAgentVideoContent>;
     /** beat_N — beat đang chọn. */
     beatId: string;
+    inline?: boolean;
 };
 
 const compactButtonSx = {
@@ -35,10 +36,15 @@ const compactButtonSx = {
  * Workflow HTML beat: thay cụm nút ảnh beat bằng nút mở lại đúng chat
  * DeepSeek đã tạo HTML motion (URL + cookie lưu trong beat_html[beatId]).
  */
-export default function WhiteboardBeatHtmlChatControl({ state, beatId }: Props) {
+export default function WhiteboardBeatHtmlChatControl({ state, beatId, inline = false }: Props) {
     const chatUrl = String(state.beatHtml[beatId]?.chat_url || '').trim();
     const opening = (state.openingBeatDeepSeekChatBeatIds || []).includes(beatId);
     const [settingsOpen, setSettingsOpen] = React.useState(false);
+
+    if (inline) return <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+        <Button variant="contained" size="small" startIcon={opening ? <CircularProgress size={14} color="inherit" /> : <OpenInNewIcon />} disabled={opening} onClick={() => state.handleOpenBeatDeepSeekChat(beatId, 'new')}>{opening ? 'Đang mở DeepSeek…' : 'Tạo HTML motion bằng DeepSeek'}</Button>
+        {chatUrl ? <Button variant="outlined" size="small" disabled={opening} onClick={() => state.handleOpenBeatDeepSeekSavedChat(beatId)}>Mở lại chat HTML đã lưu</Button> : null}
+    </Stack>;
 
     return (
         <>

@@ -1,3 +1,4 @@
+import {storyV2Request} from './agentVideoApi';
 import React from 'react';
 import useAjax from 'hook/useApi';
 import { useFloatingMessages } from 'hook/useFloatingMessages';
@@ -7340,6 +7341,15 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }
         setGeneratingBeatAudio(markId || 'all');
         try {
+            if (workflowActive === 'video-html-2d') {
+                const beatId = markId.replace(/^mark_/, 'beat_');
+                const res = beatId ? await storyV2Request(shortVideoId, 'generate_beat_audio', undefined, undefined, beatId, force)
+                    : await storyV2Request(shortVideoId, 'generate_audio');
+                showMessage(parseApiMessage(res.message) + (res.errors && Object.keys(res.errors).length ? ' ' + JSON.stringify(res.errors) : ''), res.success ? 'success' : 'error');
+                await loadRow();
+                window.dispatchEvent(new CustomEvent('whatif-audio-updated', {detail: {shortVideoId}}));
+                return;
+            }
             const res = await generateManualBeatAudio(shortVideoId, markId, '', force);
             if (!res?.success) {
                 showMessage(parseApiMessage(res?.message) || 'Không tạo được audio beat', 'error');
@@ -7353,7 +7363,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         } finally {
             setGeneratingBeatAudio(null);
         }
-    }, [generatingBeatAudio, loadRow, shortVideoId, showMessage]);
+    }, [workflowActive, generatingBeatAudio, loadRow, shortVideoId, showMessage]);
 
     const handleGenerateAllBeatAudio = React.useCallback(async () => {
         await handleGenerateBeatAudio('');

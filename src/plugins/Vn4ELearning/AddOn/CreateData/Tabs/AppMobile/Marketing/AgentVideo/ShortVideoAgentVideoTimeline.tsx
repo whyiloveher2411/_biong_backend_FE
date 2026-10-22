@@ -848,8 +848,9 @@ export default function ShortVideoAgentVideoTimeline({
             mediaDurationSec,
             audioDurationSec,
             estimatedDurationSec,
+            beatSections: beatMap?.sections,
         }),
-        [audioDurationSec, estimatedDurationSec, mediaDurationSec],
+        [audioDurationSec, estimatedDurationSec, mediaDurationSec, beatMap],
     );
 
     const timelineWorkspaceEndSec = React.useMemo(

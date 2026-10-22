@@ -11,6 +11,7 @@ import {
     DialogContent,
     DialogTitle,
     IconButton,
+    MenuItem,
     Stack,
     Tab,
     Tabs,
@@ -34,6 +35,7 @@ import useAjax from 'hook/useApi';
 import { writePromptTextToClipboard } from 'helpers/marketingShortVideoAgentPrompt';
 import {
     importManualBeatPromptFile,
+    storyV2Request,
 } from './AgentVideo/agentVideoApi';
 import {
     buildWorkflowBreakdownPlan,
@@ -74,6 +76,12 @@ import {
     importShortVideoResources,
     parseShortVideoResourceApiMessage,
 } from 'helpers/marketingShortVideoResourceApi';
+
+function assertWorkflowSfxPromptContext(file: string, context: WorkflowPromptContext): void {
+    if (file.split('/').pop() !== 'generate-sfx.md') return;
+    const missing = ['PROJECT_INFO', 'FULL_BEATS'].filter((key) => !String(context[key] || '').trim() || String(context[key]).trim() === `[${key}]`);
+    if (missing.length) throw new Error(`Chưa tải được dữ liệu SFX (${missing.join(', ')}). Kiểm tra kịch bản đã lưu và thử lại; chưa mở DeepSeek để tránh gửi prompt thiếu dữ liệu.`);
+}
 
 /** 1 mục cấu hình (Kênh / Phong cách script / Phong cách hình ảnh) — luôn hiện kèm nút "Cấu hình". */
 export type WorkflowConfigItem = {
@@ -422,6 +430,7 @@ export default function MarketingWorkflowDrawer({
         };
     }, []);
 
+    const latestStoryScriptRef = React.useRef<{id: number; script: string} | null>(null);
     const workflowOutputs = (workflow && outputs[workflow.key]) || {};
 
     /** Giá trị biến inputPrompt đã lưu: {name: value}. */
@@ -442,6 +451,8 @@ export default function MarketingWorkflowDrawer({
 
     const [draftInputs, setDraftInputs] = React.useState<Record<string, string>>({});
     const [savingInputs, setSavingInputs] = React.useState(false);
+    const inputSavePromiseRef = React.useRef<Promise<boolean> | null>(null);
+    React.useEffect(() => { inputSavePromiseRef.current = null; }, [workflow?.key, shortVideoId]);
     const storedInputsJson = workflowOutputs[WORKFLOW_INPUT_PROMPT_KEY] || '';
 
     // Nạp giá trị input vào draft khi đổi tab workflow hoặc khi giá trị đã lưu thay đổi.
@@ -484,6 +495,29 @@ export default function MarketingWorkflowDrawer({
         }
         api.showMessage('Đã lưu biến — copy prompt sẽ thay đúng giá trị', 'success');
     }, [workflow, savingInputs, shortVideoId, draftInputs, api]);
+
+    const handleDurationChange = (name: string, value: string) => {
+        if (!workflow || savingInputs || deepseekAction) return;
+        const next = {...draftInputs, [name]: value};
+        setDraftInputs(next);
+        const sid = Number(shortVideoId || 0);
+        if (!sid) { api.showMessage('Thiếu video — chưa lưu được thời lượng', 'error'); return; }
+        const key = workflow.key;
+        setSavingInputs(true);
+        inputSavePromiseRef.current = (async () => {
+            try {
+                const result = await saveWorkflowOutput(sid, key, WORKFLOW_INPUT_PROMPT_KEY, JSON.stringify(next));
+                if (!result.ok) throw new Error(result.message || 'Không lưu được thời lượng');
+                setOutputs((prev) => ({...prev, [key]: {...(prev[key] || {}), [WORKFLOW_INPUT_PROMPT_KEY]: JSON.stringify(next)}}));
+                api.showMessage('Đã lưu thời lượng video', 'success');
+                return true;
+            } catch (error) {
+                api.showMessage(error instanceof Error ? error.message : 'Không lưu được thời lượng', 'error');
+                setDraftInputs(inputValues);
+                return false;
+            } finally { setSavingInputs(false); }
+        })();
+    };
 
     /** Lựa chọn nhóm prompt đã lưu: {choiceName: label} — từ workflow outputs. */
     const storedChoicesJson = workflowOutputs[WORKFLOW_PROMPT_CHOICE_KEY] || '';
@@ -556,7 +590,8 @@ export default function MarketingWorkflowDrawer({
         sfxContextOverride?: Record<string, string>,
     ): WorkflowPromptContext => {
         const currentBucket = (workflow && allOutputs[workflow.key]) || {};
-        const audioScriptText = String(audioScript || '');
+        const audioScriptText = workflow?.key === 'video-html-2d' && latestStoryScriptRef.current?.id === Number(shortVideoId)
+            ? latestStoryScriptRef.current.script : String(audioScript || '');
         // Bản có cấu trúc "BEAT 01: ..." để prompt biết chính xác ranh giới beat
         // (beat nhiều dòng không bị chatbot chia lại theo newline).
         const audioBeats = splitWorkflowBeats(audioScriptText);
@@ -625,7 +660,7 @@ export default function MarketingWorkflowDrawer({
                 ? { 'PASTE CHARACTER SHEET DESCRIPTION HERE': characterSheet }
                 : {}),
         };
-    }, [workflow, workflow?.steps, draftInputs, inputValues, promptContext, audioScript, sfxContext]);
+    }, [workflow, workflow?.steps, shortVideoId, draftInputs, inputValues, promptContext, audioScript, sfxContext]);
 
     const mergedPromptContext = React.useMemo<WorkflowPromptContext>(
         () => buildBaseContext(outputs),
@@ -802,18 +837,23 @@ export default function MarketingWorkflowDrawer({
         } catch {
             // Lỗi mạng → dùng bản state hiện tại.
         }
+        if (workflow?.key === 'video-html-2d') {
+            const current = await storyV2Request(sid, 'get');
+            if (!current.success) throw new Error('Không tải được kịch bản mới nhất từ CMS');
+            latestStoryScriptRef.current = {id: sid, script: current.story_v2 ? JSON.stringify(current.story_v2, null, 2) : ''};
+        }
         let nextSfxContext = sfxContext;
         try {
             const freshSfx = await fetchSfxPromptContext(sid);
             if (freshSfx && Object.keys(freshSfx).length > 0) {
                 nextSfxContext = freshSfx;
                 setSfxContext(freshSfx);
-            }
+            } else { nextSfxContext = {}; setSfxContext({}); }
         } catch {
-            // Lỗi mạng → dùng bản state hiện tại.
+            nextSfxContext = {}; setSfxContext({});
         }
         return { outputs: nextOutputs, sfxContext: nextSfxContext };
-    }, [shortVideoId, outputs, sfxContext]);
+    }, [shortVideoId, workflow?.key, outputs, sfxContext]);
 
     /**
      * Context tươi cho 1 phần breakdown (mirror buildWorkflowBreakdownPlan): base mới nhất +
@@ -855,13 +895,11 @@ export default function MarketingWorkflowDrawer({
             // Tải lại outputs trước khi copy — character sheet / audio gốc có thể vừa
             // được lưu từ overlay DeepSeek sau lần tải trước của drawer.
             const fresh = await refreshWorkflowOutputs();
-            result = await copyWorkflowPromptToClipboard(
-                workflow.key,
-                file,
-                buildBaseContext(fresh.outputs, fresh.sfxContext),
-            );
-        } catch {
-            result = { ok: false, message: 'Không copy được prompt' };
+            const context = buildBaseContext(fresh.outputs, fresh.sfxContext);
+            assertWorkflowSfxPromptContext(file, context);
+            result = await copyWorkflowPromptToClipboard(workflow.key, file, context);
+        } catch (error) {
+            result = { ok: false, message: error instanceof Error ? error.message : 'Không copy được prompt' };
         }
         setCopyingStep('');
         if (result.ok) {
@@ -905,10 +943,10 @@ export default function MarketingWorkflowDrawer({
             .flatMap((step, index) => {
                 const keys: string[] = [];
                 if (step.prompts.some((p) => Boolean(p.deepseekSession))) {
-                    keys.push(`${workflow.key}#${index}`);
+                    keys.push(`${workflow.key}#${workflow.key === 'video-html-2d' ? 'handoff-v2-' : ''}${index}`);
                 }
                 if (ENABLE_CHATGPT_SESSION && step.prompts.some((p) => Boolean(p.chatgptSession))) {
-                    keys.push(`${workflow.key}#${index}::chatgpt`);
+                    keys.push(`${workflow.key}#${workflow.key === 'video-html-2d' ? 'handoff-v2-' : ''}${index}::chatgpt`);
                 }
                 return keys;
             });
@@ -998,7 +1036,7 @@ export default function MarketingWorkflowDrawer({
         if (!previous) {
             return;
         }
-        void refreshWorkflowOutputs();
+        void refreshWorkflowOutputs().catch(() => {});
         // Báo useAgentVideoContent nạp lại audio_script (breakdown cần audio script theo beat).
         document.dispatchEvent(new CustomEvent(AGENT_AUDIO_SCRIPT_SAVED_EVENT, {
             detail: { shortVideoId: Number(shortVideoId) },
@@ -1029,6 +1067,13 @@ export default function MarketingWorkflowDrawer({
         if (!workflow || deepseekAction) {
             return;
         }
+        if (!resume && workflow.key === 'video-html-2d') {
+            if (inputSavePromiseRef.current && !(await inputSavePromiseRef.current)) return;
+            if (!(draftInputs['VIDEO-DURATION-SEC'] || inputValues['VIDEO-DURATION-SEC'])) {
+                api.showMessage('Hãy chọn thời lượng video trước khi mở ' + providerLabel, 'warning');
+                return;
+            }
+        }
         if (configBlocked) {
             api.showMessage(
                 `Cần cấu hình ${unconfiguredConfigs.map((item) => item.label).join(', ')} trước khi mở ${providerLabel}`,
@@ -1053,6 +1098,15 @@ export default function MarketingWorkflowDrawer({
         try {
             const fresh = await refreshWorkflowOutputs();
             const freshContext = buildBaseContext(fresh.outputs, fresh.sfxContext);
+            if (!resume && workflow.key === 'video-html-2d' && ['create-whatif-story.md', 'update-whatif-story.md'].includes(prompts.generate || '')) {
+                if (!String(freshContext['WHATIF-TOPIC'] || '').trim()) {
+                    throw new Error('Chưa lưu chủ đề. Ở browser Bước 1, dán bản chủ đề đã chốt vào ô Chủ đề What-if đã chọn rồi bấm Lưu chủ đề đã chọn.');
+                }
+                if (prompts.generate === 'update-whatif-story.md' && !String(freshContext[WORKFLOW_AUDIO_SCRIPT_KEY] || '').trim()) {
+                    throw new Error('Chưa lưu kịch bản. Hoàn thành và lưu JSON ở Bước 2 trước.');
+                }
+            }
+            [prompts.generate, prompts.beat, prompts.translate].forEach((file) => { if (file) assertWorkflowSfxPromptContext(file, freshContext); });
             const load = (file?: string) => (
                 file
                     ? fetchWorkflowPromptText(workflow.key, file, freshContext)
@@ -1100,7 +1154,7 @@ export default function MarketingWorkflowDrawer({
         } finally {
             setDeepseekAction('');
         }
-    }, [workflow, deepseekAction, shortVideoId, configBlocked, unconfiguredConfigs, refreshWorkflowOutputs, buildBaseContext, api, patchDeepseekState]);
+    }, [workflow, deepseekAction, shortVideoId, draftInputs, inputValues, configBlocked, unconfiguredConfigs, refreshWorkflowOutputs, buildBaseContext, api, patchDeepseekState]);
 
     const openUpdateDialog = React.useCallback((
         itemKey: string,
@@ -1581,23 +1635,30 @@ export default function MarketingWorkflowDrawer({
                                                     {step.inputPrompt.map((def) => (
                                                         <TextField
                                                             key={def.name}
+                                                            select={def.type === 'duration'}
+                                                            disabled={def.type === 'duration' && (savingInputs || Boolean(deepseekAction))}
                                                             label={def.description || def.name}
                                                             placeholder={def.default}
                                                             size="small"
                                                             fullWidth
                                                             value={draftInputs[def.name] ?? inputValues[def.name] ?? def.default}
-                                                            onChange={(event) => setDraftInputs((prev) => ({
-                                                                ...prev,
-                                                                [def.name]: event.target.value,
-                                                            }))}
+                                                            onChange={(event) => def.type === 'duration'
+                                                                ? handleDurationChange(def.name, event.target.value)
+                                                                : setDraftInputs((prev) => ({...prev, [def.name]: event.target.value}))}
+                                                            helperText={def.type === 'duration' ? (savingInputs ? 'Đang tự lưu…' : 'Tự lưu khi chọn. Sau đó mở DeepSeek để tìm chủ đề.') : undefined}
                                                             InputProps={{
                                                                 sx: { fontSize: 13 },
                                                             }}
                                                             sx={{ '& .MuiInputLabel-root': { fontSize: 12 } }}
-                                                        />
+                                                        >
+                                                            {def.type === 'duration' ? [
+                                                                <MenuItem key="empty" value="" disabled>Chọn thời lượng</MenuItem>,
+                                                                ...[10, 15, 30, 60, 90, 120, 180, 300, 600, 900, 1200, 1800, 2700, 3600].map((seconds) => <MenuItem key={seconds} value={String(seconds)}>{seconds < 60 ? `${seconds} giây` : `${seconds / 60} phút`}</MenuItem>),
+                                                            ] : undefined}
+                                                        </TextField>
                                                     ))}
                                                 </Box>
-                                                <Box sx={{ mt: 1, display: 'flex', justifyContent: 'flex-end' }}>
+                                                {step.inputPrompt.some((def) => def.type !== 'duration') ? <Box sx={{ mt: 1, display: 'flex', justifyContent: 'flex-end' }}>
                                                     <Button
                                                         size="small"
                                                         variant="contained"
@@ -1612,7 +1673,7 @@ export default function MarketingWorkflowDrawer({
                                                     >
                                                         Lưu biến
                                                     </Button>
-                                                </Box>
+                                                </Box> : null}
                                             </Box>
                                         )}
 
@@ -1862,7 +1923,7 @@ export default function MarketingWorkflowDrawer({
                                         {chatSessionProviders.map(({ provider, label, keySuffix, prompts: providerPrompts }) => {
                                             // Khớp ĐÚNG vai trò — không fallback sang prompt khác
                                             // (tránh gửi nhầm prompt beat/translate thành generate).
-                                            const sessionKey = `${workflow.key}#${index}${keySuffix}`;
+                                            const sessionKey = `${workflow.key}#${workflow.key === 'video-html-2d' ? 'handoff-v2-' : ''}${index}${keySuffix}`;
                                             const dsState = deepseekStates[sessionKey] || EMPTY_DEEPSEEK_STATE;
                                             const findPrompt = (role: '' | 'generate' | 'beat' | 'translate') => (
                                                 providerPrompts.find((p) => (

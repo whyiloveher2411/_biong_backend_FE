@@ -1,3 +1,5 @@
+import StoryV2BeatToolbar from './StoryV2BeatToolbar';
+import StoryV2Preview from './StoryV2Preview';
 import React from 'react';
 import { keyframes } from '@emotion/react';
 import {
@@ -4544,10 +4546,11 @@ export default function ShortVideoAgentBeatRegionEditor({
                         display: 'flex',
                         flexDirection: 'column',
                         minHeight: 0,
-                        overflow: 'hidden',
+                        overflow: state.workflowActive === 'video-html-2d' ? 'auto' : 'hidden',
                     }}
                 >
-                    {imageLayers.length > 0 ? (
+                    {state.workflowActive === 'video-html-2d' ? <StoryV2BeatToolbar state={state} beatId={beatId} /> : null}
+                    {state.workflowActive !== 'video-html-2d' && imageLayers.length > 0 ? (
                         <WhiteboardBeatImageLayerTabs
                             layers={imageLayers}
                             activeLayerId={activeLayerId}
@@ -4564,8 +4567,9 @@ export default function ShortVideoAgentBeatRegionEditor({
                         ref={measureBoxRef}
                         onMouseDown={handleCanvasBackgroundMouseDown}
                         sx={{
-                            flex: '1 1 0',
-                            minHeight: 320,
+                            flex: state.workflowActive === 'video-html-2d' ? '0 0 auto' : '1 1 0',
+                            height: state.workflowActive === 'video-html-2d' ? 'clamp(240px, 38vh, 480px)' : undefined,
+                            minHeight: state.workflowActive === 'video-html-2d' ? 240 : 320,
                             width: '100%',
                             position: 'relative',
                             borderRadius: 2,
@@ -5832,12 +5836,12 @@ export default function ShortVideoAgentBeatRegionEditor({
                                     Tạo group ({groupableSelectionCount})
                                 </Button>
                             ) : null}
-                            {state.isHtmlBeatWorkflow ? (
+                            {state.workflowActive === 'video-html-2d' ? null : state.isHtmlBeatWorkflow ? (
                                 <WhiteboardBeatHtmlChatControl state={state} beatId={beatId} />
                             ) : (
                                 <WhiteboardBeatImageControl state={state} beatId={beatId} />
                             )}
-                            {state.agentBeatAudio ? (
+                            {state.agentBeatAudio && state.workflowActive !== 'video-html-2d' ? (
                                 <WhiteboardBeatAudioControl state={state} beatId={beatId} />
                             ) : null}
                         <Stack
@@ -5911,7 +5915,7 @@ export default function ShortVideoAgentBeatRegionEditor({
                     </Box>
 
                     {/* Thanh thời gian render theo vùng (audio bar) — dưới box ảnh */}
-                    <WhiteboardRegionTimeline
+                    {state.workflowActive === 'video-html-2d' ? <StoryV2Preview shortVideoId={shortVideoId} beatId={beatId} audioOnly revision={state.audioScript + JSON.stringify(state.beatHtml[beatId])} onTime={(sec, playing) => {setPreviewTimeSource('internal'); setPlayheadSec(sec); playheadRef.current = {sec, playing}; videoPreviewRef.current?.seekTo(sec, playing);}} /> : <WhiteboardRegionTimeline
                         regions={displayRegions}
                         beatDurationSec={beatAudioPlayback
                             ? beatAudioPlayback.durationSec
@@ -5996,7 +6000,7 @@ export default function ShortVideoAgentBeatRegionEditor({
                         onManualBeatAdjConfirm={handleAdjConfirm}
                         onManualBeatAdjClose={handleAdjClose}
                         onManualBeatAdjSeekActive={handleAdjSeekActive}
-                    />
+                    />}
 
                     {/* Dialog tạo group */}
                     <Dialog

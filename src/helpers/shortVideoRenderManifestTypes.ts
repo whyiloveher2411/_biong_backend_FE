@@ -222,6 +222,7 @@ export type ShortVideoSceneAudioTtsSettings =
     | ShortVideoVbeeAudioTtsSettings;
 
 export type ShortVideoManifestScene = {
+    suppress_legacy_text?: boolean;
     id: string;
     voiceover: string;
     on_screen_text: string;
@@ -294,7 +295,16 @@ export type ShortVideoVoiceConfig = {
     voice_vbee?: string;
 };
 
+export type ShortVideoManifestSpeechClip = {
+    id: string; speaker_id: string; kind: 'narration' | 'dialogue' | 'sfx' | 'bgm';
+    audio_url: string; start_sec: number; duration_sec: number;
+    audio_volume?: number; timeline_hidden?: boolean; loop?: boolean;
+};
+
 export type ShortVideoRenderManifest = {
+    story_schema?: string;
+    speech_clips?: ShortVideoManifestSpeechClip[];
+    sound_clips?: ShortVideoManifestSpeechClip[];
     schema_version: string;
     width: number;
     height: number;

@@ -157,17 +157,24 @@ export function resolveAgentVideoDurationSec(input: {
     mediaDurationSec: number | null;
     audioDurationSec?: number | null;
     estimatedDurationSec?: number | null;
+    beatSections?: {startSec?: number; endSec?: number; durationSec?: number}[];
 }): number {
+    // Beat overlays must remain reachable beyond any partial media duration.
+    const beatEnd = (input.beatSections || []).reduce((end, beat) => {
+        const explicitEnd = Number(beat.endSec);
+        const derivedEnd = Number(beat.startSec || 0) + Number(beat.durationSec || 0);
+        return Math.max(end, Number.isFinite(explicitEnd) ? explicitEnd : 0, Number.isFinite(derivedEnd) ? derivedEnd : 0);
+    }, 0);
     if (input.mediaDurationSec != null && Number.isFinite(input.mediaDurationSec) && input.mediaDurationSec > 0) {
-        return input.mediaDurationSec;
+        return Math.max(beatEnd, input.mediaDurationSec);
     }
     const audio = Number(input.audioDurationSec || 0);
     if (Number.isFinite(audio) && audio > 0) {
-        return audio;
+        return Math.max(beatEnd, audio);
     }
     const estimated = Number(input.estimatedDurationSec || 0);
     if (Number.isFinite(estimated) && estimated > 0) {
-        return estimated;
+        return Math.max(beatEnd, estimated);
     }
-    return 1;
+    return Math.max(1, beatEnd);
 }

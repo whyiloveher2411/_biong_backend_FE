@@ -1252,6 +1252,7 @@ export default function ShortVideoAgentVideoWorkspace({
                 savingVideo2sPrompt={state.savingVideo2sBeatPrompt}
             />
             <ShortVideoAgentBeatInfoDrawer
+                storyV2={state.workflowActive === 'video-html-2d'}
                 open={Boolean(infoBeatId && infoBeatSection)}
                 onClose={handleCloseBeatInfo}
                 beatMap={beatMapReadyForUi ? beatMapForUi : null}

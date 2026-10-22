@@ -5609,3 +5609,15 @@ export async function fetchImportHtmlContext(shortVideoId: number) {
     );
     return response.json();
 }
+
+export async function storyV2Request(shortVideoId: number, operation: 'get' | 'save' | 'generate_audio' | 'render' | 'preview' | 'generate_beat_audio', story?: import('./storyV2').StoryV2, utteranceId?: string, beatId?: string, force = false): Promise<JsonResponse & {
+    manifest?: import('helpers/shortVideoRenderManifest').ShortVideoRenderManifest;
+    errors?: Record<string, unknown>;
+    video_url?: string;
+    story_v2?: import('./storyV2').StoryV2;
+    story_timeline?: {duration_sec: number; pending_utterances: string[]; speech_clips: {id: string; speaker_id: string; audio_url: string; text: string}[]};
+}> {
+    return postJson('plugin/vn4-e-learning/app-mobile/marketing/short-video/story-v2', shortVideoBody(shortVideoId, {
+        operation, ...(story ? {story} : {}), ...(utteranceId ? {utterance_id: utteranceId, force: true} : {}), ...(beatId ? {beat_id: beatId, force} : {}),
+    }));
+}

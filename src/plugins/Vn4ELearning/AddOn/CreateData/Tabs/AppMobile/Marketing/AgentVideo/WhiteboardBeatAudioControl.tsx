@@ -24,7 +24,14 @@ type Props = {
  * provider đang setting, mặc định Saydi) + Upload MP3 thủ công. Audio full
  * được ghép TỰ ĐỘNG khi render.
  */
-export default function WhiteboardBeatAudioControl({ state, beatId }: Props) {
+export default function WhiteboardBeatAudioControl({state, beatId}: Props) {
+    if (state.workflowActive === 'video-html-2d') return <Stack direction="row" spacing={1} alignItems="center" sx={{bgcolor: 'background.paper', p: 1}}>
+        <Typography variant="caption">Lời dẫn + thoại theo giọng từng người</Typography>
+        <Button disabled={Boolean(state.generatingBeatAudio)} size="small" variant="contained" onClick={() => {void state.handleGenerateBeatAudio(beatId);}}>{state.generatingBeatAudio === beatId ? 'Đang tạo các câu…' : 'Tạo audio beat'}</Button>
+    </Stack>;
+    return <LegacyBeatAudioControl state={state} beatId={beatId} />;
+}
+function LegacyBeatAudioControl({ state, beatId }: Props) {
     const inputRef = React.useRef<HTMLInputElement>(null);
     const order = Number(String(beatId).replace(/\D+/g, '')) || 0;
     const item = (state.beatAudio?.items ?? []).find((it) => it.order === order);
