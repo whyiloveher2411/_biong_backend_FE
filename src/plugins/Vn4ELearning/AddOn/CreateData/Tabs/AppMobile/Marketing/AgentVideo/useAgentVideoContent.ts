@@ -57,6 +57,7 @@ import {
     saveAgentImportHtml,
     openDeepseekHtmlBeatSession,
     fetchDeepseekHtmlBeatSessionStatus,
+    fetchAgentImportHtmlBeatUpdate,
     bulkDeleteBeatAssets,
     type BulkDeleteBeatAssetsTarget,
     saveAgentOmnivoiceVoice,
@@ -976,6 +977,14 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [beatMapJsonDraft, setBeatMapJsonDraft] = React.useState('');
     const [beatHtml, setBeatHtml] = React.useState<Record<string, BeatHtmlEntry>>({});
     const [beatImage, setBeatImage] = React.useState<Record<string, BeatImageEntry>>({});
+    // Mirror state để poll DeepSeek đọc known values mà không restart interval.
+    const beatHtmlRef = React.useRef<Record<string, BeatHtmlEntry>>({});
+    const beatImageRef = React.useRef<Record<string, BeatImageEntry>>({});
+    const deepseekWatchStartedAtRef = React.useRef<Record<string, number>>({});
+    const deepseekPollInFlightRef = React.useRef<Record<string, boolean>>({});
+    const showMessageRef = React.useRef(showMessage);
+    showMessageRef.current = showMessage;
+    const [deepseekWatchBeatIds, setDeepseekWatchBeatIds] = React.useState<string[]>([]);
     const [beatVersions, setBeatVersions] = React.useState<BeatVersionsByBeatId>({});
     const [beatActiveVersionId, setBeatActiveVersionId] = React.useState<Record<string, string>>({});
     const beatVersionsRef = React.useRef<BeatVersionsByBeatId>({});
@@ -987,6 +996,97 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [beatsHtmlCompleted, setBeatsHtmlCompleted] = React.useState(0);
     const [beatsImageTotal, setBeatsImageTotal] = React.useState(0);
     const [beatsImageCompleted, setBeatsImageCompleted] = React.useState(0);
+
+    React.useEffect(() => {
+        beatHtmlRef.current = beatHtml;
+    }, [beatHtml]);
+    React.useEffect(() => {
+        beatImageRef.current = beatImage;
+    }, [beatImage]);
+    // Đếm lại beat có HTML từ state — poll DeepSeek/auto-save cập nhật đúng số đã xong.
+    React.useEffect(() => {
+        setBeatsHtmlCompleted(Object.values(beatHtml).filter(
+            (entry) => String(entry?.html || '').trim() !== '',
+        ).length);
+    }, [beatHtml]);
+
+    /**
+     * Poll nhẹ các beat vừa mở DeepSeek: overlay trong browser lưu HTML qua CLI
+     * → CMS đang mở tự cập nhật beat_html/beat_image, không cần F5.
+     */
+    React.useEffect(() => {
+        if (shortVideoId <= 0 || deepseekWatchBeatIds.length === 0) {
+            return undefined;
+        }
+        let cancelled = false;
+        // Phiên DeepSeek tối đa 60 phút — poll dư 5 phút.
+        const maxWatchMs = 65 * 60 * 1000;
+
+        const pollBeat = async (beatId: string) => {
+            if (cancelled || deepseekPollInFlightRef.current[beatId]) {
+                return;
+            }
+            const startedAt = Number(deepseekWatchStartedAtRef.current[beatId] || 0);
+            if (startedAt > 0 && Date.now() - startedAt > maxWatchMs) {
+                delete deepseekWatchStartedAtRef.current[beatId];
+                setDeepseekWatchBeatIds((prev) => prev.filter((id) => id !== beatId));
+                return;
+            }
+
+            const htmlEntry = beatHtmlRef.current[beatId];
+            const imageEntry = beatImageRef.current[beatId];
+            deepseekPollInFlightRef.current[beatId] = true;
+            try {
+                const res = await fetchAgentImportHtmlBeatUpdate(shortVideoId, beatId, {
+                    updatedAt: String(htmlEntry?.updated_at || ''),
+                    htmlLength: String(htmlEntry?.html || '').length,
+                    chatUrl: String(htmlEntry?.chat_url || ''),
+                    mediaSource: String(imageEntry?.media_source || ''),
+                });
+                if (cancelled || !res?.success || !res.changed) {
+                    return;
+                }
+
+                const parsedHtml = parseBeatHtmlEntry(res.beat_html);
+                if (parsedHtml) {
+                    // Functional update — không ghi đè state mới hơn của beat khác.
+                    setBeatHtml((prev) => ({ ...prev, [beatId]: parsedHtml }));
+                }
+                const parsedImage = parseBeatImageEntry(res.beat_image);
+                if (parsedImage) {
+                    setBeatImage((prev) => ({ ...prev, [beatId]: parsedImage }));
+                }
+            } catch {
+                // Poll nền — lỗi mạng tạm thời bỏ qua.
+            } finally {
+                delete deepseekPollInFlightRef.current[beatId];
+            }
+        };
+
+        const pollAll = () => {
+            // Tab đang ẩn (user đang ở cửa sổ DeepSeek) → không poll; quay lại tab sẽ poll ngay.
+            if (document.visibilityState === 'hidden') {
+                return;
+            }
+            deepseekWatchBeatIds.forEach((beatId) => {
+                void pollBeat(beatId);
+            });
+        };
+        pollAll();
+        const interval = window.setInterval(pollAll, 3000);
+        const onVisibility = () => {
+            if (document.visibilityState === 'visible') {
+                pollAll();
+            }
+        };
+        document.addEventListener('visibilitychange', onVisibility);
+
+        return () => {
+            cancelled = true;
+            window.clearInterval(interval);
+            document.removeEventListener('visibilitychange', onVisibility);
+        };
+    }, [deepseekWatchBeatIds, shortVideoId]);
     const [geminiImageFillStatus, setGeminiImageFillStatus] = React.useState('none');
     // Job fix tỉ lệ ảnh beat đang active — poll 5s (badge UI: hình đang chạy / chờ chạy).
     const [beatAspectFixStatuses, setBeatAspectFixStatuses] = React.useState<
@@ -5943,6 +6043,15 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         })();
     };
 
+    const startDeepseekWatch = (beatId: string) => {
+        const id = String(beatId || '').trim();
+        if (!id) {
+            return;
+        }
+        deepseekWatchStartedAtRef.current[id] = Date.now();
+        setDeepseekWatchBeatIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+    };
+
     const handleOpenBeatDeepSeekChat = (
         beatId: string,
         mode: 'new' | 'reopen' = 'new',
@@ -5965,6 +6074,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                     );
                     return;
                 }
+                startDeepseekWatch(id);
                 focusBeatEditor(id);
                 showMessage(
                     mode === 'reopen'

@@ -3248,6 +3248,40 @@ export async function fetchDeepseekHtmlBeatSessionStatus(
     ) as Promise<DeepseekHtmlBeatSessionResponse>;
 }
 
+export type AgentImportHtmlBeatUpdateResponse = JsonResponse & {
+    changed?: boolean;
+    beat_html?: unknown;
+    beat_image?: unknown;
+    updated_at?: string;
+    html_length?: number;
+    chat_url?: string;
+    cookie_id?: number;
+    media_source?: string;
+};
+
+/** Poll nhẹ 1 beat — trả full entry khi HTML/chat_url/media_source đổi. */
+export async function fetchAgentImportHtmlBeatUpdate(
+    shortVideoId: number,
+    beatId: string,
+    known: {
+        updatedAt?: string;
+        htmlLength?: number;
+        chatUrl?: string;
+        mediaSource?: string;
+    } = {},
+): Promise<AgentImportHtmlBeatUpdateResponse> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/get-agent-import-html-beat-update',
+        shortVideoBody(shortVideoId, {
+            beat_id: beatId,
+            known_updated_at: known.updatedAt ?? '',
+            known_html_length: known.htmlLength ?? -1,
+            known_chat_url: known.chatUrl ?? '',
+            known_media_source: known.mediaSource ?? '',
+        }),
+    ) as Promise<AgentImportHtmlBeatUpdateResponse>;
+}
+
 export type AgentImageTextLang = 'vi' | 'en';
 
 export function normalizeAgentImageTextLang(raw: unknown): AgentImageTextLang {
