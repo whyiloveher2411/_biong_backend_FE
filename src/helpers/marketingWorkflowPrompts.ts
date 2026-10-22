@@ -115,6 +115,8 @@ export const WORKFLOW_INPUT_PROMPT_KEY = '__input-prompt';
 export const WORKFLOW_PROMPT_CHOICE_KEY = '__prompt-choice';
 
 export type WorkflowDefinition = {
+    /** undefined = no file; even an empty workflow file takes precedence over DB. */
+    workflowImageStylePrompt?: string;
     key: string;
     title: string;
     background: string;
@@ -265,6 +267,7 @@ function normalizeWorkflow(raw: ANY): WorkflowDefinition | null {
         key,
         title: String(raw?.title || '').trim() || key,
         background: /^#[0-9a-fA-F]{3,8}$/.test(backgroundRaw) ? backgroundRaw : '',
+        workflowImageStylePrompt: raw?.has_workflow_image_style === true ? String(raw?.image_style_prompt ?? '') : undefined,
         documentFile: String(raw?.document_file || '').trim(),
         documentFilePath: String(raw?.document_file_path || '').trim(),
         documentFileExists: raw?.document_file_exists === true,

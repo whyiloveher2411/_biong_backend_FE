@@ -28,3 +28,15 @@ yarn-error.log*
 !storage/
 !storage/**/
 !storage/**/.gitkeep
+
+# Local video previews, references and production artifacts
+/outputs/
+/renders/
+/snapshots/
+/frames/
+/*.mp4
+/*.webm
+/*.mov
+.media/
+.hyperframes/cache/
+.hyperframes/render-cache/

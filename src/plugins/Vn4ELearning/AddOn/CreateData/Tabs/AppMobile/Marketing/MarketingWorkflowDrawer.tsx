@@ -258,10 +258,15 @@ export default function MarketingWorkflowDrawer({
     onConfigureConfig,
 }: Props) {
     const api = useAjax();
+    const effectiveConfigItems = React.useMemo(() => configItems.map((item) => (
+        item.key === 'image-style' && workflow?.workflowImageStylePrompt !== undefined
+            ? { ...item, configured: Boolean(workflow.workflowImageStylePrompt.trim()) }
+            : item
+    )), [configItems, workflow?.workflowImageStylePrompt]);
     /** Các mục còn thiếu — dùng để chặn mở phiên DeepSeek/ChatGPT. */
     const unconfiguredConfigs = React.useMemo(
-        () => configItems.filter((item) => !item.configured),
-        [configItems],
+        () => effectiveConfigItems.filter((item) => !item.configured),
+        [effectiveConfigItems],
     );
     const configBlocked = unconfiguredConfigs.length > 0;
     const [copyingStep, setCopyingStep] = React.useState('');
@@ -647,6 +652,10 @@ export default function MarketingWorkflowDrawer({
             ...currentBucket,
             ...variableValues,
             ...(promptContext || {}),
+            ...(workflow?.workflowImageStylePrompt !== undefined ? {
+                'IMAGE-STYLE': workflow.workflowImageStylePrompt,
+                STYLE_REFERENCE: workflow.workflowImageStylePrompt,
+            } : {}),
             ...(audioScriptText.trim()
                 ? { [WORKFLOW_AUDIO_SCRIPT_KEY]: audioScriptText }
                 : {}),
@@ -1434,7 +1443,7 @@ export default function MarketingWorkflowDrawer({
                         </Box>
                     ) : null}
 
-                    {configItems.map((item) => (
+                    {effectiveConfigItems.map((item) => (
                         <Alert
                             key={item.key}
                             severity={item.configured ? 'success' : item.severity}
