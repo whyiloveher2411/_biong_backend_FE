@@ -4,7 +4,7 @@ export type SceneAsset = {
     id: string; kind: 'character' | 'environment'; name: string; spec: string;
     spec_hash: string; has_html?: boolean; html?: string; ready?: boolean; module_hash?: string;
     chat_url?: string;
-    generation?: {status: 'queued' | 'processing' | 'completed' | 'failed' | 'superseded'; job_id?: number; error?: string; continue_clicks?: number; phase?: string; repair_attempt?: number; preview_checked?: boolean};
+    generation?: {status: 'queued' | 'processing' | 'completed' | 'failed' | 'superseded' | 'cancelled'; job_id?: number; error?: string; continue_clicks?: number; phase?: string; repair_attempt?: number; preview_checked?: boolean};
 };
 export type SceneAssetBeat = {
     id: string; environment_id: string; character_ids: string[]; continuity: string;

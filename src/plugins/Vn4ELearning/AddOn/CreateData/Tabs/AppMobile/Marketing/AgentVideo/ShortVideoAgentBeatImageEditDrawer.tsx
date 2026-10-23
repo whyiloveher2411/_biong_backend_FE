@@ -1,3 +1,4 @@
+import SceneAssetBeatSummary from './SceneAssetBeatSummary';
 import React from 'react';
 import ImageOutlinedIcon from '@mui/icons-material/ImageOutlined';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
@@ -28,6 +29,7 @@ import { validateBeatImagePrompt } from './agentVideoBeatMap';
 import ShortVideoAgentBeatImagePreview from './ShortVideoAgentBeatImagePreview';
 
 type Props = {
+    sceneAssetsVideoId?: number;
     open: boolean;
     onClose: () => void;
     beatId: string;
@@ -64,6 +66,7 @@ type Props = {
 };
 
 export default function ShortVideoAgentBeatImageEditDrawer({
+    sceneAssetsVideoId = 0,
     open,
     onClose,
     beatId,
@@ -358,6 +361,7 @@ export default function ShortVideoAgentBeatImageEditDrawer({
             )}
         >
             <Stack spacing={1.5} sx={{ height: '100%', minHeight: 0 }}>
+                {open && sceneAssetsVideoId > 0 && <SceneAssetBeatSummary shortVideoId={sceneAssetsVideoId} beatId={beatId}/>}
                 <Alert severity="info" sx={{ py: 0.5, flexShrink: 0 }}>
                     Chỉnh image_prompt → mở Duck.ai hoặc Meta.ai → download ảnh → tự lưu vào beat hiện tại.
                 </Alert>

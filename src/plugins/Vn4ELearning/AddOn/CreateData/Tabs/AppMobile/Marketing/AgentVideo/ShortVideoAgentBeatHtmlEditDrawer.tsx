@@ -1,3 +1,4 @@
+import SceneAssetBeatSummary from './SceneAssetBeatSummary';
 import React from 'react';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import CodeIcon from '@mui/icons-material/Code';
@@ -19,6 +20,7 @@ import { useFloatingMessages } from 'hook/useFloatingMessages';
 import { formatDurationSec } from './agentVideoHfPromptDuration';
 
 type Props = {
+    sceneAssetsVideoId?: number;
     open: boolean;
     onClose: () => void;
     beatId: string;
@@ -40,6 +42,7 @@ type Props = {
 };
 
 export default function ShortVideoAgentBeatHtmlEditDrawer({
+    sceneAssetsVideoId = 0,
     open,
     onClose,
     beatId,
@@ -171,6 +174,7 @@ export default function ShortVideoAgentBeatHtmlEditDrawer({
             )}
         >
             <Stack spacing={1.5} sx={{ height: '100%', minHeight: 0 }}>
+                {open && sceneAssetsVideoId > 0 && <SceneAssetBeatSummary shortVideoId={sceneAssetsVideoId} beatId={beatId}/>}
                 <Alert severity="info" sx={{ py: 0.5, flexShrink: 0 }}>
                     Nhập prompt sáng tạo → AI refine (Gemini Headless) đổ vào draft. Bấm Lưu mới ghi HTML lên CMS.
                 </Alert>

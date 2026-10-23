@@ -6080,7 +6080,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 showMessage(
                     mode === 'reopen'
                         ? `Đã mở lại chat DeepSeek của ${id} (đúng cookie đã lưu)`
-                        : `Đã mở DeepSeek cho ${id} — prompt đã dán sẵn, bấm Enter để gửi rồi copy HTML`,
+                        : `Đã mở DeepSeek cho ${id} — tự gửi prompt, bấm Continue và lưu HTML khi hoàn thành`,
                     'success',
                 );
             } catch (e) {

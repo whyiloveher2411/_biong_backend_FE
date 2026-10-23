@@ -1205,6 +1205,7 @@ export default function ShortVideoAgentVideoWorkspace({
                 shortVideoId={shortVideoId}
             />
             <ShortVideoAgentBeatHtmlEditDrawer
+                sceneAssetsVideoId={state.workflowActive === 'video-html' ? shortVideoId : 0}
                 open={Boolean(editBeatHtmlId)}
                 onClose={handleCloseEditBeatHtml}
                 beatId={editBeatHtmlId}
@@ -1220,6 +1221,7 @@ export default function ShortVideoAgentVideoWorkspace({
                 onAiRefine={handleAiRefineEditBeatHtml}
             />
             <ShortVideoAgentBeatImageEditDrawer
+                sceneAssetsVideoId={state.workflowActive === 'video-html' ? shortVideoId : 0}
                 open={Boolean(editBeatImageId)}
                 onClose={handleCloseEditBeatImage}
                 beatId={editBeatImageId}
@@ -1252,6 +1254,7 @@ export default function ShortVideoAgentVideoWorkspace({
                 savingVideo2sPrompt={state.savingVideo2sBeatPrompt}
             />
             <ShortVideoAgentBeatInfoDrawer
+                sceneAssetsVideoId={state.workflowActive === 'video-html' ? shortVideoId : 0}
                 storyV2={state.workflowActive === 'video-html-2d'}
                 open={Boolean(infoBeatId && infoBeatSection)}
                 onClose={handleCloseBeatInfo}

@@ -1,3 +1,4 @@
+import SceneAssetBeatSummary from './SceneAssetBeatSummary';
 import StoryV2BeatToolbar from './StoryV2BeatToolbar';
 import StoryV2Preview from './StoryV2Preview';
 import React from 'react';
@@ -4959,6 +4960,9 @@ export default function ShortVideoAgentBeatRegionEditor({
                                 </IconButton>
                             </span>
                         </Tooltip>
+                        {state.workflowActive === 'video-html' && shortVideoId > 0 && (
+                            <SceneAssetBeatSummary shortVideoId={shortVideoId} beatId={beatId} variant="toolbar"/>
+                        )}
                         </Stack>
 
                         {/* Layer nội dung: phóng THẬT kích thước khung (contain×zoom) + pan.

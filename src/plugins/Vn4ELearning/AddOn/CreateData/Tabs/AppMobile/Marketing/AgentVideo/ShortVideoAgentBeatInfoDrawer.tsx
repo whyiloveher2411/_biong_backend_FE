@@ -1,3 +1,4 @@
+import SceneAssetBeatSummary from './SceneAssetBeatSummary';
 import StoryV2Preview from './StoryV2Preview';
 import React from 'react';
 import AccessTimeOutlinedIcon from '@mui/icons-material/AccessTimeOutlined';
@@ -33,6 +34,7 @@ import ShortVideoAgentBeatVisualPreview from './ShortVideoAgentBeatVisualPreview
 import ShortVideoAgentBeatImagePreview from './ShortVideoAgentBeatImagePreview';
 
 type Props = {
+    sceneAssetsVideoId?: number;
     storyV2?: boolean;
     open: boolean;
     onClose: () => void;
@@ -125,6 +127,7 @@ function MetadataItem({
 
 export default function ShortVideoAgentBeatInfoDrawer({
     storyV2 = false,
+    sceneAssetsVideoId = 0,
     open,
     onClose,
     beatMap,
@@ -323,6 +326,8 @@ export default function ShortVideoAgentBeatInfoDrawer({
                             {beat.phrase_anchor || 'Chưa có nội dung lời thoại'}
                         </Typography>
                     </DetailSection>
+
+                    {open && sceneAssetsVideoId > 0 && <SceneAssetBeatSummary shortVideoId={sceneAssetsVideoId} beatId={beat.id}/>}
 
                     <DetailSection eyebrow="Visual direction" title="Định hướng hình ảnh">
                         <Stack spacing={1.5}>

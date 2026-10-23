@@ -1,5 +1,5 @@
 import React from 'react';
-import {fireEvent, render, screen, waitFor, within} from '@testing-library/react';
+import {act, fireEvent, render, screen, waitFor, within} from '@testing-library/react';
 import {ajax} from 'hook/useApi';
 import SceneAssetsPanel from './SceneAssetsPanel';
 
@@ -135,3 +135,73 @@ test('manual HTML save acknowledges a queued check rather than claiming immediat
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     view.unmount();
 });
+
+test('shows an explicit loading state and blocks edits until the registry arrives', async () => {
+    let resolveRequest: (value: unknown) => void = () => undefined;
+    request.mockImplementation(() => new Promise(resolve => { resolveRequest = resolve; }));
+    const view = render(<SceneAssetsPanel shortVideoId={77}/>);
+    const status = screen.getByRole('status');
+    expect(status.textContent).toContain('Đang tải danh sách nhân vật và bối cảnh');
+    expect(screen.getByRole('button', {name: 'Nhập / sửa danh sách JSON'}).hasAttribute('disabled')).toBe(true);
+    expect(screen.queryByText('Chưa có nhân vật.')).toBeNull();
+    await act(async () => {
+        resolveRequest({success: true, registry});
+    });
+    await screen.findAllByText('Phòng ăn');
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(screen.getByRole('button', {name: 'Nhập / sửa danh sách JSON'}).hasAttribute('disabled')).toBe(false);
+    view.unmount();
+});
+
+test('beat mapping is collapsed on load and mounts only when expanded', async () => {
+    const view = render(<SceneAssetsPanel shortVideoId={66}/>);
+    await screen.findAllByText('Phòng ăn');
+    expect(screen.queryByText('beat_1')).toBeNull();
+    fireEvent.click(screen.getByRole('button', {name: 'Gán hồ sơ cho từng beat (2)'}));
+    expect((await screen.findAllByText(/^beat_\d+$/)).length).toBe(2);
+    expect(screen.getByText('Cần dựng lại')).toBeTruthy();
+    expect(screen.getByText('Chưa có HTML beat')).toBeTruthy();
+    view.unmount();
+});
+
+test('cancelled queue jobs show why they stopped and can be re-queued', async () => {
+    const cancelled = {
+        ...registry,
+        assets: {
+            ...registry.assets,
+            wife: {
+                ...registry.assets.wife,
+                generation: {status: 'cancelled' as const, job_id: 123, error: 'Job queue đã bị xoá khỏi hàng đợi. Bấm "Chạy lại queue" để tạo job mới.'},
+            },
+        },
+    };
+    request.mockResolvedValue({success: true, registry: cancelled});
+    const view = render(<SceneAssetsPanel shortVideoId={66}/>);
+    await screen.findAllByText('Phòng ăn');
+    const row = screen.getByTestId('scene-asset-wife');
+    expect(within(row).getByText('Job queue đã dừng')).toBeTruthy();
+    expect(within(row).getByText('Job queue đã bị xoá khỏi hàng đợi. Bấm "Chạy lại queue" để tạo job mới.')).toBeTruthy();
+    const retry = within(row).getByRole('button', {name: 'Chạy lại queue'});
+    expect(retry.hasAttribute('disabled')).toBe(false);
+    fireEvent.click(retry);
+    await waitFor(() => expect(request).toHaveBeenCalledWith(expect.objectContaining({data: {
+        short_video_id: 66, operation: 'enqueue', asset_id: 'wife', force: true,
+    }})));
+    view.unmount();
+});
+
+test('large beat mapping mounts in batches instead of blocking on every beat', async () => {
+    const manyBeats: Record<string, unknown> = {};
+    for (let i = 1; i <= 45; i += 1) {
+        manyBeats['beat_' + i] = {id: 'beat_' + i, environment_id: 'dinner', character_ids: ['wife'], continuity: '', status: 'missing'};
+    }
+    request.mockResolvedValue({success: true, registry: {...registry, beats: manyBeats}});
+    const view = render(<SceneAssetsPanel shortVideoId={66}/>);
+    await screen.findAllByText('Phòng ăn');
+    fireEvent.click(screen.getByRole('button', {name: 'Gán hồ sơ cho từng beat (45)'}));
+    expect(screen.getAllByText(/^beat_\d+$/).length).toBe(20);
+    await waitFor(() => expect(screen.getAllByText(/^beat_\d+$/).length).toBe(45), {timeout: 3000});
+    view.unmount();
+});
+
+

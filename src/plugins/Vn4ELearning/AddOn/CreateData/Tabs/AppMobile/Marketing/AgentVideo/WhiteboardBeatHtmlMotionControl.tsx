@@ -19,7 +19,7 @@ type Props = {
     onOpenEditor: () => Promise<void> | void;
     /** Tick/bỏ tick checkbox chọn nguồn render HTML motion. */
     onSelectChange: (selected: boolean) => Promise<boolean> | void;
-    /** Mở DeepSeek với prompt HTML beat dán sẵn (không Enter). */
+    /** Mở DeepSeek tự gửi prompt, Continue và lưu HTML beat. */
     onOpenDeepSeek?: () => Promise<void> | void;
     openingDeepSeek?: boolean;
 };
@@ -133,7 +133,7 @@ export default function WhiteboardBeatHtmlMotionControl({
             {onOpenDeepSeek ? (
                 <Tooltip
                     placement="bottom"
-                    title="Mở DeepSeek với prompt HTML beat dán sẵn (chưa Enter)"
+                    title="Mở DeepSeek — tự gửi, Continue và lưu HTML beat"
                 >
                     <Box
                         role="button"
