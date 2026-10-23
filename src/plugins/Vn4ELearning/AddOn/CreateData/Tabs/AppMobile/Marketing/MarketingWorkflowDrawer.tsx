@@ -1,3 +1,4 @@
+import SceneAssetsPanel from './AgentVideo/SceneAssetsPanel';
 import React from 'react';
 import {
     Alert,
@@ -648,6 +649,7 @@ export default function MarketingWorkflowDrawer({
             });
         }
         return {
+            'SHORT-VIDEO-ID': String(shortVideoId || ''),
             ...(sfxContextOverride ?? sfxContext),
             ...currentBucket,
             ...variableValues,
@@ -1560,6 +1562,7 @@ export default function MarketingWorkflowDrawer({
                                         <Typography sx={{ fontWeight: 600, fontSize: 14 }}>
                                             {label || step.title}
                                         </Typography>
+                                        {workflow.key === 'video-html' && index === 1 && Number(shortVideoId) > 0 && <SceneAssetsPanel shortVideoId={Number(shortVideoId)}/>}
 
                                         {step.description.length > 0 && (
                                             <Box component="ul" sx={{ m: 0, mt: 0.75, p: 0, listStyle: 'none' }}>

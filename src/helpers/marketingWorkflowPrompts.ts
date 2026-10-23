@@ -1,3 +1,4 @@
+import {sceneAssetsRequest, sceneAssetsManifest, sceneAssetMessage} from './shortVideoSceneAssets';
 import { ajax } from 'hook/useApi';
 import { writePromptTextToClipboard } from 'helpers/marketingShortVideoAgentPrompt';
 import {
@@ -606,6 +607,20 @@ export function replaceWorkflowPromptKeys(
  * Như copyWorkflowPromptToClipboard nhưng trả về TEXT đã thay key (không copy clipboard).
  * Dùng để gửi thẳng prompt cho DeepSeek.
  */
+async function appendSceneAssetContext(workflow: string, file: string, context: WorkflowPromptContext, text: string): Promise<string> {
+    if (workflow !== 'video-html' || !file.startsWith('create-beat-visual')) return text;
+    const id = Number(context['SHORT-VIDEO-ID'] || 0);
+    if (!id) throw new Error('Thiếu short video để tải hồ sơ Three.js.');
+    const res = await sceneAssetsRequest(id, 'get');
+    if (!res.success) throw new Error(sceneAssetMessage(res));
+    const registry = res.registry || {};
+    if (!registry.schema_version) throw new Error('Hoàn thành danh sách nhân vật/bối cảnh ở Bước 2 trước.');
+    const missing = Object.values(registry.assets || {}).filter(a => !a.ready);
+    if (missing.length) throw new Error('Cần tạo HTML hồ sơ trước: ' + missing.map(a => a.name).join(', '));
+    return text + '\n\nCANONICAL SCENE ASSET MANIFEST (source data):\n' + sceneAssetsManifest(registry)
+        + '\nCompose the mapped character/environment IDs; preserve all fixed geometry, prop layout and anchors. Only describe camera, actions, state continuity and effects. Never redesign shared assets or substitute a new set for a camera cut.';
+}
+
 export async function fetchWorkflowPromptText(
     workflow: string,
     file: string,
@@ -619,7 +634,7 @@ export async function fetchWorkflowPromptText(
     if (!content.trim()) {
         return { ok: false, text: '', message: `Prompt rỗng: ${file}` };
     }
-    return { ok: true, text: content };
+    return { ok: true, text: await appendSceneAssetContext(workflow, file, context, content) };
 }
 
 export async function copyWorkflowPromptToClipboard(
@@ -634,7 +649,7 @@ export async function copyWorkflowPromptToClipboard(
     }
 
     const { content, replaced } = replaceWorkflowPromptKeys(res.content, context);
-    const copied = await writePromptTextToClipboard(content);
+    const copied = await writePromptTextToClipboard(await appendSceneAssetContext(workflow, file, context, content));
 
     if (!copied) {
         return { ok: false, message: 'Không copy được — hãy copy thủ công' };

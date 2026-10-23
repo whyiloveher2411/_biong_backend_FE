@@ -1,0 +1,164 @@
+import React from 'react';
+import PersonOutlineIcon from '@mui/icons-material/PersonOutline';
+import CottageOutlinedIcon from '@mui/icons-material/CottageOutlined';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import ChatOutlinedIcon from '@mui/icons-material/ChatOutlined';
+import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
+import CodeIcon from '@mui/icons-material/Code';
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
+import ReplayIcon from '@mui/icons-material/Replay';
+
+import { Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, FormControl, InputLabel, MenuItem, Select, Stack, TextField, Typography } from '@mui/material';
+import { SceneAsset, SceneAssetRegistry, sceneAssetMessage, sceneAssetsManifest, sceneAssetsRequest } from 'helpers/shortVideoSceneAssets';
+
+type Props = { shortVideoId: number };
+
+/** One row per reusable asset. Background polling observes saves made in the headless overlay. */
+export default function SceneAssetsPanel({shortVideoId}: Props) {
+    const [registry, setRegistry] = React.useState<SceneAssetRegistry>({});
+    const [error, setError] = React.useState('');
+    const [regenerate, setRegenerate] = React.useState(false);
+    const [notice, setNotice] = React.useState('');
+    const [busy, setBusy] = React.useState('');
+    const [importText, setImportText] = React.useState('');
+    const [importOpen, setImportOpen] = React.useState(false);
+    const [preview, setPreview] = React.useState<SceneAsset | null>(null);
+    const [edit, setEdit] = React.useState<SceneAsset | null>(null);
+    const [html, setHtml] = React.useState('');
+    const [profile, setProfile] = React.useState<SceneAsset | null>(null);
+    const profileBase = React.useRef<SceneAssetRegistry>({});
+    const [draft, setDraft] = React.useState<SceneAssetRegistry | null>(null);
+    const requestSerial = React.useRef(0);
+    const mounted = React.useRef(true);
+    const currentVideo = React.useRef(shortVideoId);
+    currentVideo.current = shortVideoId;
+    const importRevision = React.useRef('');
+    React.useEffect(() => {
+        mounted.current = true;
+        let cancelled = false;
+        let pending = false;
+        const load = async () => {
+            if (pending) return;
+            pending = true;
+            const serial = ++requestSerial.current;
+            try {
+                const res = await sceneAssetsRequest(shortVideoId, 'get');
+                if (!cancelled && serial === requestSerial.current) {
+                    if (res.success) setRegistry(res.registry || {});
+                    else setError(sceneAssetMessage(res));
+                }
+            } catch (e) { if (!cancelled) setError('Không tải được hồ sơ Three.js.'); }
+            finally { pending = false; }
+        };
+        setRegistry({}); setError(''); setDraft(null); setEdit(null); setProfile(null); setPreview(null); setImportOpen(false); setBusy(''); setNotice('');
+        void load();
+        const timer = setInterval(load, 5000);
+        return () => { cancelled = true; mounted.current = false; clearInterval(timer); ++requestSerial.current; };
+    }, [shortVideoId]);
+    const run = async (key: string, operation: string, data: Record<string, unknown>) => {
+        if (busy) return false;
+        setBusy(key); setError(''); setNotice(''); ++requestSerial.current;
+        try {
+            const res = await sceneAssetsRequest(shortVideoId, operation, data);
+            if (!mounted.current || currentVideo.current !== shortVideoId) return false;
+            if (!res.success) { setError(sceneAssetMessage(res)); return false; }
+            if (res.registry) setRegistry(res.registry);
+            setNotice(operation === 'open' ? 'Đã mở DeepSeek. Gửi prompt, copy HTML rồi lưu ngay trong overlay.' : operation === 'enqueue' || operation === 'html' || operation === 'repair' ? sceneAssetMessage(res) : 'Đã lưu.');
+            return true;
+        } catch (e) { if (mounted.current) setError('Không kết nối được CMS.'); return false; }
+        finally { if (mounted.current && currentVideo.current === shortVideoId) setBusy(''); }
+    };
+    const loadAsset = async (asset: SceneAsset, mode: 'preview' | 'edit') => {
+        if (busy) return;
+        setBusy('load:' + asset.id); setError('');
+        try {
+            const res = await sceneAssetsRequest(shortVideoId, 'preview', {asset_id: asset.id});
+            if (!mounted.current || currentVideo.current !== shortVideoId) return;
+            if (!res.success || !res.asset) { setError(sceneAssetMessage(res)); return; }
+            if (mode === 'preview') setPreview(res.asset);
+            else {setEdit(res.asset); setHtml(res.asset.html || '');}
+        } catch (e) { if (mounted.current) setError('Không tải được HTML hồ sơ.'); }
+        finally { if (mounted.current && currentVideo.current === shortVideoId) setBusy(''); }
+    };
+    const assets = Object.values(registry.assets || {});
+    const environments = assets.filter(a => a.kind === 'environment');
+    const characters = assets.filter(a => a.kind === 'character');
+    const working = draft || registry;
+    const patchBeat = (id: string, patch: Record<string, unknown>) => setDraft(prev => {
+        const base = prev || registry;
+        return {...base, beats: {...base.beats, [id]: {...base.beats![id], ...patch}}};
+    });
+    return <Stack spacing={1.25} sx={{mt: 1.5}}>
+        <Alert severity="info">Lập danh sách → tạo HTML từng hồ sơ → kiểm tra gán beat → tạo visual/HTML beat. Các beat cùng cảnh dùng chung bối cảnh, đồ vật và mã nhân vật.</Alert>
+        {error && <Alert severity="error" onClose={() => setError('')}>{error}</Alert>}
+        {notice && <Alert severity="success" onClose={() => setNotice('')}>{notice}</Alert>}
+        <Box><Button size="small" onClick={() => {setImportText(assets.length ? sceneAssetsManifest(registry) : ''); importRevision.current = registry.revision || ''; setImportOpen(true);}}>Nhập / sửa danh sách JSON</Button></Box>
+        {!assets.length && <Typography variant="body2" color="text.secondary">Mở DeepSeek của bước này để lập danh sách. Lưu JSON trong headless hoặc nhập tại đây; mỗi nhân vật/bối cảnh sẽ hiện thành một dòng.</Typography>}
+        {assets.length > 0 && <Stack direction="row" flexWrap="wrap" gap={1}>
+            <Button variant="contained" color="primary" startIcon={<PlayArrowIcon/>} disabled={Boolean(busy)} onClick={() => void run('queue-all', 'enqueue', {kind: 'all'})}>Tạo HTML còn thiếu · tất cả</Button>
+            <Button variant="outlined" color="warning" startIcon={<ReplayIcon/>} disabled={Boolean(busy) || assets.some(a => ['queued', 'processing'].includes(a.generation?.status || ''))} onClick={() => setRegenerate(true)}>Tạo lại tất cả HTML</Button>
+        </Stack>}
+        {(['character', 'environment'] as const).map(kind => {
+            const isCharacter = kind === 'character';
+            const color = isCharacter ? 'primary' as const : 'secondary' as const;
+            const rows = assets.filter(a => a.kind === kind);
+            const active = rows.filter(a => ['queued', 'processing'].includes(a.generation?.status || '')).length;
+            const done = rows.filter(a => a.ready).length;
+            return <Box component="section" aria-label={isCharacter ? 'Hồ sơ nhân vật' : 'Hồ sơ bối cảnh'} key={kind} sx={{border: '1px solid', borderColor: isCharacter ? 'primary.light' : 'secondary.light', borderRadius: 2, overflow: 'hidden'}}>
+                <Stack direction="row" alignItems="center" flexWrap="wrap" gap={1} sx={{p: 1.5, bgcolor: isCharacter ? 'rgba(25,118,210,.07)' : 'rgba(156,39,176,.07)'}}>
+                    {isCharacter ? <PersonOutlineIcon color="primary"/> : <CottageOutlinedIcon color="secondary"/>}
+                    <Box sx={{flex: 1, minWidth: 160}}><Typography variant="subtitle1" fontWeight={700}>{isCharacter ? 'Nhân vật' : 'Bối cảnh'}</Typography><Typography variant="caption" color="text.secondary">{isCharacter ? 'Ngoại hình, rig và biểu cảm dùng chung' : 'Không gian, đồ vật cố định và vị trí staging'} · {done}/{rows.length} có HTML{active ? ` · ${active} đang chờ/chạy` : ''}</Typography></Box>
+                    <Button size="small" variant="contained" color={color} startIcon={<PlayArrowIcon/>} disabled={Boolean(busy) || !rows.some(a => !a.ready && !['queued', 'processing'].includes(a.generation?.status || ''))} onClick={() => void run('queue:' + kind, 'enqueue', {kind})}>{isCharacter ? 'Tạo nhân vật còn thiếu' : 'Tạo bối cảnh còn thiếu'}</Button>
+                </Stack>
+                <Stack spacing={1} sx={{p: 1.25}}>
+                    {!rows.length && <Typography variant="body2" color="text.secondary">Chưa có {isCharacter ? 'nhân vật' : 'bối cảnh'}.</Typography>}
+                    {rows.map(asset => {
+                        const generation = asset.generation;
+                        const running = ['queued', 'processing'].includes(generation?.status || '');
+                        const label = generation?.status === 'queued' ? 'Đang chờ queue' : generation?.status === 'processing' ? generation.phase === 'repairing' ? `Đang tự sửa (${generation.repair_attempt || 0}/3)` : 'Đang tạo / chạy kiểm tra…' : generation?.status === 'failed' ? 'Tạo HTML lỗi' : asset.ready ? 'Đã có HTML' : asset.has_html ? 'Cần cập nhật' : 'Chưa có HTML';
+                        return <Box key={asset.id} data-testid={'scene-asset-' + asset.id} sx={{p: 1.5, border: '1px solid', borderColor: 'divider', borderLeft: '4px solid', borderLeftColor: isCharacter ? 'primary.main' : 'secondary.main', borderRadius: isCharacter ? 3 : 1, bgcolor: 'background.paper'}}>
+                            <Stack direction="row" alignItems="center" flexWrap="wrap" gap={1}>
+                                <Box sx={{width: 36, height: 36, borderRadius: isCharacter ? '50%' : 1, display: 'grid', placeItems: 'center', bgcolor: isCharacter ? 'rgba(25,118,210,.1)' : 'rgba(156,39,176,.1)'}}>{isCharacter ? <PersonOutlineIcon color="primary"/> : <CottageOutlinedIcon color="secondary"/>}</Box>
+                                <Box sx={{flex: 1, minWidth: 130}}><Typography variant="body2" fontWeight={700}>{asset.name}</Typography><Typography variant="caption" color="text.secondary">{asset.id}{generation?.job_id ? ` · Job #${generation.job_id}` : ''}</Typography></Box>
+                                <Chip size="small" color={running ? 'info' : generation?.status === 'failed' ? 'error' : asset.ready ? 'success' : 'warning'} label={label}/>
+                            </Stack>
+                            {generation?.error && ['failed', 'superseded'].includes(generation.status) && <Alert severity={generation.status === 'failed' ? 'error' : 'info'} sx={{mt: 1}}>{generation.error}</Alert>}
+                            {generation?.status === 'completed' && <Typography variant="caption" color="text.secondary">{generation.preview_checked ? 'Đã chạy preview và lưu HTML' : 'HTML cũ chưa kiểm tra preview đầy đủ'}{generation.repair_attempt ? ` · ${generation.repair_attempt} lần tự sửa` : ''}{generation.continue_clicks ? ` · ${generation.continue_clicks} lần Continue` : ''}</Typography>}
+                            <Stack direction="row" flexWrap="wrap" gap={0.75} sx={{mt: 1.25}}>
+                                <Button size="small" variant="contained" color={color} startIcon={<PlayArrowIcon/>} disabled={Boolean(busy) || running} onClick={() => void run('queue:' + asset.id, 'enqueue', {asset_id: asset.id, force: true})}>{generation?.status === 'failed' ? 'Chạy lại queue' : 'Tạo bằng queue'}</Button>
+                                <Button size="small" variant="outlined" color={color} startIcon={<ChatOutlinedIcon/>} disabled={Boolean(busy) || running} onClick={() => void run(asset.id, 'open', {asset_id: asset.id})}>{busy === asset.id ? 'Đang mở…' : 'Mở DeepSeek'}</Button>
+                                {asset.chat_url && <Button size="small" variant="text" color={color} disabled={Boolean(busy) || running} onClick={() => void run(`chat:${asset.id}`, 'open', {asset_id: asset.id, mode: 'reopen'})}>Chat đã tạo</Button>}
+                                <Button size="small" variant="contained" color="success" startIcon={<VisibilityOutlinedIcon/>} disabled={Boolean(busy) || !asset.has_html} onClick={() => void loadAsset(asset, 'preview')}>Xem HTML</Button>
+                                <Button size="small" variant="outlined" color="info" startIcon={<ReplayIcon/>} disabled={Boolean(busy) || running || !asset.has_html} onClick={() => void run('repair:' + asset.id, 'repair', {asset_id: asset.id})}>Kiểm tra / tự sửa</Button>
+                                <Button size="small" variant="outlined" color="warning" startIcon={<CodeIcon/>} disabled={Boolean(busy)} onClick={() => void loadAsset(asset, 'edit')}>Cập nhật HTML</Button>
+                                <Button size="small" variant="text" color="inherit" startIcon={<EditOutlinedIcon/>} disabled={Boolean(busy)} onClick={() => {profileBase.current = registry; setProfile({...asset});}}>Sửa hồ sơ</Button>
+                            </Stack>
+                            <Box component="details" sx={{fontSize: 12, color: 'text.secondary', mt: 1}}><summary>Đặc tả cố định</summary><Box sx={{whiteSpace: 'pre-wrap', mt: 0.5}}>{asset.spec}</Box></Box>
+                        </Box>;
+                    })}
+                </Stack>
+            </Box>;
+        })}
+        {Object.keys(registry.beats || {}).length > 0 && <Box component="details">
+            <Typography component="summary" variant="subtitle2" sx={{cursor: 'pointer'}}>Gán hồ sơ cho từng beat ({Object.keys(registry.beats || {}).length})</Typography>
+            <Typography variant="caption" color="text.secondary">Sửa lựa chọn nếu cần. “Cần dựng lại” nghĩa là HTML beat chưa dùng phiên bản hồ sơ hiện tại; không tự ghi đè beat đã duyệt.</Typography>
+            <Stack spacing={1} sx={{mt: 1}}>{Object.values(working.beats || {}).map(beat => <Box key={beat.id} sx={{p: 1, border: '1px solid', borderColor: 'divider', borderRadius: 1}}>
+                <Stack direction="row" gap={1} alignItems="center" sx={{mb: 1}}><Typography variant="body2">{beat.id}</Typography><Chip size="small" color={beat.status === 'ready' ? 'success' : 'default'} label={beat.status === 'ready' ? 'Đồng bộ' : beat.status === 'stale' ? 'Cần dựng lại' : 'Chưa có HTML beat'}/></Stack>
+                <FormControl size="small" fullWidth sx={{mb: 1}}><InputLabel>Bối cảnh</InputLabel><Select label="Bối cảnh" value={beat.environment_id} onChange={e => patchBeat(beat.id, {environment_id: e.target.value})}><MenuItem value="">Không dùng</MenuItem>{environments.map(a => <MenuItem key={a.id} value={a.id}>{a.name}{a.ready ? '' : ' — chưa có HTML'}</MenuItem>)}</Select></FormControl>
+                <FormControl size="small" fullWidth sx={{mb: 1}}><InputLabel>Nhân vật</InputLabel><Select multiple label="Nhân vật" value={beat.character_ids} onChange={e => patchBeat(beat.id, {character_ids: typeof e.target.value === 'string' ? e.target.value.split(',') : e.target.value})}>{characters.map(a => <MenuItem key={a.id} value={a.id}>{a.name}{a.ready ? '' : ' — chưa có HTML'}</MenuItem>)}</Select></FormControl>
+                <TextField fullWidth multiline size="small" label="Hành động / trạng thái nối cảnh" value={beat.continuity} onChange={e => patchBeat(beat.id, {continuity: e.target.value})}/>
+            </Box>)}</Stack>
+            {draft && <Stack direction="row" gap={1} sx={{mt: 1}}><Button disabled={Boolean(busy)} onClick={async () => {if (await run('mapping', 'manifest', {text: sceneAssetsManifest(draft), expected_revision: draft.revision || ''})) setDraft(null);}}>Lưu gán beat</Button><Button onClick={() => setDraft(null)}>Hủy chỉnh sửa</Button></Stack>}
+        </Box>}
+        <Dialog open={regenerate} onClose={() => !busy && setRegenerate(false)}><DialogTitle>Tạo lại toàn bộ HTML hồ sơ?</DialogTitle><DialogContent>DeepSeek sẽ tạo lại các nhân vật và bối cảnh qua queue. Bản HTML hiện tại chỉ được thay khi bản mới đã hoàn chỉnh, kiểm tra chạy được và lưu đúng vào DB. Các beat dùng phiên bản cũ sẽ được báo cần dựng lại.</DialogContent><DialogActions><Button onClick={() => setRegenerate(false)}>Hủy</Button><Button variant="contained" color="warning" disabled={Boolean(busy)} onClick={async () => {if (await run('queue-all', 'enqueue', {kind: 'all', force: true})) setRegenerate(false);}}>Tạo lại tất cả</Button></DialogActions></Dialog>
+        <Dialog open={importOpen} onClose={() => !busy && setImportOpen(false)} fullWidth maxWidth="md"><DialogTitle>Danh sách nhân vật và bối cảnh</DialogTitle><DialogContent><Typography variant="body2" sx={{mb: 1}}>Dán JSON chatbot trả về. Giữ nguyên ID để bảo toàn HTML đã tạo. Thay đổi đặc tả sẽ yêu cầu tạo lại HTML tương ứng.</Typography><TextField fullWidth multiline minRows={12} value={importText} onChange={e => setImportText(e.target.value)} inputProps={{'aria-label': 'JSON hồ sơ'}}/></DialogContent><DialogActions><Button disabled={Boolean(busy)} onClick={() => setImportOpen(false)}>Đóng</Button><Button disabled={Boolean(busy) || !importText.trim()} onClick={async () => {if (await run('manifest', 'manifest', {text: importText, expected_revision: importRevision.current})) {setImportOpen(false); setDraft(null);}}}>Lưu danh sách</Button></DialogActions></Dialog>
+        <Dialog open={Boolean(edit)} onClose={() => !busy && setEdit(null)} fullWidth maxWidth="md"><DialogTitle>Cập nhật HTML · {edit?.name}</DialogTitle><DialogContent><Alert severity="info" sx={{mb: 1}}>HTML được chạy kiểm tra preview trước khi lưu. Nếu có lỗi, queue sẽ gửi chẩn đoán về DeepSeek và tự kiểm tra lại bản sửa; bản hiện tại được giữ trong lúc xử lý.</Alert><TextField fullWidth multiline minRows={14} value={html} onChange={e => setHtml(e.target.value)} inputProps={{'aria-label': 'HTML hồ sơ'}}/></DialogContent><DialogActions><Button disabled={Boolean(busy)} onClick={() => setEdit(null)}>Đóng</Button><Button disabled={Boolean(busy) || !html.trim()} onClick={async () => {if (edit && await run('html', 'html', {asset_id: edit.id, spec_hash: edit.spec_hash, text: html})) setEdit(null);}}>Lưu HTML</Button></DialogActions></Dialog>
+        <Dialog open={Boolean(profile)} onClose={() => !busy && setProfile(null)} fullWidth maxWidth="md"><DialogTitle>Sửa hồ sơ · {profile?.id}</DialogTitle><DialogContent><Alert severity="info" sx={{mb: 2}}>Đổi đặc tả sẽ yêu cầu tạo lại HTML hồ sơ. Những beat đã dùng hồ sơ này sẽ được báo cần dựng lại.</Alert><TextField fullWidth label="Tên hiển thị" value={profile?.name || ''} onChange={e => setProfile(p => p ? {...p, name: e.target.value} : p)} sx={{mb: 2}}/><TextField fullWidth multiline minRows={8} label="Đặc tả cố định" value={profile?.spec || ''} onChange={e => setProfile(p => p ? {...p, spec: e.target.value} : p)}/></DialogContent><DialogActions><Button disabled={Boolean(busy)} onClick={() => setProfile(null)}>Đóng</Button><Button disabled={Boolean(busy) || !profile?.name.trim() || !profile?.spec.trim()} onClick={async () => {
+            if (!profile) return;
+            const base = profileBase.current;
+            const next = {...base, assets: {...base.assets, [profile.id]: profile}};
+            if (await run('profile', 'manifest', {text: sceneAssetsManifest(next), expected_revision: base.revision || ''})) setProfile(null);
+        }}>Lưu hồ sơ</Button></DialogActions></Dialog>
+        <Dialog open={Boolean(preview)} onClose={() => setPreview(null)} fullWidth maxWidth="lg"><DialogTitle>Preview · {preview?.name}</DialogTitle><DialogContent sx={{height: '70vh', p: 0}}>{preview && <iframe title={`Preview ${preview.name}`} sandbox="allow-scripts" srcDoc={preview.html} style={{width: '100%', height: '100%', border: 0}}/>}</DialogContent><DialogActions><Button onClick={() => setPreview(null)}>Đóng</Button></DialogActions></Dialog>
+    </Stack>;
+}
