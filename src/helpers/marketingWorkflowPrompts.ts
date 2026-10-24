@@ -618,7 +618,7 @@ async function appendSceneAssetContext(workflow: string, file: string, context: 
     const missing = Object.values(registry.assets || {}).filter(a => !a.ready);
     if (missing.length) throw new Error('Cần tạo HTML hồ sơ trước: ' + missing.map(a => a.name).join(', '));
     return text + '\n\nCANONICAL SCENE ASSET MANIFEST (source data):\n' + sceneAssetsManifest(registry)
-        + '\nCompose the mapped character/environment IDs; preserve all fixed geometry, prop layout and anchors. Only describe camera, actions, state continuity and effects. Never redesign shared assets or substitute a new set for a camera cut.';
+        + '\nCompose the mapped character/environment IDs. Follow each beat start_state → action → end_state and new_information; use scene_id and neighbouring states across input batches. Preserve identity, architecture and named rest anchors while allowing story props/joints to move. A fixed camera is valid; angle changes and particles do not count as a story turn. Off-screen narration never implies an on-screen presenter. Never silently substitute a studio for the actual story setting.';
 }
 
 export async function fetchWorkflowPromptText(

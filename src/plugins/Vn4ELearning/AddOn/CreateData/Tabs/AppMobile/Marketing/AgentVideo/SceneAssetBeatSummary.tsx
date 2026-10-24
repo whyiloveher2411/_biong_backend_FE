@@ -74,6 +74,9 @@ export default function SceneAssetBeatSummary({shortVideoId, beatId, variant = '
         {loading && <Typography variant="body2" color="text.secondary">Đang tải asset…</Typography>}
         {error && <Alert severity="error">{error}</Alert>}
         {!loading && !error && !mapping && <Alert severity="warning">Chưa có mapping asset cho beat này. Gán nhân vật và bối cảnh ở Bước 2 trước khi tạo HTML.</Alert>}
+        {mapping && !mapping.action && <Alert severity="warning" sx={{mb: 1}}>Mapping hiện tại chưa có kế hoạch diễn biến. Lập lại hồ sơ ở Bước 2 để lưu trạng thái đầu, hành động và kết quả của từng beat; chỉ đổi góc máy sẽ không làm câu chuyện tiến triển.</Alert>}
+        {mapping?.continuity_error && <Alert severity="warning" sx={{mb: 1}}>{mapping.continuity_error}</Alert>}
+        {mapping?.continuity_from && <Alert severity="success" sx={{mb: 1}}>Đã nạp trạng thái frame cuối từ {mapping.continuity_from}.</Alert>}
         {mapping && <Stack spacing={1}>
             {ids.map(id => {
                 const asset = registry?.assets?.[id];
@@ -86,8 +89,15 @@ export default function SceneAssetBeatSummary({shortVideoId, beatId, variant = '
             })}
             {!mapping.character_ids.length && <Typography variant="body2" color="text.secondary">Không có nhân vật trong beat này.</Typography>}
             {!ids.length && <Typography variant="body2" color="text.secondary">Beat này không dùng asset chung.</Typography>}
+            {mapping.action && <Box>
+                <Typography variant="subtitle2">Diễn biến của beat{mapping.scene_id ? ` · ${mapping.scene_id}` : ''}</Typography>
+                {mapping.start_state && <Typography variant="body2"><b>Bắt đầu:</b> {mapping.start_state}</Typography>}
+                <Typography variant="body2"><b>Hành động:</b> {mapping.action}</Typography>
+                {mapping.end_state && <Typography variant="body2"><b>Kết thúc:</b> {mapping.end_state}</Typography>}
+                {mapping.new_information && <Typography variant="body2"><b>Thay đổi:</b> {mapping.new_information}</Typography>}
+            </Box>}
             {mapping.continuity && <Typography variant="body2" sx={{whiteSpace: 'pre-wrap'}}>{mapping.continuity}</Typography>}
-            <Typography variant="caption" color="text.secondary">Dùng các asset này để giữ cùng hình dáng và bố trí giữa các beat. Chỉ thay đổi góc máy và hành động.</Typography>
+            <Typography variant="caption" color="text.secondary">Dùng các asset này để giữ cùng hình dáng và bố trí giữa các beat. Beat cùng cảnh kế thừa trạng thái frame cuối; hành động tiếp tục từ điểm nối.</Typography>
         </Stack>}
         {previewDialog}
     </Box>;

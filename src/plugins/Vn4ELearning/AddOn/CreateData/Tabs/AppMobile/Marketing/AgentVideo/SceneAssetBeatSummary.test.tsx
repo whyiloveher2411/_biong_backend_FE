@@ -60,3 +60,9 @@ test('toolbar stacks the environment before characters and opens the selected as
     expect(iframe.getAttribute('srcdoc')).toContain('wife preview');
     expect(request).toHaveBeenLastCalledWith(66, 'preview', {asset_id: 'wife'});
 });
+
+test('shows outdated frame handoff warning from the workflow', async () => {
+    request.mockResolvedValueOnce({success: true, registry: {...registry, beats: {beat_1: {...registry.beats.beat_1, action: 'test', continuity_error: 'Beat trước đã thay đổi; hãy tạo lại beat_1 để khớp frame.'}}}});
+    render(<SceneAssetBeatSummary shortVideoId={66} beatId="beat_1"/>);
+    expect(await screen.findByText(/Beat trước đã thay đổi/)).toBeTruthy();
+});
