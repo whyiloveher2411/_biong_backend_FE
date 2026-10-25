@@ -186,6 +186,22 @@ export function parseBeatTranslationClipboard(
     };
 }
 
+/**
+ * Danh sách beat dạng text theo bản dịch — mỗi dòng = 1 beat, giữ đúng thứ tự.
+ * Beat chưa dịch hiển thị nguyên văn kèm tiền tố `[chưa dịch]` để không lệch dòng.
+ */
+export function buildBeatTranslationListText(
+    marks: ManualBeatMark[],
+    translations: BeatTranslationMap,
+): string {
+    return marks
+        .map((mark) => {
+            const vi = String(translations[String(mark.order)] || '').trim();
+            return vi || `[chưa dịch] ${mark.content.trim()}`;
+        })
+        .join('\n');
+}
+
 /** Map translations → Record<string,string> lưu theo order beat string. */
 export function beatTranslationsFromPayload(
     payload: BeatTranslationPayload,

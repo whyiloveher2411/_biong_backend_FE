@@ -5621,3 +5621,14 @@ export async function storyV2Request(shortVideoId: number, operation: 'get' | 's
         operation, ...(story ? {story} : {}), ...(utteranceId ? {utterance_id: utteranceId, force: true} : {}), ...(beatId ? {beat_id: beatId, force} : {}),
     }));
 }
+
+
+export type SaydiVoiceCast = {
+    enabled: boolean;
+    speakers: Record<string, { name: string; voice_sample: string }>;
+};
+
+export async function saydiVoiceCastRequest(shortVideoId: number, config?: SaydiVoiceCast): Promise<JsonResponse & { config?: SaydiVoiceCast }> {
+    return postJson('plugin/vn4-e-learning/app-mobile/marketing/short-video/saydi-voice-cast',
+        shortVideoBody(shortVideoId, { operation: config ? 'save' : 'get', ...(config ? { config } : {}) }));
+}

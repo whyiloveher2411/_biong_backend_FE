@@ -4,7 +4,7 @@ test('manifest roundtrip retains the complete acting plan but never copies built
     const registry: SceneAssetRegistry = {schema_version: 'threejs_scene_assets_v1', storyboard_version: 'causal_3d_v1',
         assets: {room: {id: 'room', kind: 'environment', name: 'Room', spec: 'Movable book', spec_hash: 'hash', html: 'preview only'}},
         beats: {beat_1: {id: 'beat_1', environment_id: 'room', character_ids: [], continuity: 'Carry the open page forward.',
-            scene_id: 'discovery', story_function: 'reveal', start_state: 'Book shut', action: 'Book opens', end_state: 'Book open', new_information: 'A clue is revealed', camera: 'Locked insert'}},
+            scene_id: 'discovery', story_function: 'reveal', start_state: 'Book shut', action: 'Book opens', end_state: 'Book open', new_information: 'A clue is revealed', camera: 'Close insert', transition: 'cut', title_card: true}},
     };
     const serialized = JSON.parse(sceneAssetsManifest(registry));
     expect(serialized.storyboard_version).toBe('causal_3d_v1');

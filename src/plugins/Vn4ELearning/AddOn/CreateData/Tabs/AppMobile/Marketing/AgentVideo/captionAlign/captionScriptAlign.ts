@@ -60,6 +60,7 @@ export function stripPunct(word) {
 
 export function stripScriptMarkers(text) {
   return String(text)
+    .replace(/\[\s*giong-doc-id\s*:\s*[^\]]*\]/gi, " ")
     .replace(/\[BGM:[^\]]*\]/gi, " ")
     .replace(/\[SFX:[^\]]*\]/gi, " ")
     .replace(/\[Dừng[^\]]*\]/gi, " ")

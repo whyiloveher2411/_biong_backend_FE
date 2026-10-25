@@ -1,4 +1,5 @@
 import React from 'react';
+import ShortVideoAgentSaydiCastSettings from './ShortVideoAgentSaydiCastSettings';
 import {
     Alert,
     Box,
@@ -25,6 +26,7 @@ import ShortVideoAgentOmnivoiceVoicePicker from './ShortVideoAgentOmnivoiceVoice
 import ShortVideoAgentSaydiVoicePicker from './ShortVideoAgentSaydiVoicePicker';
 
 type Props = {
+    shortVideoId: number;
     open: boolean;
     onClose: () => void;
     agentTtsAuto: boolean;
@@ -72,6 +74,7 @@ const SPEED_MARKS = [
 
 export default function ShortVideoAgentAudioSettingsDrawer({
     open,
+    shortVideoId,
     onClose,
     agentTtsAuto,
     savingTtsMode,
@@ -166,7 +169,7 @@ export default function ShortVideoAgentAudioSettingsDrawer({
                     px: 2,
                     pb: 2,
                     gap: 2,
-                    overflow: 'hidden',
+                    overflowY: 'auto',
                 },
             }}
         >
@@ -314,6 +317,7 @@ export default function ShortVideoAgentAudioSettingsDrawer({
                         <Typography variant="subtitle2" sx={{ mb: 1 }}>
                             Giọng Saydi
                         </Typography>
+                        {open ? <ShortVideoAgentSaydiCastSettings shortVideoId={shortVideoId} samples={saydiSamples} disabled={regeneratingTts || savingTtsMode} /> : null}
                         <ShortVideoAgentSaydiVoicePicker
                             active={open && showSaydi}
                             samples={saydiSamples}

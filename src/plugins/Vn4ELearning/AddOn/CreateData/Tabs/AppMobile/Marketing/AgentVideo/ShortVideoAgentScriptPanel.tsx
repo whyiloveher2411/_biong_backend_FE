@@ -1371,6 +1371,7 @@ function LegacyShortVideoAgentScriptPanel({ state }: Props) {
             />
 
             <ShortVideoAgentAudioSettingsDrawer
+                shortVideoId={state.shortVideoId}
                 open={audioSettingsOpen}
                 onClose={handleCloseAudioSettings}
                 agentTtsAuto={state.agentTtsAuto}

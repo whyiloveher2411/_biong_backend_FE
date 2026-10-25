@@ -6,6 +6,8 @@ import {
     Chip,
     Stack,
     TextField,
+    ToggleButton,
+    ToggleButtonGroup,
     Typography,
 } from '@mui/material';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
@@ -17,12 +19,14 @@ import DnsIcon from '@mui/icons-material/Dns';
 import ManageAccountsIcon from '@mui/icons-material/ManageAccounts';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import SaveIcon from '@mui/icons-material/Save';
+import TranslateIcon from '@mui/icons-material/Translate';
 import TuneIcon from '@mui/icons-material/Tune';
 import Button from 'components/atoms/Button';
 import LoadingButton from 'components/atoms/LoadingButton';
 import { parseBeatListText } from './agentVideoManualBeats';
 import {
     beatTranslationsFromPayload,
+    buildBeatTranslationListText,
     buildBeatTranslationPrompt,
     parseBeatTranslationClipboard,
 } from './agentVideoBeatTranslation';
@@ -62,6 +66,8 @@ export default function ShortVideoAgentVideo2sBeatListPanel({ state, onOpenAudio
 
     const [listText, setListText] = React.useState('');
     const [listDirty, setListDirty] = React.useState(false);
+    /** Beat gốc (sửa được) ↔ bản dịch (chỉ xem) cho cùng danh sách beat. */
+    const [listView, setListView] = React.useState<'source' | 'translation'>('source');
 
     // Đổ danh sách beat đã lưu vào textarea — chỉ khi user chưa gõ gì (không đè
     // nội dung đang sửa). marks là nguồn truth đã parse (không có số thứ tự).
@@ -104,11 +110,21 @@ export default function ShortVideoAgentVideo2sBeatListPanel({ state, onOpenAudio
     const translatedCount = marks.filter(
         (mark) => (beatTranslations[String(mark.order)] || '').trim() !== '',
     ).length;
+    const translationListText = React.useMemo(
+        () => buildBeatTranslationListText(marks, beatTranslations),
+        [beatTranslations, marks],
+    );
+    // Mất hết bản dịch (reload/xóa beat) → không giữ màn hình xem bản dịch rỗng.
+    React.useEffect(() => {
+        if (listView === 'translation' && translatedCount === 0) {
+            setListView('source');
+        }
+    }, [listView, translatedCount]);
     const allTranslated = marks.length > 0 && translatedCount === marks.length;
     const translationStatus = marks.length === 0
         ? 'Chưa có beat nào để dịch'
         : allTranslated
-            ? `Đã đủ bản dịch ${translatedCount}/${marks.length} beat — bấm vào beat để xem bản dịch trên timeline audio`
+            ? `Đã đủ bản dịch ${translatedCount}/${marks.length} beat — bấm “Bản dịch” ở danh sách beat để xem toàn bộ`
             : `Đã dịch ${translatedCount}/${marks.length} beat — còn thiếu beat: ${
                 marks
                     .filter((mark) => (beatTranslations[String(mark.order)] || '').trim() === '')
@@ -200,9 +216,19 @@ export default function ShortVideoAgentVideo2sBeatListPanel({ state, onOpenAudio
                 <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
                     <Chip
                         size="small"
-                        color={parsedBeats.length > 0 ? 'primary' : 'default'}
-                        variant={parsedBeats.length > 0 ? 'filled' : 'outlined'}
-                        label={`${parsedBeats.length} beat trong ô nhập`}
+                        color={
+                            (listView === 'translation' ? translatedCount : parsedBeats.length) > 0
+                                ? 'primary'
+                                : 'default'
+                        }
+                        variant={
+                            (listView === 'translation' ? translatedCount : parsedBeats.length) > 0
+                                ? 'filled'
+                                : 'outlined'
+                        }
+                        label={listView === 'translation'
+                            ? `${translatedCount}/${marks.length} beat đã dịch`
+                            : `${parsedBeats.length} beat trong ô nhập`}
                     />
                     {marks.length > 0 ? (
                         <>
@@ -318,18 +344,69 @@ export default function ShortVideoAgentVideo2sBeatListPanel({ state, onOpenAudio
                     </Box>
                 )}
 
+                <Stack
+                    direction="row"
+                    spacing={1}
+                    flexWrap="wrap"
+                    useFlexGap
+                    alignItems="center"
+                    justifyContent="space-between"
+                >
+                    <Typography variant="caption" color="text.secondary">
+                        {listView === 'translation'
+                            ? `Bản dịch ${translatedCount}/${marks.length} beat — chỉ xem`
+                            : 'Audio script beat — mỗi dòng = 1 beat'}
+                    </Typography>
+                    <ToggleButtonGroup
+                        exclusive
+                        size="small"
+                        value={listView}
+                        onChange={(_event, value: 'source' | 'translation' | null) => {
+                            if (value) {
+                                setListView(value);
+                            }
+                        }}
+                        aria-label="Hiển thị beat gốc hoặc bản dịch"
+                    >
+                        <ToggleButton value="source" aria-label="Hiển thị beat gốc">
+                            Beat gốc
+                        </ToggleButton>
+                        <ToggleButton
+                            value="translation"
+                            aria-label="Hiển thị danh sách beat theo bản dịch"
+                            disabled={translatedCount === 0}
+                        >
+                            <TranslateIcon sx={{ fontSize: 16, mr: 0.5 }} />
+                            Bản dịch
+                        </ToggleButton>
+                    </ToggleButtonGroup>
+                </Stack>
+
                 <TextField
                     multiline
                     minRows={8}
                     maxRows={20}
                     placeholder={PLACEHOLDER}
-                    value={listText}
-                    onChange={(event) => handleChange(event.target.value)}
+                    value={listView === 'translation' ? translationListText : listText}
+                    onChange={(event) => {
+                        if (listView === 'source') {
+                            handleChange(event.target.value);
+                        }
+                    }}
+                    InputProps={{ readOnly: listView === 'translation' }}
+                    inputProps={{
+                        'aria-label': listView === 'translation'
+                            ? 'Danh sách beat theo bản dịch'
+                            : 'Danh sách beat gốc',
+                    }}
                     sx={{
                         '& .MuiOutlinedInput-root': {
                             fontFamily: 'monospace',
                             fontSize: 13,
                             lineHeight: 1.55,
+                            ...(listView === 'translation' ? {
+                                bgcolor: 'action.hover',
+                            } : {}),
                         },
                     }}
                 />
@@ -337,7 +414,7 @@ export default function ShortVideoAgentVideo2sBeatListPanel({ state, onOpenAudio
                 <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap alignItems="center">
                     <LoadingButton
                         loading={state.importingVideo2sBeatList}
-                        disabled={parsedBeats.length === 0}
+                        disabled={parsedBeats.length === 0 || listView === 'translation'}
                         variant="contained"
                         color="primary"
                         startIcon={<SaveIcon />}
@@ -364,8 +441,9 @@ export default function ShortVideoAgentVideo2sBeatListPanel({ state, onOpenAudio
                         Tải phụ đề (.sbv)
                     </LoadingButton>
                     <Typography variant="caption" color="text.secondary">
-                        Sửa/xóa dòng rồi cập nhật lại — beat đổi nội dung sẽ tự tạo lại audio. Phụ đề SBV (YouTube)
-                        toàn video, mỗi beat 1 cue — text theo audio script, mốc thời gian theo beat/whisper.
+                        {listView === 'translation'
+                            ? 'Đang xem bản dịch — chuyển về “Beat gốc” để sửa và cập nhật beat.'
+                            : 'Sửa/xóa dòng rồi cập nhật lại — beat đổi nội dung sẽ tự tạo lại audio. Phụ đề SBV (YouTube) toàn video, mỗi beat 1 cue — text theo audio script, mốc thời gian theo beat/whisper.'}
                     </Typography>
                 </Stack>
 

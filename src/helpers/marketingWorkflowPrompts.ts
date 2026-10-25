@@ -345,6 +345,7 @@ export async function fetchShortVideoTopicOptions(
 export async function fetchWorkflowPromptContent(
     workflow: string,
     file: string,
+    shortVideoId?: number,
 ): Promise<{ ok: boolean; content: string; message?: string }> {
     if (!workflow || !file) {
         return { ok: false, content: '', message: 'Thiếu workflow hoặc file prompt' };
@@ -353,7 +354,7 @@ export async function fetchWorkflowPromptContent(
     const res = await ajax({
         url: WORKFLOW_PROMPT_CONTENT_PATH,
         method: 'POST',
-        data: { workflow, file },
+        data: { workflow, file, ...(shortVideoId ? { short_video_id: shortVideoId } : {}) },
     });
 
     if (!res?.success || typeof res.content !== 'string' || !res.content.trim()) {
@@ -626,7 +627,7 @@ export async function fetchWorkflowPromptText(
     file: string,
     context: WorkflowPromptContext = {},
 ): Promise<{ ok: boolean; text: string; message?: string }> {
-    const res = await fetchWorkflowPromptContent(workflow, file);
+    const res = await fetchWorkflowPromptContent(workflow, file, Number(context['SHORT-VIDEO-ID'] || 0));
     if (!res.ok) {
         return { ok: false, text: '', message: res.message || 'Không tải được prompt' };
     }
@@ -642,7 +643,7 @@ export async function copyWorkflowPromptToClipboard(
     file: string,
     context: WorkflowPromptContext = {},
 ): Promise<{ ok: boolean; message: string }> {
-    const res = await fetchWorkflowPromptContent(workflow, file);
+    const res = await fetchWorkflowPromptContent(workflow, file, Number(context['SHORT-VIDEO-ID'] || 0));
 
     if (!res.ok) {
         return { ok: false, message: res.message || 'Không tải được prompt' };

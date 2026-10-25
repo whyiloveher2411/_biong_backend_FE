@@ -397,7 +397,7 @@ export default function MarketingWorkflowDrawer({
         setLoadingMasterPrompt(true);
         setMasterPromptUrl('');
 
-        fetchWorkflowPromptContent(workflow.key, workflow.documentFile)
+        fetchWorkflowPromptContent(workflow.key, workflow.documentFile, Number(shortVideoId || 0))
             .then((result) => {
                 if (cancelled) {
                     return;
@@ -426,7 +426,7 @@ export default function MarketingWorkflowDrawer({
                 masterPromptObjectUrlRef.current = '';
             }
         };
-    }, [open, workflow?.key, workflow?.documentFile, workflow?.documentFileExists]);
+    }, [open, shortVideoId, workflow?.key, workflow?.documentFile, workflow?.documentFileExists]);
 
     React.useEffect(() => {
         return () => {
@@ -713,7 +713,7 @@ export default function MarketingWorkflowDrawer({
 
         Promise.all(pending.map(async (file) => {
             try {
-                const res = await fetchWorkflowPromptContent(workflow.key, file);
+                const res = await fetchWorkflowPromptContent(workflow.key, file, Number(shortVideoId || 0));
                 if (res.ok) {
                     promptKeywordCacheRef.current[`${workflow.key}::${file}`] = extractPromptKeywords(res.content);
                 }
@@ -1047,7 +1047,8 @@ export default function MarketingWorkflowDrawer({
         if (!previous) {
             return;
         }
-        void refreshWorkflowOutputs().catch(() => {});
+        void refreshWorkflowOutputs().catch(() => { /* Do nothing */ });
+        
         // Báo useAgentVideoContent nạp lại audio_script (breakdown cần audio script theo beat).
         document.dispatchEvent(new CustomEvent(AGENT_AUDIO_SCRIPT_SAVED_EVENT, {
             detail: { shortVideoId: Number(shortVideoId) },
