@@ -1,4 +1,5 @@
 import SceneAssetsPanel from './AgentVideo/SceneAssetsPanel';
+import ShortVideoAgentSaydiCastSettings from './AgentVideo/ShortVideoAgentSaydiCastSettings';
 import React from 'react';
 import {
     Alert,
@@ -1563,6 +1564,7 @@ export default function MarketingWorkflowDrawer({
                                         <Typography sx={{ fontWeight: 600, fontSize: 14 }}>
                                             {label || step.title}
                                         </Typography>
+                                        {workflow.key === 'video-html' && index === 0 && Number(shortVideoId) > 0 && <ShortVideoAgentSaydiCastSettings shortVideoId={Number(shortVideoId)} revision={String(audioScript || '')} />}
                                         {workflow.key === 'video-html' && index === 1 && Number(shortVideoId) > 0 && <SceneAssetsPanel shortVideoId={Number(shortVideoId)}/>}
 
                                         {step.description.length > 0 && (

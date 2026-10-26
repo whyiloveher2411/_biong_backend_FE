@@ -47,6 +47,9 @@ type Props = {
     genders: string[];
     languages: string[];
     selectedVoice: string;
+    voiceAssignments?: Record<string, Array<{ speakerId: string; name: string }>>;
+    currentSpeakerId?: string;
+    defaultGender?: 'male' | 'female' | 'neutral' | 'all';
     loading?: boolean;
     saving?: boolean;
     errorMessage?: string;
@@ -62,6 +65,9 @@ export default function ShortVideoAgentSaydiVoicePicker({
     genders,
     languages,
     selectedVoice,
+    voiceAssignments = {},
+    currentSpeakerId = '',
+    defaultGender = 'all',
     loading = false,
     saving = false,
     errorMessage = '',
@@ -70,9 +76,14 @@ export default function ShortVideoAgentSaydiVoicePicker({
     onPlayPreview,
 }: Props) {
     const [search, setSearch] = React.useState('');
-    const [gender, setGender] = React.useState('all');
+    const [gender, setGender] = React.useState<string>(defaultGender);
     const [language, setLanguage] = React.useState('en');
     const [usedOnly, setUsedOnly] = React.useState(false);
+
+    React.useEffect(() => {
+        if (active) setGender(defaultGender);
+    }, [active, defaultGender]);
+    const genderOptions = Array.from(new Set([...genders.map((g) => g.toLowerCase()), ...(defaultGender !== 'all' ? [defaultGender] : [])]));
 
     const usedSet = React.useMemo(() => new Set(usedVoices), [usedVoices]);
 
@@ -134,7 +145,7 @@ export default function ShortVideoAgentSaydiVoicePicker({
                         MenuProps={SELECT_MENU_PROPS}
                     >
                         <MenuItem value="all">Tất cả</MenuItem>
-                        {genders.map((g) => (
+                        {genderOptions.map((g) => (
                             <MenuItem key={g} value={g}>
                                 {GENDER_LABELS[g] || g}
                             </MenuItem>
@@ -199,6 +210,8 @@ export default function ShortVideoAgentSaydiVoicePicker({
                 <List disablePadding sx={{ flex: 1, overflowY: 'auto', maxHeight: 360 }}>
                     {filtered.map((item) => {
                         const isSelected = selectedVoice === item.name;
+                        const owners = voiceAssignments[item.name] || [];
+                        const assignedElsewhere = owners.some((owner) => owner.speakerId !== currentSpeakerId);
                         const displayName = item.display_name || item.name;
                         const initials = voiceInitials(displayName);
                         const avatarColor = voiceAvatarColor(item.name, catalogKeys);
@@ -215,7 +228,9 @@ export default function ShortVideoAgentSaydiVoicePicker({
                                 key={item.name}
                                 selected={isSelected}
                                 disabled={saving}
+                                aria-disabled={saving || assignedElsewhere}
                                 onClick={() => {
+                                    if (assignedElsewhere) return;
                                     void onSelect(item.name);
                                 }}
                                 sx={{
@@ -223,6 +238,8 @@ export default function ShortVideoAgentSaydiVoicePicker({
                                     px: 2,
                                     gap: 1.5,
                                     alignItems: 'center',
+                                    cursor: assignedElsewhere ? 'default' : undefined,
+                                    minWidth: 0,
                                 }}
                             >
                                 <Avatar
@@ -242,20 +259,25 @@ export default function ShortVideoAgentSaydiVoicePicker({
                                 </Avatar>
                                 <ListItemText
                                     primary={(
-                                        <Stack direction="row" spacing={1} alignItems="center">
+                                        <Stack direction="row" alignItems="center" flexWrap="wrap" sx={{ gap: 0.75 }}>
                                             <Typography variant="body2" fontWeight={isSelected ? 700 : 500}>
                                                 {displayName}
                                             </Typography>
                                             {isSelected ? (
                                                 <Chip size="small" label="Đang chọn" color="primary" />
                                             ) : null}
+                                            {owners.map((owner) => (
+                                                <Chip key={owner.speakerId} size="small" color={owner.speakerId === currentSpeakerId ? 'primary' : 'warning'} variant="outlined"
+                                                    label={`${owner.speakerId === currentSpeakerId ? 'Đang dùng cho' : 'Đã gán cho'}: ${owner.name} (${owner.speakerId})`}
+                                                    sx={{ maxWidth: '100%', height: 'auto', '& .MuiChip-label': { whiteSpace: 'normal', overflowWrap: 'anywhere', py: 0.5 } }} />
+                                            ))}
                                             {item.featured ? (
                                                 <Chip size="small" label="Nổi bật" variant="outlined" />
                                             ) : null}
                                         </Stack>
                                     )}
                                     secondary={(
-                                        <Typography variant="caption" color="text.secondary">
+                                        <Typography variant="caption" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
                                             {[item.name, ...metaBits].filter(Boolean).join(' · ')}
                                         </Typography>
                                     )}

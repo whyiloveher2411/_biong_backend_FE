@@ -5625,10 +5625,14 @@ export async function storyV2Request(shortVideoId: number, operation: 'get' | 's
 
 export type SaydiVoiceCast = {
     enabled: boolean;
-    speakers: Record<string, { name: string; voice_sample: string }>;
+    speakers: Record<string, { name: string; voice_sample: string; description?: string; gender?: 'male' | 'female' | 'neutral' | 'unknown' }>;
 };
 
-export async function saydiVoiceCastRequest(shortVideoId: number, config?: SaydiVoiceCast): Promise<JsonResponse & { config?: SaydiVoiceCast }> {
+export async function saydiVoiceCastRequest(shortVideoId: number, config?: SaydiVoiceCast, beatId?: string): Promise<JsonResponse & { config?: SaydiVoiceCast; beat_voices?: Array<{ id: string; name: string; description: string; gender: string; voice_sample: string }> | null; manifest_ready?: boolean; manifest_json?: string }> {
     return postJson('plugin/vn4-e-learning/app-mobile/marketing/short-video/saydi-voice-cast',
-        shortVideoBody(shortVideoId, { operation: config ? 'save' : 'get', ...(config ? { config } : {}) }));
+        shortVideoBody(shortVideoId, { operation: config ? 'save' : 'get', ...(config ? { config } : {}), ...(beatId ? { beat_id: beatId } : {}) }));
+}
+
+export async function saveSaydiVoiceManifest(shortVideoId: number, manifest: string): Promise<JsonResponse & { config?: SaydiVoiceCast; manifest_ready?: boolean }> {
+    return postJson('plugin/vn4-e-learning/app-mobile/marketing/short-video/saydi-voice-cast', shortVideoBody(shortVideoId, { operation: 'save_manifest', manifest }));
 }

@@ -17,9 +17,10 @@ const registry = {
     },
 };
 beforeEach(() => {
+    global.fetch = jest.fn().mockResolvedValue({ok: true, text: async () => 'window.__SV_THREE_VERSION="0.186.1";window.THREE={REVISION:"186"};'});
     request.mockReset();
     request.mockImplementation(({data}) => Promise.resolve(data.operation === 'preview'
-        ? {success: true, asset: {...registry.assets[data.asset_id as 'wife' | 'dinner'], html: '<!doctype html><html><body>Asset preview</body></html>'}}
+        ? {success: true, asset: {...registry.assets[data.asset_id as 'wife' | 'dinner'], html: '<!doctype html><html><head><script src="http://localhost:8000/three.min.js?v=0.186.1"></script></head><body>AI layout<script id="sv-asset-module">window.SVAssetFactory=function(){/* canonical wife */};</script></body></html>'}}
         : {success: true, registry}));
 });
 
@@ -32,7 +33,9 @@ test('shows one row per character/set and lazily loads sandboxed HTML preview', 
     fireEvent.click(screen.getAllByRole('button', {name: 'Xem HTML'})[0]);
     const iframe = await screen.findByTitle('Preview Người vợ');
     expect(iframe.getAttribute('sandbox')).toBe('allow-scripts');
-    expect(iframe.getAttribute('srcdoc')).toContain('Asset preview');
+    expect(iframe.getAttribute('srcdoc')).toContain('canonical wife');
+    expect(iframe.getAttribute('srcdoc')).toContain('data-sv-three-version="0.186.1"');
+    expect(iframe.getAttribute('srcdoc')).not.toContain('http://localhost:8000');
     expect(request).toHaveBeenCalledWith(expect.objectContaining({data: {short_video_id: 42, operation: 'preview', asset_id: 'wife'}}));
     view.unmount();
 });

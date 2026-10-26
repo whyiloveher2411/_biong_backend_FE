@@ -16,7 +16,7 @@ beforeEach(() => {
 });
 test('long story mounts a bounded number of editor fields', async () => {
     const start = performance.now();
-    const view = render(<StoryV2Editor shortVideoId={67} initialScript={JSON.stringify(fixture())} onSaved={() => {}} />);
+    const view = render(<StoryV2Editor shortVideoId={67} initialScript={JSON.stringify(fixture())} onSaved={() => undefined} />);
     await screen.findByText(/Timeline: 320/);
     const count = view.container.querySelectorAll('input, textarea, [role="combobox"]').length;
     console.log(`Story editor mount: ${Math.round(performance.now()-start)}ms, ${count} input/textarea/combobox elements`);
@@ -28,7 +28,7 @@ async function choose(label: string, option: string, index?: number) {
     fireEvent.click(await screen.findByRole('option', {name: option}));
 }
 test('casts narrator and character to separate Saydi voices and preserves all beats on save', async () => {
-    render(<StoryV2Editor shortVideoId={67} initialScript={JSON.stringify(fixture())} onSaved={() => {}} />);
+    render(<StoryV2Editor shortVideoId={67} initialScript={JSON.stringify(fixture())} onSaved={() => undefined} />);
     await screen.findByText(/Timeline: 320/);
     await choose('Dịch vụ giọng', 'Saydi', 0);
     await choose('Giọng Saydi cho Người dẫn', 'Nam mẫu');
@@ -46,7 +46,7 @@ test('casts narrator and character to separate Saydi voices and preserves all be
 });
 test('switching beats keeps edits and does not mount all other editors', async () => {
     const story = fixture();
-    const {container} = render(<StoryV2Editor shortVideoId={67} initialScript={JSON.stringify(story)} onSaved={() => {}} />);
+    const {container} = render(<StoryV2Editor shortVideoId={67} initialScript={JSON.stringify(story)} onSaved={() => undefined} />);
     await screen.findByText(/Timeline: 320/);
     fireEvent.change(screen.getByLabelText('Visual: bối cảnh, nhân vật, diễn biến và kết thúc'), {target: {value: 'Edited first shot'}});
     fireEvent.mouseDown(screen.getByLabelText('Beat đang chỉnh'));
@@ -62,7 +62,7 @@ test('switching beats keeps edits and does not mount all other editors', async (
 });
 test('catalog failure reports an error and does not retry in a render loop', async () => {
     (fetchSaydiVoiceSamples as jest.Mock).mockRejectedValue(new Error('Catalog unavailable'));
-    render(<StoryV2Editor shortVideoId={67} initialScript={JSON.stringify(fixture())} onSaved={() => {}} />);
+    render(<StoryV2Editor shortVideoId={67} initialScript={JSON.stringify(fixture())} onSaved={() => undefined} />);
     await screen.findByText(/Catalog unavailable/);
     expect(fetchSaydiVoiceSamples).toHaveBeenCalledTimes(1);
 });

@@ -34,7 +34,7 @@ function quickHash(input: string): string {
 }
 
 /** Đoán kích thước canvas beat HTML được thiết kế (khớp runner render). */
-function detectAuthoredSize(html: string): { w: number; h: number } | null {
+export function detectAuthoredSize(html: string): { w: number; h: number } | null {
     const dw = html.match(/data-width=["']?(\d+)/i);
     const dh = html.match(/data-height=["']?(\d+)/i);
     if (dw && dh) {
@@ -63,6 +63,11 @@ function detectAuthoredSize(html: string): { w: number; h: number } | null {
                 : { w: base, h: Math.round((base * b) / a) };
         }
     }
+    // Legacy fixed-size Three.js beats may declare only renderer.setSize(...).
+    const fixed = html.match(/\b\w+\.setSize\(\s*(\d+)\s*,\s*(\d+)\s*\)/);
+    if (fixed && Number(fixed[1]) > 0 && Number(fixed[2]) > 0) {
+        return { w: Number(fixed[1]), h: Number(fixed[2]) };
+    }
     return null;
 }
 
@@ -82,10 +87,9 @@ export default function BeatHtmlMotionPreview({ html, timeSec, durationSec, beat
     useModel3dLocateAsset(iframeRef, shortVideoId, beatId || '');
     const srcDoc = React.useMemo(() => {
         const raw = String(html || '');
-        // Beat dùng asset library → giữ three/loader CDN (r147) để khớp runtime,
+        // Beat dùng asset library → dùng bundle Three.js r186 cùng bộ render,
         // và đổi 2 thẻ assets/ tương đối sang URL same-origin có token.
-        const useAssetLibrary = raw.includes('assets/assets-runtime.js');
-        const localized = useAssetLibrary ? raw : localizeImportHtmlExternalScripts(raw);
+        const localized = localizeImportHtmlExternalScripts(raw);
         const withAssets = localizeImportHtmlAssetScripts(localized, { shortVideoId, beatId, revision: assetRevision });
         return ensureImportHtmlDataDuration(withAssets, duration);
     }, [html, duration, shortVideoId, beatId, assetRevision]);

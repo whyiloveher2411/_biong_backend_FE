@@ -1,4 +1,6 @@
 import React from 'react';
+import SceneAssetHtmlPreview from './SceneAssetHtmlPreview';
+import BeatVoiceSummary from './BeatVoiceSummary';
 import CottageOutlinedIcon from '@mui/icons-material/CottageOutlined';
 import PersonOutlineIcon from '@mui/icons-material/PersonOutline';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
@@ -42,7 +44,7 @@ export default function SceneAssetBeatSummary({shortVideoId, beatId, variant = '
     const previewDialog = (
         <Dialog open={Boolean(preview)} onClose={() => setPreview(null)} maxWidth="lg" fullWidth>
             <DialogTitle>{preview?.name}</DialogTitle>
-            <DialogContent><Box component="iframe" title={`Asset ${preview?.id || ''}`} sandbox="allow-scripts" srcDoc={preview?.html || ''} sx={{width: '100%', height: '65vh', border: 0}}/></DialogContent>
+            <DialogContent>{preview && <SceneAssetHtmlPreview kind={preview.kind} title={`Asset ${preview.id}`} html={preview.html || ''}/>}</DialogContent>
             <DialogActions><Button onClick={() => setPreview(null)}>Đóng</Button></DialogActions>
         </Dialog>
     );
@@ -66,6 +68,7 @@ export default function SceneAssetBeatSummary({shortVideoId, beatId, variant = '
                     </IconButton></span>
                 </Tooltip>;
             })}
+            <BeatVoiceSummary shortVideoId={shortVideoId} beatId={beatId} compact />
             {previewDialog}
         </Stack>;
     }
@@ -77,6 +80,7 @@ export default function SceneAssetBeatSummary({shortVideoId, beatId, variant = '
         {mapping && !mapping.action && <Alert severity="warning" sx={{mb: 1}}>Mapping hiện tại chưa có kế hoạch diễn biến. Lập lại hồ sơ ở Bước 2 để lưu trạng thái đầu, hành động và kết quả của từng beat; chỉ đổi góc máy sẽ không làm câu chuyện tiến triển.</Alert>}
         {mapping?.continuity_error && <Alert severity="warning" sx={{mb: 1}}>{mapping.continuity_error}</Alert>}
         {mapping?.continuity_from && <Alert severity="success" sx={{mb: 1}}>Đã nạp trạng thái frame cuối từ {mapping.continuity_from}.</Alert>}
+        {!mapping && <BeatVoiceSummary shortVideoId={shortVideoId} beatId={beatId} />}
         {mapping && <Stack spacing={1}>
             {ids.map(id => {
                 const asset = registry?.assets?.[id];
@@ -89,6 +93,7 @@ export default function SceneAssetBeatSummary({shortVideoId, beatId, variant = '
             })}
             {!mapping.character_ids.length && <Typography variant="body2" color="text.secondary">Không có nhân vật trong beat này.</Typography>}
             {!ids.length && <Typography variant="body2" color="text.secondary">Beat này không dùng asset chung.</Typography>}
+            <BeatVoiceSummary shortVideoId={shortVideoId} beatId={beatId} />
             {mapping.action && <Box>
                 <Typography variant="subtitle2">Diễn biến của beat{mapping.scene_id ? ` · ${mapping.scene_id}` : ''}</Typography>
                 {mapping.start_state && <Typography variant="body2"><b>Bắt đầu:</b> {mapping.start_state}</Typography>}

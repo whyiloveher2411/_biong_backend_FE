@@ -95,28 +95,18 @@ export function seekCustomHtmlIframe(iframe: HTMLIFrameElement | null, timeSec: 
     }
 }
 
-/**
- * Beat HTML sinh ra có thể tham chiếu Three.js qua CDN ngoài
- * (cdn.jsdelivr / unpkg …). Trong iframe preview, script ngoài có thể không tải
- * được (offline / adblock / mạng) → `window.THREE` undefined → preview trắng.
- * Rewrite sang bản Three.js tự phục vụ tại `/three.min.js` (public) để preview
- * luôn hoạt động. Không đụng tới các script ngoài khác.
- */
+/** All HTML previews share the exact application-owned r186 bundle used by export. */
 const EXTERNAL_THREE_SCRIPT_RE = /<script\b[^>]*\bsrc\s*=\s*["'][^"']*\/three(?:\.min)?\.js[^"']*["'][^>]*>\s*<\/script>/gi;
-
 export function localizeImportHtmlExternalScripts(html: string): string {
-    const source = String(html || '');
-    if (!source || source.toLowerCase().indexOf('three') === -1) {
-        return source;
-    }
-    return source.replace(EXTERNAL_THREE_SCRIPT_RE, '<script src="/three.min.js"></script>');
+    return String(html || '').replace(EXTERNAL_THREE_SCRIPT_RE,
+        '<script src="/three.min.js?v=0.186.1"></script>');
 }
 
 /**
  * Preview asset library: thay 2 thẻ script tương đối của scaffold
  * (`assets/dist/assets-config.js`, `assets/assets-runtime.js`) bằng URL tuyệt đối
  * same-origin (có access_token) để GLB + runtime tải được trong iframe preview.
- * Giữ nguyên các thẻ three/loader (CDN r147) để khớp phiên bản với runtime.
+ * Three.js và addons dùng bundle r186 cùng phiên bản với bộ render.
  */
 export function localizeImportHtmlAssetScripts(
     html: string,

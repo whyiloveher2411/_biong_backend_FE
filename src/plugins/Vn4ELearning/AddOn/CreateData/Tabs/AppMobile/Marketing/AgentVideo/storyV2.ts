@@ -7,14 +7,17 @@ export type StoryV2 = {
     speakers: Record<string, {name?: string; character_id?: string; voice?: StoryVoice | null}>;
     beats: {id: string; duration_hint_sec: number; visual_description?: string; items: StoryItem[]}[];
 };
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
 export function parseStoryV2(raw: string): StoryV2 | null {
     try {
-        const value = JSON.parse(raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, ''));
-        if (value?.schema_version !== 'whatif_2d_story_v2' || !Array.isArray(value.beats) || !value.beats.length || !value.speakers || typeof value.speakers !== 'object' || Array.isArray(value.speakers)) return null;
-        if (Object.values(value.speakers).some((speaker: any) => !speaker || typeof speaker !== 'object' || (speaker.voice != null && (typeof speaker.voice !== 'object' || !['saydi', 'vbee'].includes(speaker.voice.provider))))) return null;
-        if (value.characters !== undefined && (!Array.isArray(value.characters) || value.characters.some((c: any) => !c || typeof c.id !== 'string'))) return null;
-        if (value.beats.some((beat: any) => !beat || typeof beat.id !== 'string' || !Array.isArray(beat.items) || beat.items.some((item: any) => !item || typeof item.id !== 'string' || typeof item.text !== 'string' || !['narration', 'dialogue', 'screen_text', 'action'].includes(item.type) || (item.events !== undefined && (!Array.isArray(item.events) || item.events.some((event: any) => !event || typeof event.id !== 'string' || typeof event.at_sec !== 'number')))))) return null;
-        return {...value, language: value.language || 'vi'};
+        const value: unknown = JSON.parse(raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, ''));
+        if (!isRecord(value) || value.schema_version !== 'whatif_2d_story_v2' || !Array.isArray(value.beats) || !value.beats.length || !isRecord(value.speakers)) return null;
+        if (Object.values(value.speakers).some((speaker: unknown) => !isRecord(speaker) || (speaker.voice != null && (!isRecord(speaker.voice) || typeof speaker.voice.provider !== 'string' || !['saydi', 'vbee'].includes(speaker.voice.provider))))) return null;
+        if (value.characters !== undefined && (!Array.isArray(value.characters) || value.characters.some((c: unknown) => !isRecord(c) || typeof c.id !== 'string'))) return null;
+        if (value.beats.some((beat: unknown) => !isRecord(beat) || typeof beat.id !== 'string' || !Array.isArray(beat.items) || beat.items.some((item: unknown) => !isRecord(item) || typeof item.id !== 'string' || typeof item.text !== 'string' || typeof item.type !== 'string' || !['narration', 'dialogue', 'screen_text', 'action'].includes(item.type) || (item.events !== undefined && (!Array.isArray(item.events) || item.events.some((event: unknown) => !isRecord(event) || typeof event.id !== 'string' || typeof event.at_sec !== 'number')))))) return null;
+        return {...value, language: value.language || 'vi'} as StoryV2;
     } catch { return null; }
 }
 export function newStoryV2(): StoryV2 {

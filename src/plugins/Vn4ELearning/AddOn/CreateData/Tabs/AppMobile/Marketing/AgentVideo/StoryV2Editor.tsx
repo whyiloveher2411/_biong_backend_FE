@@ -46,7 +46,7 @@ function StoryV2Editor({shortVideoId, initialScript, onSaved}: Props) {
         let cancelled = false;
         void storyV2Request(shortVideoId, 'get').then((res) => {
             if (!cancelled && res.success && res.story_timeline) { setClips(res.story_timeline.speech_clips); setSummary(`Timeline: ${res.story_timeline.duration_sec.toFixed(2)}s · ${res.story_timeline.pending_utterances.length} câu cần audio`); }
-        }).catch(() => {});
+        }).catch(() => undefined);
         return () => { cancelled = true; };
     }, [shortVideoId, initialScript]);
     const update = (next: StoryV2) => { setStory(next); setDirty(true); setError(''); setClips([]); setManifest(null); setVideoUrl(''); };

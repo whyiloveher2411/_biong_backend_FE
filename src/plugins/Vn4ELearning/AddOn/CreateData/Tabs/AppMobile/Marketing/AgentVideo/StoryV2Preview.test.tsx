@@ -3,12 +3,13 @@ import {act, fireEvent, render, screen, waitFor} from '@testing-library/react';
 import StoryV2Preview from './StoryV2Preview';
 import {storyV2Request} from './agentVideoApi';
 jest.mock('./agentVideoApi', () => ({storyV2Request: jest.fn()}));
-const mockPlayer = {getCurrentFrame: jest.fn(() => 0), isPlaying: jest.fn(() => false), seekTo: jest.fn(), play: jest.fn(), pause: jest.fn(), addEventListener: jest.fn(), removeEventListener: jest.fn()};
+const mockPlayer = {getCurrentFrame: jest.fn(() => 0), isPlaying: jest.fn(() => false), seekTo: jest.fn(), play: jest.fn(), pause: jest.fn(), addEventListener: jest.fn<void, [string, () => void]>(), removeEventListener: jest.fn()};
+type MockPreviewProps = {manifest: {speech_clips: {speaker_id?: string}[]}; playerRef: React.MutableRefObject<typeof mockPlayer | null>; onPlayerReady: (player: typeof mockPlayer) => void};
 jest.mock('../ShortVideoRemotionPlayer', () => ({
-    ShortVideoRemotionPreview: ({manifest, playerRef, onPlayerReady}: any) => {
-        const React = require('react');
+    ShortVideoRemotionPreview: ({manifest, playerRef, onPlayerReady}: MockPreviewProps) => {
+        const React = jest.requireActual<typeof import('react')>('react');
         React.useEffect(() => {playerRef.current = mockPlayer; onPlayerReady(mockPlayer);}, [playerRef, onPlayerReady]);
-        return <div data-testid="shared-video-player" data-speakers={manifest.speech_clips.map((clip: any) => clip.speaker_id).join(',')} />;
+        return <div data-testid="shared-video-player" data-speakers={manifest.speech_clips.map((clip) => clip.speaker_id).join(',')} />;
     },
     ShortVideoRemotionTimelineBar: () => <div data-testid="one-playback-bar" />,
 }));
@@ -63,7 +64,8 @@ test('listen from a line seeks and plays the same timeline and highlights curren
     expect(mockPlayer.seekTo).toHaveBeenLastCalledWith(64);
     expect(mockPlayer.play).toHaveBeenCalled();
     mockPlayer.getCurrentFrame.mockReturnValue(90);
-    const sync = mockPlayer.addEventListener.mock.calls.find((call: any[]) => call[0] === 'frameupdate') as any;
+    const sync = mockPlayer.addEventListener.mock.calls.find((call) => call[0] === 'frameupdate');
+    if (!sync) throw new Error('Missing frameupdate listener');
     act(() => sync[1]());
     expect(screen.getByText('Minh').closest('[role="listitem"]')).toHaveAttribute('aria-current', 'true');
     mockPlayer.getCurrentFrame.mockReturnValue(0);
@@ -75,8 +77,9 @@ test('audio frame updates notify the visible motion preview with local time', as
     await screen.findByRole('list', {name: 'Danh sách lời dẫn và thoại'});
     mockPlayer.getCurrentFrame.mockReturnValue(150);
     mockPlayer.isPlaying.mockReturnValue(true);
-    const calls = mockPlayer.addEventListener.mock.calls as any[];
+    const calls = mockPlayer.addEventListener.mock.calls;
     const sync = calls.filter((call) => call[0] === 'frameupdate').pop();
+    if (!sync) throw new Error('Missing frameupdate listener');
     act(() => sync[1]());
     expect(onTime).toHaveBeenLastCalledWith(5, true);
     mockPlayer.getCurrentFrame.mockReturnValue(0);

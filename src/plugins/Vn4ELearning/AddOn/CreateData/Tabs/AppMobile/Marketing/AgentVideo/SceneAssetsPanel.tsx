@@ -1,4 +1,5 @@
 import React from 'react';
+import SceneAssetHtmlPreview from './SceneAssetHtmlPreview';
 import PersonOutlineIcon from '@mui/icons-material/PersonOutline';
 import CottageOutlinedIcon from '@mui/icons-material/CottageOutlined';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
@@ -181,7 +182,9 @@ export default function SceneAssetsPanel({shortVideoId}: Props) {
     const locked = Boolean(busy) || loading;
     const patchBeat = (id: string, patch: Record<string, unknown>) => setDraft(prev => {
         const base = prev || registry;
-        return {...base, beats: {...base.beats, [id]: {...base.beats![id], ...patch}}};
+        const current = base.beats?.[id];
+        if (!current) return prev;
+        return {...base, beats: {...base.beats, [id]: {...current, ...patch}}};
     });
     return <Stack spacing={1.25} sx={{mt: 1.5}} aria-busy={loading}>
         <Alert severity="info">Lập danh sách → tạo HTML từng hồ sơ → kiểm tra gán beat → tạo visual/HTML beat. Các beat cùng cảnh dùng chung bối cảnh, đồ vật và mã nhân vật.</Alert>
@@ -276,6 +279,6 @@ export default function SceneAssetsPanel({shortVideoId}: Props) {
             const next = {...base, assets: {...base.assets, [profile.id]: profile}};
             if (await run('profile', 'manifest', {text: sceneAssetsManifest(next), expected_revision: base.revision || ''})) setProfile(null);
         }}>Lưu hồ sơ</Button></DialogActions></Dialog>
-        <Dialog open={Boolean(preview)} onClose={() => setPreview(null)} fullWidth maxWidth="lg"><DialogTitle>Preview · {preview?.name}</DialogTitle><DialogContent sx={{height: '70vh', p: 0}}>{preview && <iframe title={`Preview ${preview.name}`} sandbox="allow-scripts" srcDoc={preview.html} style={{width: '100%', height: '100%', border: 0}}/>}</DialogContent><DialogActions><Button onClick={() => setPreview(null)}>Đóng</Button></DialogActions></Dialog>
+        <Dialog open={Boolean(preview)} onClose={() => setPreview(null)} fullWidth maxWidth="lg"><DialogTitle>Preview · {preview?.name}</DialogTitle><DialogContent sx={{height: '70vh', p: 0}}>{preview && <SceneAssetHtmlPreview kind={preview.kind} title={`Preview ${preview.name}`} html={preview.html || ''} height="100%"/>}</DialogContent><DialogActions><Button onClick={() => setPreview(null)}>Đóng</Button></DialogActions></Dialog>
     </Stack>;
 }
