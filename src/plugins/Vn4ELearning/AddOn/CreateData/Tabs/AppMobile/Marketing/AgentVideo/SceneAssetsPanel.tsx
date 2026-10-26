@@ -1,5 +1,5 @@
 import React from 'react';
-import SceneAssetHtmlPreview from './SceneAssetHtmlPreview';
+import SceneAssetPreviewDialog from './SceneAssetPreviewDialog';
 import PersonOutlineIcon from '@mui/icons-material/PersonOutline';
 import CottageOutlinedIcon from '@mui/icons-material/CottageOutlined';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
@@ -163,15 +163,14 @@ export default function SceneAssetsPanel({shortVideoId}: Props) {
         } catch (e) { if (mounted.current) setError('Không kết nối được CMS.'); return false; }
         finally { if (mounted.current && currentVideo.current === shortVideoId) setBusy(''); }
     };
-    const loadAsset = async (asset: SceneAsset, mode: 'preview' | 'edit') => {
+    const loadAsset = async (asset: SceneAsset) => {
         if (busy || loading) return;
         setBusy('load:' + asset.id); setError('');
         try {
             const res = await sceneAssetsRequest(shortVideoId, 'preview', {asset_id: asset.id});
             if (!mounted.current || currentVideo.current !== shortVideoId) return;
             if (!res.success || !res.asset) { setError(sceneAssetMessage(res)); return; }
-            if (mode === 'preview') setPreview(res.asset);
-            else {setEdit(res.asset); setHtml(res.asset.html || '');}
+            setEdit(res.asset); setHtml(res.asset.html || '');
         } catch (e) { if (mounted.current) setError('Không tải được HTML hồ sơ.'); }
         finally { if (mounted.current && currentVideo.current === shortVideoId) setBusy(''); }
     };
@@ -232,17 +231,17 @@ export default function SceneAssetsPanel({shortVideoId}: Props) {
                             {generation?.status === 'completed' && <Typography variant="caption" color="text.secondary">{generation.preview_checked ? 'Đã chạy preview và lưu HTML' : 'HTML cũ chưa kiểm tra preview đầy đủ'}{generation.repair_attempt ? ` · ${generation.repair_attempt} lần tự sửa` : ''}{generation.continue_clicks ? ` · ${generation.continue_clicks} lần Continue` : ''}</Typography>}
                             <Box sx={{mt: 1.25, pt: 1.25, borderTop: '1px solid', borderColor: 'divider', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 0.75}}>
                                 {asset.has_html ? <>
-                                    <Button size="small" sx={compactButtonSx} variant="contained" color="success" startIcon={<VisibilityOutlinedIcon/>} disabled={locked || !asset.has_html} onClick={() => void loadAsset(asset, 'preview')}>Xem HTML</Button>
+                                    <Button size="small" sx={compactButtonSx} variant="contained" color="success" startIcon={<VisibilityOutlinedIcon/>} disabled={locked || !asset.has_html} onClick={() => setPreview(asset)}>Xem HTML</Button>
                                     <Button size="small" sx={compactButtonSx} variant="outlined" color="primary" startIcon={<PlayArrowIcon/>} disabled={locked || running} onClick={() => void run('queue:' + asset.id, 'enqueue', {asset_id: asset.id, force: true})}>{generation?.status === 'failed' || generation?.status === 'cancelled' ? 'Chạy lại queue' : 'Tạo bằng queue'}</Button>
                                 </> : <>
                                     <Button size="small" sx={compactButtonSx} variant="contained" color="primary" startIcon={<PlayArrowIcon/>} disabled={locked || running} onClick={() => void run('queue:' + asset.id, 'enqueue', {asset_id: asset.id, force: true})}>{generation?.status === 'failed' || generation?.status === 'cancelled' ? 'Chạy lại queue' : 'Tạo bằng queue'}</Button>
-                                    <Button size="small" sx={compactButtonSx} variant="outlined" color="success" startIcon={<VisibilityOutlinedIcon/>} disabled>Xem HTML</Button>
+                                    <Button size="small" sx={compactButtonSx} variant="outlined" color="success" startIcon={<VisibilityOutlinedIcon/>} disabled={locked} onClick={() => setPreview(asset)}>Xem HTML</Button>
                                 </>}
                                 <Button size="small" sx={compactButtonSx} variant="outlined" color="primary" startIcon={<ChatOutlinedIcon/>} disabled={locked || running} onClick={() => void run(asset.id, 'open', {asset_id: asset.id})}>{busy === asset.id ? 'Đang mở…' : 'Mở DeepSeek'}</Button>
                                 {asset.chat_url && <Button size="small" sx={compactButtonSx} variant="text" color="primary" disabled={locked || running} onClick={() => void run(`chat:${asset.id}`, 'open', {asset_id: asset.id, mode: 'reopen'})}>Chat đã tạo</Button>}
                                 <Box sx={{display: 'flex', alignItems: 'center', gap: 0.25, ml: 'auto', p: 0.25, borderRadius: 1.5, bgcolor: 'action.hover'}}>
                                     <Button size="small" sx={compactUtilitySx} variant="text" color="inherit" startIcon={<ReplayIcon/>} disabled={locked || running || !asset.has_html} onClick={() => void run('repair:' + asset.id, 'repair', {asset_id: asset.id})}>Kiểm tra / tự sửa</Button>
-                                    <Button size="small" sx={compactUtilitySx} variant="text" color="inherit" startIcon={<CodeIcon/>} disabled={locked} onClick={() => void loadAsset(asset, 'edit')}>Cập nhật HTML</Button>
+                                    <Button size="small" sx={compactUtilitySx} variant="text" color="inherit" startIcon={<CodeIcon/>} disabled={locked} onClick={() => void loadAsset(asset)}>Cập nhật HTML</Button>
                                     <Button size="small" sx={compactUtilitySx} variant="text" color="inherit" startIcon={<EditOutlinedIcon/>} disabled={locked} onClick={() => {profileBase.current = registry; setProfile({...asset});}}>Sửa hồ sơ</Button>
                                 </Box>
                             </Box>
@@ -279,6 +278,6 @@ export default function SceneAssetsPanel({shortVideoId}: Props) {
             const next = {...base, assets: {...base.assets, [profile.id]: profile}};
             if (await run('profile', 'manifest', {text: sceneAssetsManifest(next), expected_revision: base.revision || ''})) setProfile(null);
         }}>Lưu hồ sơ</Button></DialogActions></Dialog>
-        <Dialog open={Boolean(preview)} onClose={() => setPreview(null)} fullWidth maxWidth="lg"><DialogTitle>Preview · {preview?.name}</DialogTitle><DialogContent sx={{height: '70vh', p: 0}}>{preview && <SceneAssetHtmlPreview kind={preview.kind} title={`Preview ${preview.name}`} html={preview.html || ''} height="100%"/>}</DialogContent><DialogActions><Button onClick={() => setPreview(null)}>Đóng</Button></DialogActions></Dialog>
+        <SceneAssetPreviewDialog shortVideoId={shortVideoId} asset={preview} onClose={() => setPreview(null)} onRegistryChange={applyRegistry} previewTitle={`Preview ${preview?.name || ''}`}/>
     </Stack>;
 }

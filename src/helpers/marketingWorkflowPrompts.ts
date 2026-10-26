@@ -616,9 +616,9 @@ async function appendSceneAssetContext(workflow: string, file: string, context: 
     if (!res.success) throw new Error(sceneAssetMessage(res));
     const registry = res.registry || {};
     if (!registry.schema_version) throw new Error('Hoàn thành danh sách nhân vật/bối cảnh ở Bước 2 trước.');
-    const missing = Object.values(registry.assets || {}).filter(a => !a.ready);
-    if (missing.length) throw new Error('Cần tạo HTML hồ sơ trước: ' + missing.map(a => a.name).join(', '));
-    return text + '\n\nCANONICAL SCENE ASSET MANIFEST (source data):\n' + sceneAssetsManifest(registry)
+    // Shot/action design consumes specifications and mappings, not compiled HTML factories.
+    // Readiness is checked later by the server when generating/composing each HTML beat.
+    return text + '\n\nPLANNING STAGE: Design beat actions from saved asset specifications and mappings. Assets may have no HTML yet or require rebuilding; neither condition blocks planning. Do not request HTML creation at this stage. Factory readiness is checked later when generating/composing HTML beats.\nCANONICAL SCENE ASSET MANIFEST (source data):\n' + sceneAssetsManifest(registry)
         + '\nCompose the mapped character/environment IDs. Follow each beat start_state → action → end_state and new_information; use scene_id and neighbouring states across input batches. Preserve identity, architecture and named rest anchors while allowing story props/joints to move. A fixed camera is valid; angle changes and particles do not count as a story turn. Off-screen narration never implies an on-screen presenter. Never silently substitute a studio for the actual story setting.';
 }
 

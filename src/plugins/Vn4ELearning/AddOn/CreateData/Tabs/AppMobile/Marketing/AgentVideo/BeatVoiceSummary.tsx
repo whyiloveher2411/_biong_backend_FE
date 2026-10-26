@@ -1,5 +1,6 @@
 import React from 'react';
 import { Avatar, Box, Chip, CircularProgress, Stack, Tooltip, Typography } from '@mui/material';
+import ShortVideoAgentSaydiCastSettings from './ShortVideoAgentSaydiCastSettings';
 import RecordVoiceOverOutlinedIcon from '@mui/icons-material/RecordVoiceOverOutlined';
 import { AGENT_AUDIO_SCRIPT_SAVED_EVENT } from 'helpers/marketingAgentAudioScriptGeminiWorkflow';
 import { saydiVoiceCastRequest } from './agentVideoApi';
@@ -17,6 +18,8 @@ export default function BeatVoiceSummary({ shortVideoId, beatId, compact = false
     const [allIds, setAllIds] = React.useState<string[]>([]);
     const [error, setError] = React.useState('');
     const [revision, setRevision] = React.useState(0);
+    const [selectedVoice, setSelectedVoice] = React.useState('');
+    React.useEffect(() => setSelectedVoice(''), [shortVideoId, beatId]);
     React.useEffect(() => {
         const updated = (e: Event) => { if (Number((e as CustomEvent).detail?.shortVideoId) === shortVideoId) setRevision((n) => n + 1); };
         document.addEventListener(AGENT_AUDIO_SCRIPT_SAVED_EVENT, updated);
@@ -42,7 +45,7 @@ export default function BeatVoiceSummary({ shortVideoId, beatId, compact = false
                 const label = voice.name || voice.id;
                 const title = `${label} (${voice.id})${voice.description ? ' — ' + voice.description : ''} · ${voice.voice_sample || 'Chưa cài giọng Saydi'}`;
                 return <Tooltip key={voice.id} title={title} placement={compact ? 'left' : 'top'}>
-                    <Box tabIndex={0} aria-label={`Giọng đọc: ${label} (${voice.id})`} data-voice-id={voice.id} data-voice-color={color}>
+                    <Box component="button" type="button" onClick={() => setSelectedVoice(voice.id)} sx={{border:0, p:0, bgcolor:'transparent', cursor:'pointer', font:'inherit', borderRadius:1, '&:focus-visible':{outline:'2px solid', outlineColor:'primary.main'}}} aria-label={`Giọng đọc: ${label} (${voice.id})`} data-voice-id={voice.id} data-voice-color={color}>
                         {compact ? <Stack alignItems="center" sx={{ width: 64 }}>
                             <Avatar sx={{ width: 30, height: 30, bgcolor: color, color: '#fff' }}><RecordVoiceOverOutlinedIcon sx={{ fontSize: 18 }} /></Avatar>
                             <Typography variant="caption" noWrap sx={{ maxWidth: 64, color: 'common.white', fontSize: 10 }}>{label}</Typography>
@@ -53,5 +56,6 @@ export default function BeatVoiceSummary({ shortVideoId, beatId, compact = false
         </Stack> : <Tooltip title={message}><Box>
             {compact && !error && voices === null ? <CircularProgress size={16} sx={{ color: 'common.white' }} /> : <Typography variant="caption" role={error ? 'alert' : undefined} sx={{ color: compact ? 'common.white' : 'text.secondary' }}>{compact ? (error ? 'Lỗi tải' : '—') : message}</Typography>}
         </Box></Tooltip>}
+        {selectedVoice && <ShortVideoAgentSaydiCastSettings shortVideoId={shortVideoId} drawerOnly openRoleId={selectedVoice} onClose={() => setSelectedVoice('')}/>}
     </Stack>;
 }

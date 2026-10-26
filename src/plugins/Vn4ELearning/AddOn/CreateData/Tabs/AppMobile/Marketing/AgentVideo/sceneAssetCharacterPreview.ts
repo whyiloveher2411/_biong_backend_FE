@@ -12,6 +12,7 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#10151d;col
 <label>Biểu cảm <select id="emotion"><option value="neutral">Trung tính</option><option value="happy">Vui</option><option value="sad">Buồn</option><option value="angry">Giận</option><option value="surprised">Ngạc nhiên</option><option value="worried">Lo lắng</option><option value="smug">Tự mãn</option><option value="thinking">Suy nghĩ</option></select></label>
 <label>Tư thế <select id="pose"><option value="idle">Đứng</option><option value="sit">Ngồi</option></select></label>
 <label>Bước đi <input id="gait" aria-label="Bước đi" type="range" min="0" max="6.283185" step="0.05" value="0"></label>
+<label id="speaking-control"><input id="speaking" aria-label="Đang nói chuyện" type="checkbox" disabled>Đang nói chuyện <span id="speaking-support" style="color:#facc15;font-size:11px"></span></label>
 <label id="deadpan-control" hidden><input id="deadpan" aria-label="Mặt đơ hài" type="checkbox">Mặt đơ hài</label>
 <label id="intensity-control" hidden>Cường độ <input id="intensity" aria-label="Cường độ cảm xúc" type="range" min="0" max="1" step="0.05" value="1"></label>
 <label>Thời gian <input id="preview-time" aria-label="Thời gian biểu cảm" type="range" min="0" max="3" step="0.02" value="0"><output id="time-value">0.00s</output></label>
@@ -31,7 +32,11 @@ try {
  const asset=window.SVAssetFactory(THREE,{});scene.add(asset.root);
  if(typeof asset.update!=='function')throw new Error('Nhân vật chưa hỗ trợ giao diện update(t,state). Hãy tạo lại hồ sơ.');
  let previewTime=0,playing=false,playStarted=0,playOffset=0,frameId=0;
- const state={neutralCue:false,emotionTime:0,emotionEffects:true,emotionIntensity:1,emotion:'neutral',pose:'idle',gaitPhase:0,walkWeight:0,jointRotations:{}};
+ const state={speaking:false,speechTime:0,neutralCue:false,emotionTime:0,emotionEffects:true,emotionIntensity:1,emotion:'neutral',pose:'idle',gaitPhase:0,walkWeight:0,jointRotations:{}};
+ const speakingSupported=asset.capabilities?.speaking===true;
+ document.getElementById('speaking').disabled=!speakingSupported;
+ document.getElementById('speaking-support').textContent=speakingSupported?'':'(HTML chưa hỗ trợ)';
+ document.getElementById('speaking-control').title=speakingSupported?'Bật để xem miệng nói chuyện':'HTML này chưa hỗ trợ nói chuyện. Hãy tạo lại HTML nhân vật theo hồ sơ mới.';
  if(asset.capabilities?.neutralCue===true)document.getElementById('deadpan-control').hidden=false;
  if(asset.capabilities?.emotionIntensity){document.getElementById('intensity-control').hidden=false;for(const id of ['crying','laughing'])if(asset.capabilities.emotions?.includes(id)){const option=document.createElement('option');option.value=id;option.textContent=id==='crying'?'Khóc thành dòng':'Cười lớn';document.getElementById('emotion').appendChild(option);}}
  asset.update(0,state);asset.root.updateMatrixWorld(true);
@@ -54,18 +59,19 @@ try {
  let yaw=.18,pitch=.06,distance=1,baseDistance=1,target=center.clone();
  function render(){camera.position.set(target.x+Math.sin(yaw)*Math.cos(pitch)*distance,target.y+Math.sin(pitch)*distance,target.z+Math.cos(yaw)*Math.cos(pitch)*distance);camera.lookAt(target);renderer.render(scene,camera);}
  function fit(){const top=toolbar.getBoundingClientRect().height,w=innerWidth,h=Math.max(1,innerHeight-top);stage.style.top=top+'px';renderer.setSize(w,h);camera.aspect=w/h;camera.far=Math.max(100,scale*100);camera.updateProjectionMatrix();const v=THREE.MathUtils.degToRad(camera.fov/2),horizontal=Math.atan(Math.tan(v)*camera.aspect);baseDistance=Math.max(size.y/(2*Math.tan(v)),Math.hypot(size.x,size.z)/(2*Math.tan(horizontal)))*1.25+size.z/2;distance=baseDistance;render();}
- function update(){state.emotionTime=previewTime;state.effectFacingYaw=yaw;asset.update(previewTime,state);asset.root.updateMatrixWorld(true);render();document.getElementById('preview-time').value=String(previewTime);document.getElementById('time-value').textContent=previewTime.toFixed(2)+'s';}
+ function update(){state.speechTime=previewTime;state.emotionTime=previewTime;state.effectFacingYaw=yaw;asset.update(previewTime,state);asset.root.updateMatrixWorld(true);render();document.getElementById('preview-time').value=String(previewTime);document.getElementById('time-value').textContent=previewTime.toFixed(2)+'s';}
  function stop(){playing=false;cancelAnimationFrame(frameId);document.getElementById('play').textContent='Phát biểu cảm';}
  function tick(now){if(!playing)return;previewTime=Math.min(3,playOffset+(now-playStarted)/1000);update();if(previewTime>=3){stop();return;}frameId=requestAnimationFrame(tick);}
  function play(){stop();if(previewTime>=3)previewTime=0;playOffset=previewTime;playStarted=performance.now();playing=true;document.getElementById('play').textContent='Dừng';frameId=requestAnimationFrame(tick);}
  document.getElementById('preview-time').oninput=function(){stop();previewTime=Number(this.value);update();};
  document.getElementById('play').onclick=function(){if(playing)stop();else play();};
+ document.getElementById('speaking').onchange=function(){state.speaking=this.checked;if(this.checked){previewTime=0;update();play();}else{stop();update();}};
  document.getElementById('deadpan').onchange=function(){stop();previewTime=0;state.neutralCue=this.checked;state.emotion='neutral';document.getElementById('emotion').value='neutral';update();};
  document.getElementById('intensity').oninput=function(){state.emotionIntensity=Number(this.value);update();};
- document.getElementById('emotion').onchange=function(){stop();previewTime=0;state.neutralCue=false;document.getElementById('deadpan').checked=false;state.emotion=this.value;update();if(this.value==='laughing'||this.value==='crying')play();};
+ document.getElementById('emotion').onchange=function(){stop();previewTime=0;state.neutralCue=false;document.getElementById('deadpan').checked=false;state.emotion=this.value;update();if(state.speaking||this.value==='laughing'||this.value==='crying')play();};
  document.getElementById('pose').onchange=function(){state.pose=this.value;state.walkWeight=0;document.getElementById('gait').value='0';state.gaitPhase=0;update();};
  document.getElementById('gait').oninput=function(){state.gaitPhase=Number(this.value);state.walkWeight=state.gaitPhase?1:0;state.pose='idle';document.getElementById('pose').value='idle';update();};
- document.getElementById('reset').onclick=function(){stop();previewTime=0;state.neutralCue=false;document.getElementById('deadpan').checked=false;state.emotionIntensity=1;document.getElementById('intensity').value='1';state.emotion='neutral';state.pose='idle';state.gaitPhase=0;state.walkWeight=0;document.getElementById('emotion').value='neutral';document.getElementById('pose').value='idle';document.getElementById('gait').value='0';yaw=.18;pitch=.06;target.copy(center);update();fit();};
+ document.getElementById('reset').onclick=function(){stop();previewTime=0;state.speaking=false;state.speechTime=0;document.getElementById('speaking').checked=false;state.neutralCue=false;document.getElementById('deadpan').checked=false;state.emotionIntensity=1;document.getElementById('intensity').value='1';state.emotion='neutral';state.pose='idle';state.gaitPhase=0;state.walkWeight=0;document.getElementById('emotion').value='neutral';document.getElementById('pose').value='idle';document.getElementById('gait').value='0';yaw=.18;pitch=.06;target.copy(center);update();fit();};
  let drag=null;renderer.domElement.onpointerdown=function(e){drag=[e.clientX,e.clientY];this.setPointerCapture(e.pointerId);};
  renderer.domElement.onpointermove=function(e){if(!drag)return;yaw-=(e.clientX-drag[0])*.008;pitch=Math.max(-.45,Math.min(.9,pitch+(e.clientY-drag[1])*.006));drag=[e.clientX,e.clientY];render();};renderer.domElement.onpointerup=renderer.domElement.onpointercancel=function(){drag=null;};
  renderer.domElement.addEventListener('wheel',function(e){e.preventDefault();distance=Math.max(baseDistance*.35,Math.min(baseDistance*3,distance*Math.exp(e.deltaY*.001)));render();},{passive:false});

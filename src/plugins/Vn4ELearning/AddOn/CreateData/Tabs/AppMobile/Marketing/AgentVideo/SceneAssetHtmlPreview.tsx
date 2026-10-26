@@ -21,29 +21,36 @@ function runtimeSource(): Promise<string> {
 }
 
 export default function SceneAssetHtmlPreview({html, title, kind, height = '65vh'}: {html: string; title: string; kind?: string; height?: string}) {
-    const [document, setDocument] = React.useState('');
+    const [runtime, setRuntime] = React.useState('');
     const [error, setError] = React.useState('');
     const [readySource, setReadySource] = React.useState('');
     React.useEffect(() => {
         let active = true;
-        setError(''); setDocument(''); setReadySource('');
-        const prepare = async () => {
+        setError(''); setReadySource('');
+        loaderPattern.lastIndex = 0;
+        const needsRuntime = kind === 'character' || loaderPattern.test(html);
+        const prepare = needsRuntime ? runtimeSource() : Promise.resolve('');
+        void prepare.then(source => {if (active) {setRuntime(source); setReadySource(html);}})
+            .catch(e => {if (active) setError(e instanceof Error ? e.message : 'Không mở được preview hồ sơ.');});
+        return () => {active = false;};
+    }, [html, kind]);
+    // Cache the runtime only, not a finished iframe document. A template update must
+    // rebuild srcDoc even when the saved character HTML has not changed.
+    const buildCharacterDocument = characterPreviewDocument;
+    const prepared = React.useMemo(() => {
+        if (readySource !== html) return {document: '', error: ''};
+        try {
             if (kind === 'character') {
-                const viewer = characterPreviewDocument(html, await runtimeSource());
-                if (!viewer) throw new Error('Hồ sơ nhân vật thiếu sv-asset-module. Hãy tạo lại hồ sơ.');
-                return viewer;
+                const document = buildCharacterDocument(html, runtime);
+                if (!document) throw new Error('Hồ sơ nhân vật thiếu sv-asset-module. Hãy tạo lại hồ sơ.');
+                return {document, error: ''};
             }
             loaderPattern.lastIndex = 0;
-            if (!loaderPattern.test(html)) return html;
-            const runtime = (await runtimeSource()).replace(/<\/script/gi, '<\\/script');
-            loaderPattern.lastIndex = 0;
-            return html.replace(loaderPattern, () => `<script data-sv-three-version="0.186.1">${runtime}</script>`);
-        };
-        void prepare().then(source => { if (active) { setDocument(source); setReadySource(html); } })
-            .catch(e => { if (active) setError(e instanceof Error ? e.message : 'Không mở được preview hồ sơ.'); });
-        return () => { active = false; };
-    }, [html, kind]);
-    if (error) return <Alert severity="error">{error}</Alert>;
-    if (!document || readySource !== html) return <Box role="status" sx={{height, display: 'grid', placeItems: 'center'}}><CircularProgress aria-label="Đang tải preview hồ sơ"/></Box>;
-    return <iframe title={title} sandbox="allow-scripts" srcDoc={document} style={{width: '100%', height, border: 0, display: 'block'}}/>;
+            const inlineRuntime = runtime.replace(/<\/script/gi, '<\\/script');
+            return {document: html.replace(loaderPattern, () => `<script data-sv-three-version="0.186.1">${inlineRuntime}</script>`), error: ''};
+        } catch (e) {return {document: '', error: e instanceof Error ? e.message : 'Không mở được preview hồ sơ.'};}
+    }, [html, kind, runtime, readySource, buildCharacterDocument]);
+    if (error || prepared.error) return <Alert severity="error">{error || prepared.error}</Alert>;
+    if (!prepared.document || readySource !== html) return <Box role="status" sx={{height, display: 'grid', placeItems: 'center'}}><CircularProgress aria-label="Đang tải preview hồ sơ"/></Box>;
+    return <iframe title={title} sandbox="allow-scripts" srcDoc={prepared.document} style={{width: '100%', height, border: 0, display: 'block'}}/>;
 }

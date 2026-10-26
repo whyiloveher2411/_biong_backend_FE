@@ -1,10 +1,10 @@
 import React from 'react';
-import SceneAssetHtmlPreview from './SceneAssetHtmlPreview';
+import SceneAssetPreviewDialog from './SceneAssetPreviewDialog';
 import BeatVoiceSummary from './BeatVoiceSummary';
 import CottageOutlinedIcon from '@mui/icons-material/CottageOutlined';
 import PersonOutlineIcon from '@mui/icons-material/PersonOutline';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
-import { Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, Stack, Typography, IconButton, Tooltip, CircularProgress } from '@mui/material';
+import { Alert, Box, Button, Chip, Stack, Typography, IconButton, Tooltip, CircularProgress } from '@mui/material';
 import { SceneAsset, SceneAssetRegistry, sceneAssetMessage, sceneAssetsRequest } from 'helpers/shortVideoSceneAssets';
 
 /** Read saved mapping beside the beat direction; never infer asset IDs from prose. */
@@ -13,11 +13,10 @@ export default function SceneAssetBeatSummary({shortVideoId, beatId, variant = '
     const [error, setError] = React.useState('');
     const [loading, setLoading] = React.useState(true);
     const [preview, setPreview] = React.useState<SceneAsset | null>(null);
-    const [busy, setBusy] = React.useState('');
     const request = React.useRef(0);
     React.useEffect(() => {
         const serial = ++request.current;
-        setRegistry(null); setError(''); setLoading(true); setPreview(null); setBusy('');
+        setRegistry(null); setError(''); setLoading(true); setPreview(null);
         sceneAssetsRequest(shortVideoId, 'get').then(res => {
             if (request.current !== serial) return;
             if (res.success) setRegistry(res.registry || {});
@@ -27,27 +26,13 @@ export default function SceneAssetBeatSummary({shortVideoId, beatId, variant = '
         }).finally(() => { if (request.current === serial) setLoading(false); });
         return () => { ++request.current; };
     }, [shortVideoId, beatId]);
-    const loadPreview = async (assetId: string) => {
-        const serial = request.current;
-        setBusy(assetId); setError('');
-        try {
-            const res = await sceneAssetsRequest(shortVideoId, 'preview', {asset_id: assetId});
-            if (request.current !== serial) return;
-            if (res.success && res.asset?.html) setPreview(res.asset);
-            else setError(sceneAssetMessage(res));
-        } catch {
-            if (request.current === serial) setError('Không tải được preview asset.');
-        } finally { if (request.current === serial) setBusy(''); }
+    const loadPreview = (assetId: string) => {
+        const asset = registry?.assets?.[assetId];
+        if (asset) setPreview(asset);
     };
     const mapping = registry?.beats?.[beatId];
     const ids = mapping ? [mapping.environment_id, ...mapping.character_ids].filter(Boolean) : [];
-    const previewDialog = (
-        <Dialog open={Boolean(preview)} onClose={() => setPreview(null)} maxWidth="lg" fullWidth>
-            <DialogTitle>{preview?.name}</DialogTitle>
-            <DialogContent>{preview && <SceneAssetHtmlPreview kind={preview.kind} title={`Asset ${preview.id}`} html={preview.html || ''}/>}</DialogContent>
-            <DialogActions><Button onClick={() => setPreview(null)}>Đóng</Button></DialogActions>
-        </Dialog>
-    );
+    const previewDialog = <SceneAssetPreviewDialog shortVideoId={shortVideoId} asset={preview} onClose={() => setPreview(null)} onRegistryChange={setRegistry}/>;
     if (variant === 'toolbar') {
         return <Stack role="group" aria-label="Asset dùng trong beat" direction="column" alignItems="center" spacing={0.75}
             onMouseDown={event => event.stopPropagation()} onClick={event => event.stopPropagation()}
@@ -59,12 +44,12 @@ export default function SceneAssetBeatSummary({shortVideoId, beatId, variant = '
                 const environment = id === mapping?.environment_id;
                 const label = `Mở ${environment ? 'bối cảnh' : 'nhân vật'}: ${asset?.name || id}`;
                 return <Tooltip key={id} placement="left" title={`${label}${asset?.has_html ? '' : ' — chưa có HTML'}`}>
-                    <span><IconButton size="small" aria-label={label} disabled={!asset?.has_html || Boolean(busy)} onClick={() => void loadPreview(id)}
+                    <span><IconButton size="small" aria-label={label} disabled={!asset} onClick={() => void loadPreview(id)}
                         sx={{width: 32, height: 32, borderRadius: 1, color: 'common.white',
                             bgcolor: environment ? 'rgba(123,31,162,0.88)' : 'rgba(0,105,92,0.88)',
                             '&:hover': {bgcolor: environment ? 'rgba(123,31,162,1)' : 'rgba(0,105,92,1)'},
                             '&.Mui-disabled': {color: 'rgba(255,255,255,0.38)', bgcolor: 'rgba(0,0,0,0.4)'}}}>
-                        {busy === id ? <CircularProgress size={18} color="inherit"/> : environment ? <CottageOutlinedIcon fontSize="small"/> : <PersonOutlineIcon fontSize="small"/>}
+                        {environment ? <CottageOutlinedIcon fontSize="small"/> : <PersonOutlineIcon fontSize="small"/>}
                     </IconButton></span>
                 </Tooltip>;
             })}
@@ -88,7 +73,7 @@ export default function SceneAssetBeatSummary({shortVideoId, beatId, variant = '
                     <Typography variant="body2">{asset?.kind === 'character' ? 'Nhân vật' : 'Bối cảnh'}: <b>{asset?.name || id}</b></Typography>
                     <Chip size="small" label={id}/>
                     <Chip size="small" color={asset?.ready ? 'success' : 'warning'} label={asset?.ready ? 'Sẵn sàng' : 'Cần cập nhật HTML'}/>
-                    <Button size="small" disabled={!asset?.has_html || Boolean(busy)} onClick={() => void loadPreview(id)}>{busy === id ? 'Đang tải…' : 'Xem asset'}</Button>
+                    <Button size="small" disabled={!asset} onClick={() => void loadPreview(id)}>Xem asset</Button>
                 </Stack>;
             })}
             {!mapping.character_ids.length && <Typography variant="body2" color="text.secondary">Không có nhân vật trong beat này.</Typography>}

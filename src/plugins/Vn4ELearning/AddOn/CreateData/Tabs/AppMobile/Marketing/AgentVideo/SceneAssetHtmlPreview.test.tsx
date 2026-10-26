@@ -1,4 +1,5 @@
 import React from 'react';
+import * as characterTemplates from './sceneAssetCharacterPreview';
 import {render, screen} from '@testing-library/react';
 import SceneAssetHtmlPreview from './SceneAssetHtmlPreview';
 const originalFetch = global.fetch;
@@ -51,4 +52,19 @@ test('missing character factory is reported instead of showing an uncontrolled p
     render(<SceneAssetHtmlPreview html="<html>Missing factory</html>" kind="character" title="Broken character"/>);
     expect((await screen.findByRole('alert')).textContent).toContain('thiếu sv-asset-module');
     expect(screen.queryByTitle('Broken character')).toBeNull();
+});
+
+test('updating the inspector template refreshes srcDoc even with unchanged asset HTML',async()=>{
+    const source='<html><script id="sv-asset-module">window.SVAssetFactory=function(){};</script></html>';
+    const original=characterTemplates.characterPreviewDocument;
+    const view=render(<SceneAssetHtmlPreview html={source} kind="character" title="Updated inspector"/>);
+    const frame=await screen.findByTitle('Updated inspector');
+    expect(frame.getAttribute('srcdoc')).toContain('id="speaking-control"');
+    expect(frame.getAttribute('srcdoc')).not.toContain('id="speaking-control" hidden');
+    // A hot module update replaces the exported builder function, not merely its implementation.
+    const builder=jest.spyOn(characterTemplates,'characterPreviewDocument').mockImplementation((html,runtime)=>original(html,runtime)?.replace('<body>','<body><div id="new-template-version"></div>')||null);
+    try {
+        view.rerender(<SceneAssetHtmlPreview html={source} kind="character" title="Updated inspector"/>);
+        expect((await screen.findByTitle('Updated inspector')).getAttribute('srcdoc')).toContain('new-template-version');
+    } finally {builder.mockRestore();}
 });

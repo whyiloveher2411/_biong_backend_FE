@@ -59,7 +59,7 @@ test('toolbar stacks the environment before characters and opens the selected as
     expect(screen.getAllByRole('button').map(button => button.getAttribute('aria-label'))).toEqual([
         'Mở bối cảnh: Phòng ăn', 'Mở nhân vật: Người vợ', 'Mở nhân vật: Người con',
     ]);
-    expect(screen.getByRole('button', {name: 'Mở nhân vật: Người con'}).hasAttribute('disabled')).toBe(true);
+    expect(screen.getByRole('button', {name: 'Mở nhân vật: Người con'}).hasAttribute('disabled')).toBe(false);
     request.mockResolvedValueOnce({success: true, asset: {...wife, html: '<html><script id="sv-asset-module">window.SVAssetFactory=function(){/* wife preview */};</script></html>'}});
     fireEvent.click(screen.getByRole('button', {name: 'Mở nhân vật: Người vợ'}));
     const iframe = await screen.findByTitle('Asset wife');
@@ -71,4 +71,17 @@ test('shows outdated frame handoff warning from the workflow', async () => {
     request.mockResolvedValueOnce({success: true, registry: {...registry, beats: {beat_1: {...registry.beats.beat_1, action: 'test', continuity_error: 'Beat trước đã thay đổi; hãy tạo lại beat_1 để khớp frame.'}}}});
     render(<SceneAssetBeatSummary shortVideoId={66} beatId="beat_1"/>);
     expect(await screen.findByText(/Beat trước đã thay đổi/)).toBeTruthy();
+});
+
+test('missing environment shortcut opens creation popup instead of being disabled',async()=>{
+    const missing={...registry.assets.dinner,has_html:false,ready:false};
+    request.mockResolvedValueOnce({success:true,registry:{...registry,assets:{dinner:missing}}})
+        .mockResolvedValueOnce({success:true,asset:{...missing,html:''}});
+    render(<SceneAssetBeatSummary shortVideoId={66} beatId="beat_1" variant="toolbar"/>);
+    fireEvent.click(await screen.findByRole('button',{name:'Mở bối cảnh: Phòng ăn'}));
+    expect(await screen.findByText(/Chưa có HTML bối cảnh/)).toBeTruthy();
+    request.mockResolvedValueOnce({success:true,registry:{...registry,assets:{dinner:{...missing,generation:{status:'queued',job_id:99}}}}});
+    fireEvent.click(screen.getByRole('button',{name:'Tạo HTML bằng queue'}));
+    await screen.findByText(/Đang chờ queue tạo HTML.*Job 99/);
+    expect(request).toHaveBeenCalledWith(66,'enqueue',{asset_id:'dinner',force:true});
 });

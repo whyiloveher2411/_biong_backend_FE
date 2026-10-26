@@ -8,7 +8,7 @@ import { AGENT_AUDIO_SCRIPT_SAVED_EVENT } from 'helpers/marketingAgentAudioScrip
 import { saydiVoiceCastRequest, saveSaydiVoiceManifest, fetchSaydiVoiceSamples, resolveSaydiVoicePreviewUrl, type SaydiVoiceCast, type SaydiVoiceSampleItem } from './agentVideoApi';
 import ShortVideoAgentSaydiVoicePicker from './ShortVideoAgentSaydiVoicePicker';
 
-type Props = { shortVideoId: number; samples?: SaydiVoiceSampleItem[]; disabled?: boolean; revision?: string };
+type Props = { shortVideoId: number; samples?: SaydiVoiceSampleItem[]; disabled?: boolean; revision?: string; openRoleId?: string; drawerOnly?: boolean; onClose?: () => void };
 
 /** Màu nền/border xen kẽ để tách các dòng giọng dễ nhìn. */
 const ROLE_TONES = ['primary', 'secondary', 'success', 'info', 'warning'] as const;
@@ -24,7 +24,7 @@ const roleBoxSx = (tone: RoleTone) => (theme: Theme) => ({
     bgcolor: alpha(theme.palette[tone].main, theme.palette.mode === 'dark' ? 0.16 : 0.06),
 });
 
-export default function ShortVideoAgentSaydiCastSettings({ shortVideoId, disabled = false, revision }: Props) {
+export default function ShortVideoAgentSaydiCastSettings({ shortVideoId, disabled = false, revision, openRoleId, drawerOnly = false, onClose }: Props) {
     const [config, setConfig] = React.useState<SaydiVoiceCast>({ enabled: false, speakers: {} });
     const [loading, setLoading] = React.useState(true);
     const [saving, setSaving] = React.useState(false);
@@ -34,7 +34,7 @@ export default function ShortVideoAgentSaydiCastSettings({ shortVideoId, disable
     const [manifestOpen, setManifestOpen] = React.useState(false);
     const manifestDirty = React.useRef(false);
     const [manifestReady, setManifestReady] = React.useState(false);
-    const [selectedRole, setSelectedRole] = React.useState('');
+    const [selectedRole, setSelectedRole] = React.useState(openRoleId || '');
     const [catalog, setCatalog] = React.useState<SaydiVoiceSampleItem[]>([]);
     const [genders, setGenders] = React.useState<string[]>([]);
     const [languages, setLanguages] = React.useState<string[]>([]);
@@ -65,7 +65,7 @@ export default function ShortVideoAgentSaydiCastSettings({ shortVideoId, disable
             setManifest('');
             setManifestReady(false);
             manifestDirty.current = false;
-            setSelectedRole('');
+            setSelectedRole(drawerOnly ? openRoleId || '' : '');
         }
         // Chỉ hiện trạng thái "đang quét" ở lần tải đầu / khi đổi video.
         // Các lần tự động quét lại chạy ngầm để danh sách giọng không bị chớp tắt.
@@ -81,7 +81,7 @@ export default function ShortVideoAgentSaydiCastSettings({ shortVideoId, disable
                 const nextManifest = r.manifest_json ?? '';
                 setManifest((prev) => (prev === nextManifest ? prev : nextManifest));
             }
-            setSelectedRole((prev) => (prev && next.speakers?.[prev] ? prev : ''));
+            setSelectedRole((prev) => (drawerOnly ? openRoleId || '' : prev && next.speakers?.[prev] ? prev : ''));
         }).catch((e) => {
             if (!active || requestId !== requestIdRef.current) return;
             // Lỗi khi quét ngầm: giữ nguyên dữ liệu đang hiển thị, không làm layout nhảy.
@@ -92,7 +92,10 @@ export default function ShortVideoAgentSaydiCastSettings({ shortVideoId, disable
             setScanning(false);
         });
         return () => { active = false; };
-    }, [shortVideoId, revision, refresh]);
+    }, [shortVideoId, revision, refresh, drawerOnly, openRoleId]);
+    React.useEffect(() => {
+        if (drawerOnly) setSelectedRole(openRoleId || '');
+    }, [drawerOnly, openRoleId]);
     React.useEffect(() => {
         if (!selectedRole) return;
         let active = true;
@@ -110,7 +113,7 @@ export default function ShortVideoAgentSaydiCastSettings({ shortVideoId, disable
         return () => window.clearInterval(timer);
     }, [selectedRole, saving]);
     React.useEffect(() => () => { audioRef.current?.pause(); }, []);
-    const close = () => { audioRef.current?.pause(); setPlayingUrl(null); setSelectedRole(''); };
+    const close = () => { audioRef.current?.pause(); setPlayingUrl(null); setSelectedRole(''); onClose?.(); };
     const speaker = config.speakers[selectedRole];
     const voiceAssignments = React.useMemo(() => {
         const bySample: Record<string, Array<{ speakerId: string; name: string }>> = {};
@@ -121,7 +124,7 @@ export default function ShortVideoAgentSaydiCastSettings({ shortVideoId, disable
     }, [config.speakers]);
     const genderLabels = { male: 'Nam', female: 'Nữ', neutral: 'Trung tính', unknown: 'Chưa xác định' };
     const missing = Object.values(config.speakers).filter((s) => !s.voice_sample).length;
-    return <Stack spacing={1} sx={{ py: 1 }}>
+    return <><Stack spacing={1} sx={{ py: 1, ...(drawerOnly ? {display: 'none'} : {}) }}>
         <Typography variant="subtitle2">Giọng đọc trong kịch bản</Typography>
         <Typography variant="caption">Viết và lưu kịch bản trước. Sau đó dán JSON id/description/gender của chatbot để đối chiếu. Danh sách này độc lập với nhân vật trên hình.</Typography>
         <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1.5, bgcolor: 'action.hover' }}>
@@ -165,16 +168,20 @@ export default function ShortVideoAgentSaydiCastSettings({ shortVideoId, disable
         <Button size="small" disabled={loading || scanning || saving} onClick={() => { setScanning(true); setRefresh((n) => n + 1); }}>{scanning ? 'Đang quét kịch bản…' : 'Quét lại kịch bản đã lưu'}</Button>
         {notice ? <Alert severity="success">{notice}</Alert> : null}
         {error ? <Alert severity="error">{error}</Alert> : null}
+    </Stack>
         <DrawerCustom open={Boolean(selectedRole)} onClose={close} title={`Giọng đọc: ${speaker?.name || selectedRole}`} width={600} ModalProps={{ sx: { zIndex: 1400 } }}>
             <Stack spacing={1} sx={{ p: 2 }}>
+                {loading && <Typography variant="body2">Đang tải cài đặt giọng…</Typography>}
+                {!loading && !speaker && <Alert severity="warning">ID giọng này không còn trong kịch bản. Hãy tải lại beat.</Alert>}
+                {!loading && !manifestReady && <Alert severity="warning">Lưu danh sách giọng JSON trong workflow trước khi chọn giọng đọc.</Alert>}
                 <Typography variant="body2">Mô tả: {speaker?.description}. ID trong kịch bản: {selectedRole}. Chọn sample Saydi chỉ thay giọng đọc, không đổi ID hay nhân vật trên hình.</Typography>
                 <Typography variant="caption">Giới tính giọng: {genderLabels[speaker?.gender || 'unknown']}. {speaker?.gender && speaker.gender !== 'unknown' ? 'Danh mục tự lọc theo giới tính này; bạn vẫn có thể đổi bộ lọc.' : 'Chưa có giới tính trong dữ liệu, hiển thị tất cả; không đoán từ tên.'}</Typography>
                 <Typography variant="caption">Đổi giọng sẽ đánh dấu audio cũ cần tạo lại. Các ID khác chưa chọn giọng vẫn được giữ.</Typography>
                 <Button disabled={catalogLoading || saving} onClick={() => setCatalogRevision((n) => n + 1)}>Tải lại danh mục từ API Saydi</Button>
                 <Box sx={{ height: 450, display: 'flex', flexDirection: 'column' }}>
-                    <ShortVideoAgentSaydiVoicePicker key={selectedRole} defaultGender={speaker?.gender && speaker.gender !== 'unknown' ? speaker.gender : 'all'} active={Boolean(selectedRole)} voiceAssignments={voiceAssignments} currentSpeakerId={selectedRole} samples={catalog} usedVoices={[]} genders={genders} languages={languages} selectedVoice={speaker?.voice_sample ?? ''} loading={catalogLoading} saving={saving || disabled} errorMessage={catalogError} playingUrl={playingUrl}
+                    <ShortVideoAgentSaydiVoicePicker key={selectedRole} defaultGender={speaker?.gender && speaker.gender !== 'unknown' ? speaker.gender : 'all'} active={Boolean(selectedRole)} voiceAssignments={voiceAssignments} currentSpeakerId={selectedRole} samples={catalog} usedVoices={[]} genders={genders} languages={languages} selectedVoice={speaker?.voice_sample ?? ''} loading={catalogLoading} saving={saving || disabled || !manifestReady || loading} errorMessage={catalogError} playingUrl={playingUrl}
                         onSelect={async (voice) => {
-                            if (!speaker) return;
+                            if (!speaker || !manifestReady || loading || saving || disabled) return;
                             const owners = (voiceAssignments[voice] || []).filter((owner) => owner.speakerId !== selectedRole);
                             if (owners.length) { setError(`Giọng này đã gán cho ${owners.map((owner) => `${owner.name} (${owner.speakerId})`).join(', ')}. Hãy chọn giọng khác.`); return; }
                             const next = { ...config, speakers: { ...config.speakers, [selectedRole]: { ...speaker, voice_sample: voice } } };
@@ -194,5 +201,5 @@ export default function ShortVideoAgentSaydiCastSettings({ shortVideoId, disable
                 {error ? <Alert severity="error">{error}</Alert> : null}
             </Stack>
         </DrawerCustom>
-    </Stack>;
+    </>;
 }
