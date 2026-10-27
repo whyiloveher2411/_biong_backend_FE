@@ -5,6 +5,7 @@ export type SceneAsset = {
     id: string; kind: 'character' | 'environment'; name: string; spec: string;
     spec_hash: string; has_html?: boolean; html?: string; ready?: boolean; module_hash?: string;
     model_snapshot?: ShortVideoModel3d;
+    has_html_backup?: boolean; html_backup_ready?: boolean;
     chat_url?: string;
     generation?: {status: 'queued' | 'processing' | 'completed' | 'failed' | 'superseded' | 'cancelled'; job_id?: number; error?: string; continue_clicks?: number; phase?: string; repair_attempt?: number; preview_checked?: boolean};
 };

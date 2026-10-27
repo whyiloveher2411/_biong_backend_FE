@@ -12,8 +12,8 @@ const OPTIONS: Record<string, {label: string; values: Array<[string,string]>}> =
     shoes:{label:'Giày',values:[['sneakers','Giày sáng màu'],['boots','Giày nâu']]}, face:{label:'Mắt, mũi, miệng',values:[['cartoon','Khuôn mặt cartoon']]},
 };
 const DEFAULT_SELECTION: Record<string,string> = {top:'shirt',bottom:'trousers',hair:'short',arms:'sleeves',legs:'trousers',hands:'round',shoes:'sneakers',face:'cartoon'};
-type Props = {value: CharacterConfig; onChange: (value: CharacterConfig) => void; modelId: number; library: CharacterPart[]; initialGeneration?: CharacterGeneration; disabled?: boolean};
-export default function CharacterWardrobeEditor({value,onChange,modelId,library,initialGeneration,disabled}: Props) {
+type Props = {value: CharacterConfig; onChange: (value: CharacterConfig) => void; modelId: number; library: CharacterPart[]; initialGeneration?: CharacterGeneration; disabled?: boolean; allowGeneration?: boolean};
+export default function CharacterWardrobeEditor({value,onChange,modelId,library,initialGeneration,disabled,allowGeneration=true}: Props) {
     const [slot,setSlot] = React.useState('hair');
     const [request,setRequest] = React.useState('');
     const [generation,setGeneration] = React.useState<CharacterGeneration>(initialGeneration || {});
@@ -58,7 +58,7 @@ export default function CharacterWardrobeEditor({value,onChange,modelId,library,
     return <Stack spacing={2} sx={{border:'1px solid',borderColor:'divider',borderRadius:2,p:2}}>
         <Box><Typography variant="subtitle1" fontWeight={700}>Tủ đồ nhân vật</Typography>
             <Typography variant="body2" color="text.secondary">Thay ngoại hình, giữ bộ khung và chuyển động. Cấu hình đã lưu được dùng cho các beat gán nhân vật này.</Typography></Box>
-        <FormControlLabel control={<Switch checked={!!value.enabled} disabled={disabled} onChange={e=>onChange({...value,enabled:e.target.checked})}/>} label="Dùng ngoại hình cartoon"/>
+        {allowGeneration && <FormControlLabel control={<Switch checked={!!value.enabled} disabled={disabled} onChange={e=>onChange({...value,enabled:e.target.checked})}/>} label="Dùng ngoại hình cartoon"/>}
         {value.enabled && <>
             {value.surface_mode==='skinned_v2' && <TextField select size="small" label="Bộ phối trang phục" value={value.outfit || 'explorer'} disabled={disabled} onChange={e=>{
                 const outfit=e.target.value as CharacterConfig['outfit'];
@@ -84,7 +84,7 @@ export default function CharacterWardrobeEditor({value,onChange,modelId,library,
                 {([['skin','Da','#e8b18d'],['shirt','Áo','#367de0'],['trousers','Quần','#263b58'],['hairColor','Tóc','#302723']] as const).map(([key,label,fallback])=><TextField key={key} size="small" type="color" label={label} value={value[key] || fallback} onChange={e=>onChange({...value,[key]:e.target.value})} disabled={disabled} sx={{width:95}} InputLabelProps={{shrink:true}}/>)}
             </Stack>
             <Alert severity="info">{value.surface_mode==='skinned_v2' ? 'Áo, tay áo và quần dùng bề mặt liền, uốn theo xương. Các bộ phối thay màu và chi tiết trên cùng kiểu dáng Aster. Bạn vẫn có thể đổi tóc, khuôn mặt và màu riêng; kiểu áo/quần mới cần asset skinned tương thích.' : 'Bộ mẫu cũ dùng các khối gắn theo khớp. Chọn Aster · Urban Explorer để dùng trang phục liền có skin weights.'}</Alert>
-            <Typography variant="subtitle2">Tạo thêm bộ phận bằng DeepSeek</Typography>
+            {allowGeneration && <><Typography variant="subtitle2">Tạo thêm bộ phận bằng DeepSeek</Typography>
             {!modelId && <Alert severity="info">Lưu nhân vật trước để tạo và lưu thêm asset vào thư viện.</Alert>}
             <TextField select size="small" label="Bộ phận cần tạo" value={slot} onChange={e=>setSlot(e.target.value)} disabled={busy || active || disabled}>
                 {Object.entries(OPTIONS).filter(([key])=>value.surface_mode!=='skinned_v2' || ['hair','face'].includes(key)).map(([key,o])=><MenuItem key={key} value={key}>{o.label}</MenuItem>)}
@@ -94,7 +94,7 @@ export default function CharacterWardrobeEditor({value,onChange,modelId,library,
                 {active && <Chip label={generation.status==='queued'?'Đang chờ worker':'DeepSeek đang thiết kế'} color="info" size="small"/>}</Stack>
             {generation.status==='failed' && <Alert severity="error">{generation.error || 'Tạo asset thất bại. Bạn có thể gửi lại yêu cầu.'}</Alert>}
             {notice && <Alert severity="success">{notice}</Alert>}
-            {error && <Alert severity="error">{error}</Alert>}
+            {error && <Alert severity="error">{error}</Alert>}</>}
         </>}
     </Stack>;
 }

@@ -3,6 +3,7 @@ import {act, fireEvent, render, screen, waitFor, within} from '@testing-library/
 import {ajax} from 'hook/useApi';
 import SceneAssetsPanel from './SceneAssetsPanel';
 
+jest.mock('../Model3dPreview',()=>()=>null);
 jest.mock('../ShortVideoModel3dManageDrawer',()=>()=>null);
 jest.mock('components/molecules/DrawerCustom',()=>({open,children,title}: ANY)=>open?<div role="dialog" aria-label={title}>{children}</div>:null);
 jest.mock('hook/useApi', () => ({ajax: jest.fn()}));
@@ -218,5 +219,25 @@ test('adds a library character before a prompt manifest exists',async()=>{
     await waitFor(()=>expect(add.hasAttribute('disabled')).toBe(false));fireEvent.click(add);
     fireEvent.click(await screen.findByText('aster-urban-explorer'));
     await waitFor(()=>expect(request).toHaveBeenCalledWith(expect.objectContaining({data:{short_video_id:42,operation:'add_model',model_id:4}})));
+    view.unmount();
+});
+
+test('edits clothing per role without changing the shared model',async()=>{
+    request.mockImplementation(()=>Promise.resolve({success:true,registry:{...registry,assets:{...registry.assets,wife:{...registry.assets.wife,module_hash:'role-v1',model_snapshot:{id:4,model_url:'https://example.com/aster.glb',character:{enabled:true,surface_mode:'skinned_v2'}}}}}}));
+    const view=render(<SceneAssetsPanel shortVideoId={42}/>);
+    fireEvent.click(await screen.findByRole('button',{name:'Trang phục'}));
+    expect(screen.queryByText('Tạo thêm bộ phận bằng DeepSeek')).toBeNull();
+    fireEvent.mouseDown(screen.getByLabelText('Bộ phối trang phục'));fireEvent.click(screen.getByRole('option',{name:'Sport · Xanh / cam'}));
+    fireEvent.click(screen.getByRole('button',{name:'Lưu trang phục cho vai này'}));
+    await waitFor(()=>expect(request).toHaveBeenCalledWith(expect.objectContaining({data:expect.objectContaining({operation:'character_config',asset_id:'wife',expected_module_hash:'role-v1',character:expect.objectContaining({shirt:'#315b87',outfit:'sport'})})})));
+    view.unmount();
+});
+test('provides an explicit return-to-HTML action for a library role',async()=>{
+    request.mockImplementation(()=>Promise.resolve({success:true,registry:{...registry,assets:{...registry.assets,wife:{...registry.assets.wife,module_hash:'role-v1',has_html_backup:true,model_snapshot:{id:4,character:{enabled:true}}}}}}));
+    const view=render(<SceneAssetsPanel shortVideoId={42}/>);
+    fireEvent.click(await screen.findByRole('button',{name:'Dùng HTML'}));
+    expect(screen.getByText(/Bản HTML trước khi chọn thư viện sẽ được khôi phục/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button',{name:'Chuyển sang HTML'}));
+    await waitFor(()=>expect(request).toHaveBeenCalledWith(expect.objectContaining({data:{short_video_id:42,operation:'unbind_model',asset_id:'wife',expected_module_hash:'role-v1'}})));
     view.unmount();
 });

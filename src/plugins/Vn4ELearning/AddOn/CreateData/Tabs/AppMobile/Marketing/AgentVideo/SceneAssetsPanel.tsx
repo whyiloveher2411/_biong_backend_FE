@@ -1,7 +1,9 @@
 import React from 'react';
+import CharacterWardrobeEditor from '../CharacterWardrobeEditor';
+import Model3dPreview from '../Model3dPreview';
 import ShortVideoModel3dManageDrawer from '../ShortVideoModel3dManageDrawer';
 import Model3dLibraryPickerDrawer from './Model3dLibraryPickerDrawer';
-import {listShortVideoModel3ds, ShortVideoModel3d} from 'helpers/marketingShortVideoModel3dApi';
+import {listShortVideoModel3ds, ShortVideoModel3d, CharacterConfig, buildModel3dPreviewUrl} from 'helpers/marketingShortVideoModel3dApi';
 import SceneAssetPreviewDialog from './SceneAssetPreviewDialog';
 import PersonOutlineIcon from '@mui/icons-material/PersonOutline';
 import CottageOutlinedIcon from '@mui/icons-material/CottageOutlined';
@@ -52,6 +54,9 @@ const startTransition: (callback: () => void) => void = (
 
 /** One row per reusable asset. Background polling observes saves made in the headless overlay. */
 export default function SceneAssetsPanel({shortVideoId}: Props) {
+    const [wardrobeAsset,setWardrobeAsset]=React.useState<SceneAsset | null>(null);
+    const [wardrobeConfig,setWardrobeConfig]=React.useState<CharacterConfig>({});
+    const [switchHtml,setSwitchHtml]=React.useState<SceneAsset | null>(null);
     const [libraryOpen,setLibraryOpen]=React.useState(false);
     const [addingModel,setAddingModel]=React.useState(false);
     const [pickAsset,setPickAsset]=React.useState<SceneAsset | null>(null);
@@ -248,8 +253,12 @@ export default function SceneAssetsPanel({shortVideoId}: Props) {
                             {generation?.error && ['failed', 'superseded', 'cancelled'].includes(generation.status) && <Alert severity={generation.status === 'failed' ? 'error' : 'info'} sx={{mt: 1}}>{generation.error}</Alert>}
                             {generation?.status === 'completed' && <Typography variant="caption" color="text.secondary">{generation.preview_checked ? 'Đã chạy preview và lưu HTML' : 'HTML cũ chưa kiểm tra preview đầy đủ'}{generation.repair_attempt ? ` · ${generation.repair_attempt} lần tự sửa` : ''}{generation.continue_clicks ? ` · ${generation.continue_clicks} lần Continue` : ''}</Typography>}
                             <Box sx={{mt: 1.25, pt: 1.25, borderTop: '1px solid', borderColor: 'divider', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 0.75}}>
-                                {isCharacter && <Button size="small" sx={compactButtonSx} variant="contained" disabled={locked || running} onClick={()=>void pickCharacter(asset)}>Chọn nhân vật thư viện</Button>}
-                                {asset.model_snapshot ? <Button size="small" sx={compactButtonSx} variant="outlined" onClick={()=>setPreview(asset)}>Xem nhân vật đã chọn</Button> : <>
+                                {isCharacter && <Button size="small" sx={compactButtonSx} variant="contained" disabled={locked || running} onClick={()=>void pickCharacter(asset)}>Thư viện</Button>}
+                                {asset.model_snapshot ? <>
+                                    <Button size="small" sx={compactButtonSx} variant="outlined" onClick={()=>setPreview(asset)}>Xem nhân vật đã chọn</Button>
+                                    <Button size="small" sx={compactButtonSx} variant="contained" disabled={locked} onClick={()=>{setError('');setWardrobeAsset(asset);setWardrobeConfig(JSON.parse(JSON.stringify(asset.model_snapshot?.character || {})));}}>Trang phục</Button>
+                                    <Button size="small" sx={compactButtonSx} variant="outlined" disabled={locked} onClick={()=>setSwitchHtml(asset)}>Dùng HTML</Button>
+                                </> : <>
                                 {asset.has_html ? <>
                                     <Button size="small" sx={compactButtonSx} variant="contained" color="success" startIcon={<VisibilityOutlinedIcon/>} disabled={locked || !asset.has_html} onClick={() => setPreview(asset)}>Xem HTML</Button>
                                     <Button size="small" sx={compactButtonSx} variant="outlined" color="primary" startIcon={<PlayArrowIcon/>} disabled={locked || running} onClick={() => void run('queue:' + asset.id, 'enqueue', {asset_id: asset.id, force: true})}>{generation?.status === 'failed' || generation?.status === 'cancelled' ? 'Chạy lại queue' : 'Tạo bằng queue'}</Button>
@@ -290,6 +299,22 @@ export default function SceneAssetsPanel({shortVideoId}: Props) {
                 {draft && <Stack direction="row" gap={1} sx={{mt: 1}}><Button disabled={Boolean(busy)} onClick={async () => {if (await run('mapping', 'manifest', {text: sceneAssetsManifest(draft), expected_revision: draft.revision || ''})) setDraft(null);}}>Lưu gán beat</Button><Button onClick={() => setDraft(null)}>Hủy chỉnh sửa</Button></Stack>}
             </Box>}
         </Box>}
+        <Dialog open={!!wardrobeAsset} onClose={()=>!busy && setWardrobeAsset(null)} fullWidth maxWidth="lg">
+            <DialogTitle>Trang phục riêng · {wardrobeAsset?.name}</DialogTitle>
+            <DialogContent><Alert severity="info" sx={{mb:2}}>Chỉ áp dụng cho vai này trong video. Hai vai dùng cùng model có thể có trang phục, tóc và biểu cảm riêng; mẫu trong thư viện giữ nguyên.</Alert>
+                {error && <Alert severity="error">{error}</Alert>}
+                <Box sx={{display:'grid',gridTemplateColumns:{xs:'1fr',md:'1fr 1fr'},gap:2}}>
+                    <CharacterWardrobeEditor value={wardrobeConfig} onChange={setWardrobeConfig} modelId={0} library={wardrobeConfig.library || []} disabled={!!busy} allowGeneration={false}/>
+                    {wardrobeAsset?.model_snapshot && <Model3dPreview url={buildModel3dPreviewUrl(wardrobeAsset.model_snapshot.model_url)} character={wardrobeConfig}/>}
+                </Box>
+            </DialogContent>
+            <DialogActions><Button disabled={!!busy} onClick={()=>setWardrobeAsset(null)}>Hủy</Button><Button variant="contained" disabled={!!busy} onClick={async()=>{if(wardrobeAsset && await run('wardrobe:'+wardrobeAsset.id,'character_config',{asset_id:wardrobeAsset.id,expected_module_hash:wardrobeAsset.module_hash,character:wardrobeConfig}))setWardrobeAsset(null);}}>Lưu trang phục cho vai này</Button></DialogActions>
+        </Dialog>
+        <Dialog open={!!switchHtml} onClose={()=>!busy && setSwitchHtml(null)}><DialogTitle>Dùng nhân vật HTML · {switchHtml?.name}</DialogTitle><DialogContent>
+            {switchHtml?.has_html_backup ? 'Bản HTML trước khi chọn thư viện sẽ được khôi phục. Trang phục của mẫu thư viện giữ nguyên.' : 'Hồ sơ này chưa có bản HTML cũ được lưu dự phòng. Chuyển sang chế độ HTML rồi dán HTML hoặc tạo lại bằng DeepSeek.'}
+            {switchHtml?.has_html_backup && switchHtml.html_backup_ready===false && <Alert severity="warning" sx={{mt:1}}>Bản HTML cũ cần kiểm tra hoặc cập nhật theo đặc tả hiện tại trước khi dựng beat.</Alert>}
+            <Typography variant="body2" sx={{mt:1}}>Các beat dùng hồ sơ này sẽ cần dựng lại để nhận thay đổi.</Typography>{error && <Alert severity="error">{error}</Alert>}
+        </DialogContent><DialogActions><Button disabled={!!busy} onClick={()=>setSwitchHtml(null)}>Hủy</Button><Button variant="contained" disabled={!!busy} onClick={async()=>{if(switchHtml && await run('html-mode:'+switchHtml.id,'unbind_model',{asset_id:switchHtml.id,expected_module_hash:switchHtml.module_hash}))setSwitchHtml(null);}}>Chuyển sang HTML</Button></DialogActions></Dialog>
         <Dialog open={regenerate} onClose={() => !busy && setRegenerate(false)}><DialogTitle>Tạo lại toàn bộ HTML hồ sơ?</DialogTitle><DialogContent>DeepSeek sẽ tạo lại các nhân vật và bối cảnh qua queue. Bản HTML hiện tại chỉ được thay khi bản mới đã hoàn chỉnh, kiểm tra chạy được và lưu đúng vào DB. Các beat dùng phiên bản cũ sẽ được báo cần dựng lại.</DialogContent><DialogActions><Button onClick={() => setRegenerate(false)}>Hủy</Button><Button variant="contained" color="warning" disabled={Boolean(busy)} onClick={async () => {if (await run('queue-all', 'enqueue', {kind: 'all', force: true})) setRegenerate(false);}}>Tạo lại tất cả</Button></DialogActions></Dialog>
         <Dialog open={importOpen} onClose={() => !busy && setImportOpen(false)} fullWidth maxWidth="md"><DialogTitle>Danh sách nhân vật và bối cảnh</DialogTitle><DialogContent><Typography variant="body2" sx={{mb: 1}}>Dán JSON chatbot trả về. Giữ nguyên ID để bảo toàn HTML đã tạo. Thay đổi đặc tả sẽ yêu cầu tạo lại HTML tương ứng.</Typography><TextField fullWidth multiline minRows={12} value={importText} onChange={e => setImportText(e.target.value)} inputProps={{'aria-label': 'JSON hồ sơ'}}/></DialogContent><DialogActions><Button disabled={Boolean(busy)} onClick={() => setImportOpen(false)}>Đóng</Button><Button disabled={Boolean(busy) || !importText.trim()} onClick={async () => {if (await run('manifest', 'manifest', {text: importText, expected_revision: importRevision.current})) {setImportOpen(false); setDraft(null);}}}>Lưu danh sách</Button></DialogActions></Dialog>
         <Dialog open={Boolean(edit)} onClose={() => !busy && setEdit(null)} fullWidth maxWidth="md"><DialogTitle>Cập nhật HTML · {edit?.name}</DialogTitle><DialogContent><Alert severity="info" sx={{mb: 1}}>HTML được chạy kiểm tra preview trước khi lưu. Nếu có lỗi, queue sẽ gửi chẩn đoán về DeepSeek và tự kiểm tra lại bản sửa; bản hiện tại được giữ trong lúc xử lý.</Alert><TextField fullWidth multiline minRows={14} value={html} onChange={e => setHtml(e.target.value)} inputProps={{'aria-label': 'HTML hồ sơ'}}/></DialogContent><DialogActions><Button disabled={Boolean(busy)} onClick={() => setEdit(null)}>Đóng</Button><Button disabled={Boolean(busy) || !html.trim()} onClick={async () => {if (edit && await run('html', 'html', {asset_id: edit.id, spec_hash: edit.spec_hash, text: html})) setEdit(null);}}>Lưu HTML</Button></DialogActions></Dialog>
