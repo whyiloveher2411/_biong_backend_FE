@@ -6,6 +6,7 @@ import {
     localizeImportHtmlAssetScripts,
     localizeImportHtmlExternalScripts,
     seekCustomHtmlIframe,
+    setModelAudioPlayback,
     useModel3dBeatAssetRevision,
     useModel3dLocateAsset,
 } from './agentVideoCustomHtmlPreview';
@@ -15,6 +16,7 @@ type Props = {
     html: string;
     /** Thời điểm playhead (giây, beat-local) — iframe seek theo giá trị này. */
     timeSec: number;
+    playing?: boolean;
     /** Window audio của beat (giây). */
     durationSec: number;
     /** ID beat — dùng để đổi `key` của iframe khi chuyển beat (tránh tái dùng
@@ -76,7 +78,7 @@ export function detectAuthoredSize(html: string): { w: number; h: number } | nul
  * (`timeSec`). Đặt TRONG khung geometry của editor nên zoom/pan + kéo timeline
  * (playhead) đều áp dụng lên preview.
  */
-export default function BeatHtmlMotionPreview({ html, timeSec, durationSec, beatId, shortVideoId = 0 }: Props) {
+export default function BeatHtmlMotionPreview({ html, timeSec, durationSec, beatId, shortVideoId = 0, playing=false }: Props) {
     const containerRef = React.useRef<HTMLDivElement | null>(null);
     const iframeRef = React.useRef<HTMLIFrameElement | null>(null);
     const latestTimeRef = React.useRef(0);
@@ -121,6 +123,8 @@ export default function BeatHtmlMotionPreview({ html, timeSec, durationSec, beat
         seek(timeSec);
     }, [timeSec, seek, srcDoc]);
 
+    React.useEffect(()=>{setModelAudioPlayback(iframeRef.current,playing);return()=>setModelAudioPlayback(iframeRef.current,false);},[playing,srcDoc]);
+
     const fitScale = authored && size.w > 0 && size.h > 0
         ? Math.min(size.w / authored.w, size.h / authored.h)
         : 1;
@@ -163,7 +167,7 @@ export default function BeatHtmlMotionPreview({ html, timeSec, durationSec, beat
                 title="HTML motion beat"
                 srcDoc={srcDoc}
                 scrolling="no"
-                onLoad={() => seek(latestTimeRef.current)}
+                onLoad={() => { setModelAudioPlayback(iframeRef.current,playing); seek(latestTimeRef.current); }}
                 sx={{
                     position: 'absolute',
                     top: '50%',

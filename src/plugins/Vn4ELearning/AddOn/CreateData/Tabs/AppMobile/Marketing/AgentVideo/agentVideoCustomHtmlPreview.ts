@@ -81,6 +81,10 @@ export function useModel3dLocateAsset(
     }, [sid, bid, iframeRef]);
 }
 
+export function setModelAudioPlayback(iframe:HTMLIFrameElement|null,playing:boolean):void{
+    try {iframe?.contentWindow?.dispatchEvent(new CustomEvent('hf-model-audio-playback',{detail:{playing}}));}catch{ /* The preview may have been unmounted. */ }
+}
+
 export function seekCustomHtmlIframe(iframe: HTMLIFrameElement | null, timeSec: number): void {
     if (!iframe?.contentWindow) {
         return;

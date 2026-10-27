@@ -1,3 +1,4 @@
+import type {ModelAudioConfig} from './modelAudio';
 import type {CharacterEmotion} from './characterEmotions';
 import { ajax } from 'hook/useApi';
 import { getAdminApiPrefix } from 'helpers/apiHost';
@@ -348,7 +349,7 @@ export async function uploadShortVideoModel3dThumbnail(
 }
 
 /** Phiên bản asset runtime — tăng khi runtime thay đổi để bust cache trình duyệt. */
-export const MODEL3D_ASSET_RUNTIME_VERSION = '12';
+export const MODEL3D_ASSET_RUNTIME_VERSION = '14';
 
 /** Sự kiện yêu cầu preview định vị (bay camera tới) 1 asset slot. */
 export const MODEL3D_LOCATE_ASSET_EVENT = 'vn4-model3d-locate-asset';
@@ -405,6 +406,7 @@ export function buildModel3dAssetConfigUrl(shortVideoId: number, beatId: string,
 export type CharacterPart = { id: string; name: string; slot: string; parts: Array<{bone: string; shape: string; size: number[]; position?: number[]; rotation?: number[]; color: string}> };
 export type CharacterConfig = {
     enabled?: boolean;
+    audio?: ModelAudioConfig;
     surface_mode?: 'skinned_v2';
     expression?: CharacterEmotion;
     emotionEffects?: boolean; emotionIntensity?: number;
@@ -421,7 +423,7 @@ export function characterRequest(operation: string, data: Record<string, unknown
 }
 let characterRuntimePromise: Promise<ANY> | null = null;
 export function loadCharacterRuntime(): Promise<ANY> {
-    if ((window as ANY).HFCharacterRuntime?.version === 'anime_v2') return Promise.resolve((window as ANY).HFCharacterRuntime);
+    if ((window as ANY).HFCharacterRuntime?.version === 'anime_v2_audio_v1') return Promise.resolve((window as ANY).HFCharacterRuntime);
     if (!characterRuntimePromise) characterRuntimePromise = new Promise((resolve, reject) => {
         const script = document.createElement('script');
         script.src = `${buildModel3dRuntimeAssetUrl()}&module=character`;

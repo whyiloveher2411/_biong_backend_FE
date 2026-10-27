@@ -11,6 +11,7 @@ import {
     localizeImportHtmlAssetScripts,
     localizeImportHtmlExternalScripts,
     seekCustomHtmlIframe,
+    setModelAudioPlayback,
     useModel3dBeatAssetRevision,
     useModel3dLocateAsset,
 } from './agentVideoCustomHtmlPreview';
@@ -138,6 +139,7 @@ export default function ShortVideoAgentCustomHtmlPreview({
         proxy.bindAudio(audio);
 
         const syncSeek = () => {
+            setModelAudioPlayback(iframeRef.current,!audio.paused);
             const globalT = audio.currentTime;
             setLocalTimeSec(globalT);
             const beat = resolveActiveBeatSection(beatMapRef.current, globalT);
@@ -147,11 +149,13 @@ export default function ShortVideoAgentCustomHtmlPreview({
 
         audio.addEventListener('timeupdate', syncSeek);
         audio.addEventListener('play', syncSeek);
+        audio.addEventListener('pause',syncSeek);
         audio.addEventListener('seeked', syncSeek);
 
         return () => {
             audio.removeEventListener('timeupdate', syncSeek);
             audio.removeEventListener('play', syncSeek);
+            audio.removeEventListener('pause',syncSeek);
             audio.removeEventListener('seeked', syncSeek);
             proxy.unbindAudio();
         };

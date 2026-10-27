@@ -1,4 +1,5 @@
 import React from 'react';
+import {resolveCharacterAudio} from 'helpers/modelAudio';
 import {CHARACTER_EMOTIONS} from 'helpers/characterEmotions';
 import {
     Box,
@@ -75,6 +76,8 @@ const Model3dPreview = React.forwardRef<Model3dPreviewHandle, Props>(function Mo
     const expressionRef=React.useRef(expression); expressionRef.current=expression;
     const [faceCloseup,setFaceCloseup]=React.useState(false);
     const faceViewRef=React.useRef<((closeup:boolean)=>void) | null>(null);
+    const [soundPreview,setSoundPreview]=React.useState(false);
+    const soundPreviewRef=React.useRef(soundPreview);soundPreviewRef.current=soundPreview;
     const [speaking,setSpeaking] = React.useState(false);
     const speakingRef = React.useRef(speaking); speakingRef.current=speaking;
     const runtimeRef = React.useRef<PreviewRuntime | null>(null);
@@ -88,7 +91,7 @@ const Model3dPreview = React.forwardRef<Model3dPreviewHandle, Props>(function Mo
     onErrorRef.current = onError;
 
     React.useEffect(() => {
-        if (engineRef.current) { try {engineRef.current.rebuild(character); setAppearanceError('');} catch(e) {setAppearanceError(e instanceof Error?e.message:'Không lắp được ngoại hình.');} }
+        if (engineRef.current) { try {engineRef.current.rebuild(character?resolveCharacterAudio(character):character); setAppearanceError('');} catch(e) {setAppearanceError(e instanceof Error?e.message:'Không lắp được ngoại hình.');} }
     },[character]);
 
     React.useImperativeHandle(ref, () => ({
@@ -139,6 +142,7 @@ const Model3dPreview = React.forwardRef<Model3dPreviewHandle, Props>(function Mo
             if (mixerRef.current) {
                 mixerRef.current.timeScale = next ? 0 : 1;
             }
+            (window as ANY).HFModelAudio?.setEnabled(soundPreviewRef.current && !next);
             return next;
         });
     };
@@ -173,7 +177,7 @@ const Model3dPreview = React.forwardRef<Model3dPreviewHandle, Props>(function Mo
         setLoading(true);
         setFailed(false);
         setClipNames([]);
-        setAdditiveNames([]); setWeights({}); setSpeaking(false); setExpression('default'); setFaceCloseup(false); setAppearanceError('');
+        setAdditiveNames([]); setWeights({}); setSpeaking(false);setSoundPreview(false); setExpression('default'); setFaceCloseup(false); setAppearanceError('');
         setActiveClip(NO_CLIP);
         setPaused(false);
         container.innerHTML = '';
@@ -280,7 +284,7 @@ const Model3dPreview = React.forwardRef<Model3dPreviewHandle, Props>(function Mo
                     const shared = await loadCharacterRuntime();
                     if (disposed) return;
                     if (mixer) {mixer.stopAllAction(); mixer.uncacheRoot(root);}
-                    const engine=shared.create(three,root,clips,characterRef.current);
+                    const engine=shared.create(three,root,clips,resolveCharacterAudio(characterRef.current));
                     engineRef.current=engine;
                     setClipNames(engine.baseClips); setAdditiveNames(engine.additiveClips);
                     setActiveClip(engine.baseClips.includes('idle')?'idle':engine.baseClips[0] || NO_CLIP);
@@ -351,6 +355,7 @@ const Model3dPreview = React.forwardRef<Model3dPreviewHandle, Props>(function Mo
                 cancelAnimationFrame(raf);
             }
             try {
+                (window as ANY).HFModelAudio?.setEnabled(false);
                 if (engineRef.current) {engineRef.current.dispose(); engineRef.current=null;}
                 if (mixer) {
                     mixer.stopAllAction();
@@ -448,7 +453,7 @@ const Model3dPreview = React.forwardRef<Model3dPreviewHandle, Props>(function Mo
                     <MenuItem value="default">Theo cấu hình đã lưu</MenuItem>
                     {Object.entries(CHARACTER_EMOTIONS).map(([id,label])=><MenuItem key={id} value={id}>{label}</MenuItem>)}
                 </TextField>
-                <Stack direction="row" spacing={1}><Button size="small" variant={speaking?'contained':'outlined'} onClick={()=>setSpeaking(v=>!v)}>Thử nói chuyện</Button><Button size="small" variant={faceCloseup?'contained':'outlined'} onClick={()=>{setFaceCloseup(!faceCloseup);faceViewRef.current?.(!faceCloseup);}}>{faceCloseup?'Xem toàn thân':'Cận khuôn mặt'}</Button></Stack>
+                <Stack direction="row" useFlexGap flexWrap="wrap" spacing={1}><Button size="small" variant={soundPreview?'contained':'outlined'} onClick={()=>{const next=!soundPreview;setSoundPreview(next);(window as ANY).HFModelAudio?.setEnabled(next && !paused);}}>{soundPreview?'Âm thanh: Bật':'Âm thanh: Tắt'}</Button><Button size="small" variant={speaking?'contained':'outlined'} onClick={()=>setSpeaking(v=>!v)}>Thử nói chuyện</Button><Button size="small" variant={faceCloseup?'contained':'outlined'} onClick={()=>{setFaceCloseup(!faceCloseup);faceViewRef.current?.(!faceCloseup);}}>{faceCloseup?'Xem toàn thân':'Cận khuôn mặt'}</Button></Stack>
             </Stack>}
             <Box
                 sx={{

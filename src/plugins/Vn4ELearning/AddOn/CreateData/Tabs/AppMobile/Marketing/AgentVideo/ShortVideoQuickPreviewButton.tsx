@@ -57,7 +57,7 @@ export default function ShortVideoQuickPreviewButton({
         <Tooltip
             title={pinned
                 ? 'Bỏ khỏi danh sách preview nhanh'
-                : 'Thêm vào danh sách preview nhanh (dock góc trái)'}
+                : 'Thêm vào danh sách preview nhanh (dock góc phải)'}
             placement="top"
         >
             <span>

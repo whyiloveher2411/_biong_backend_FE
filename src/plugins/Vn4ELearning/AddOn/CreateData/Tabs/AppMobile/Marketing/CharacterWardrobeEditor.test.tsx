@@ -2,6 +2,8 @@ import React from 'react';
 import {act, fireEvent, render, screen} from '@testing-library/react';
 import CharacterWardrobeEditor from './CharacterWardrobeEditor';
 import {characterRequest, CharacterPart} from 'helpers/marketingShortVideoModel3dApi';
+jest.mock('components/molecules/DrawerCustom',()=>({open,children}:ANY)=>open?<div>{children}</div>:null);
+jest.mock('helpers/modelAudio',()=>({listLibrarySounds:()=>Promise.resolve({success:true,sounds:[]}),librarySoundUrl:()=>'/audio'}));
 jest.mock('helpers/marketingShortVideoModel3dApi',()=>({characterRequest:jest.fn(),parseShortVideoModel3dApiMessage:()=> 'Lỗi thử'}));
 const request=characterRequest as jest.Mock;
 const part: CharacterPart={id:'helmet',name:'Tóc mũ thử',slot:'hair',parts:[{bone:'head',shape:'sphere',size:[.1,.1,.1],color:'#ffcc00'}]};

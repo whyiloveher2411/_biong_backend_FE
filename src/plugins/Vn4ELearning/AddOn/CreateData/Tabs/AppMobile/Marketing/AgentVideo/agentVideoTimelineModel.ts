@@ -5,7 +5,7 @@ import type {
     WhiteboardTransitionOption,
 } from './agentVideoApi';
 
-export const AGENT_VIDEO_TRACK_ROW_HEIGHT = 72;
+export const AGENT_VIDEO_TRACK_ROW_HEIGHT = 32;
 
 export const AGENT_VIDEO_TRACK_ID = 'agent-video-track';
 export const AGENT_VIDEO_CLIP_ID = 'agent-video-clip';

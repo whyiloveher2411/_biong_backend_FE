@@ -10,6 +10,7 @@ import {
     localizeImportHtmlAssetScripts,
     localizeImportHtmlExternalScripts,
     seekCustomHtmlIframe,
+    setModelAudioPlayback,
     useModel3dBeatAssetRevision,
     useModel3dLocateAsset,
 } from './agentVideoCustomHtmlPreview';
@@ -204,6 +205,7 @@ export default function ShortVideoAgentBeatVisualPreview({
         seekCustomHtmlIframe(iframeRef.current, localTimeSec);
     };
 
+    React.useEffect(()=>{setModelAudioPlayback(iframeRef.current,isPlaying);return()=>setModelAudioPlayback(iframeRef.current,false);},[isPlaying,localHtml]);
     const handleTogglePlayback = () => {
         const audio = audioRef.current;
         if (audio && audioUrl) {

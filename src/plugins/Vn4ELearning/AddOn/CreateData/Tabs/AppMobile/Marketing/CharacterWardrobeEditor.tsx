@@ -1,4 +1,5 @@
 import React from 'react';
+import ModelActionAudioEditor from './ModelActionAudioEditor';
 import {CHARACTER_EMOTIONS} from 'helpers/characterEmotions';
 import {Alert, Box, Button, Chip, CircularProgress, FormControlLabel, Slider, MenuItem, Stack, Switch, TextField, Typography} from '@mui/material';
 import {CharacterConfig, CharacterGeneration, CharacterPart, characterRequest, parseShortVideoModel3dApiMessage} from 'helpers/marketingShortVideoModel3dApi';
@@ -84,6 +85,7 @@ export default function CharacterWardrobeEditor({value,onChange,modelId,library,
                 {([['skin','Da','#e8b18d'],['shirt','Áo','#367de0'],['trousers','Quần','#263b58'],['hairColor','Tóc','#302723']] as const).map(([key,label,fallback])=><TextField key={key} size="small" type="color" label={label} value={value[key] || fallback} onChange={e=>onChange({...value,[key]:e.target.value})} disabled={disabled} sx={{width:95}} InputLabelProps={{shrink:true}}/>)}
             </Stack>
             <Alert severity="info">{value.surface_mode==='skinned_v2' ? 'Áo, tay áo và quần dùng bề mặt liền, uốn theo xương. Các bộ phối thay màu và chi tiết trên cùng kiểu dáng Aster. Bạn vẫn có thể đổi tóc, khuôn mặt và màu riêng; kiểu áo/quần mới cần asset skinned tương thích.' : 'Bộ mẫu cũ dùng các khối gắn theo khớp. Chọn Aster · Urban Explorer để dùng trang phục liền có skin weights.'}</Alert>
+            <ModelActionAudioEditor value={value} onChange={onChange} disabled={disabled}/>
             {allowGeneration && <><Typography variant="subtitle2">Tạo thêm bộ phận bằng DeepSeek</Typography>
             {!modelId && <Alert severity="info">Lưu nhân vật trước để tạo và lưu thêm asset vào thư viện.</Alert>}
             <TextField select size="small" label="Bộ phận cần tạo" value={slot} onChange={e=>setSlot(e.target.value)} disabled={busy || active || disabled}>

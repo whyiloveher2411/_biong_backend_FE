@@ -242,16 +242,16 @@ export default function ShortVideoPipelineDock() {
             elevation={8}
             sx={{
                 position: 'fixed',
-                left: 0,
+                right: 0,
                 bottom: 0,
                 zIndex: 1400,
                 maxWidth: '100vw',
                 bgcolor: 'rgba(9,12,16,0.97)',
                 color: 'common.white',
                 border: '1px solid rgba(255,255,255,0.16)',
-                borderRight: 'none',
+                borderLeft: 'none',
                 borderBottom: 'none',
-                borderRadius: '0 10px 0 0',
+                borderRadius: '10px 0 0 0',
                 overflow: 'hidden',
             }}
         >

@@ -518,12 +518,29 @@ export default function AgentVideoBeatBoundaryOverlay({
                                     />
                                 </Box>
                             ) : null}
+                            {trackHeight <= 36 && <Box
+                                component="button"
+                                type="button"
+                                title={`Beat ${segment.beatIndex} · Chuột phải để mở thao tác`}
+                                onClick={() => onBeatClick?.(segment.beatId)}
+                                onDoubleClick={() => onOpenInfo?.(segment.beatId)}
+                                onContextMenu={(event: React.MouseEvent<HTMLButtonElement>) => {
+                                    event.preventDefault();event.stopPropagation();
+                                    onBeatClick?.(segment.beatId);setMenuBeatId(segment.beatId);setMenuAnchorEl(event.currentTarget);
+                                }}
+                                onKeyDown={(event: React.KeyboardEvent<HTMLButtonElement>) => {
+                                    if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
+                                        event.preventDefault();setMenuBeatId(segment.beatId);setMenuAnchorEl(event.currentTarget);
+                                    }
+                                }}
+                                sx={{width:'100%',height:'100%',minWidth:0,border:0,bgcolor:'transparent',color:'inherit',px:1,textAlign:'left',fontSize:12,lineHeight:'32px',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',cursor:'pointer','&:focus-visible':{outline:'2px solid white',outlineOffset:-2}}}
+                            >{`beat ${segment.beatIndex}`}</Box>}
                             <Box
                                 sx={{
                                     position: 'relative',
                                     flex: 1,
                                     minHeight: 0,
-                                    display: 'flex',
+                                    display: trackHeight <= 36 ? 'none' : 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
                                     gap: 0.5,

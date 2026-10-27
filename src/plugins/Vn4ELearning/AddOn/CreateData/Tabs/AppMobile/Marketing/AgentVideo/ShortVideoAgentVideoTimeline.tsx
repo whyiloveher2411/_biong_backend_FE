@@ -1,3 +1,5 @@
+import TimelineAudioClipView from './TimelineAudioClipView';
+import useTimelineAudio from './useTimelineAudio';
 import React from 'react';
 import { Timeline, type TimelineState } from '@xzdarcy/react-timeline-editor';
 import '@xzdarcy/react-timeline-editor/dist/react-timeline-editor.css';
@@ -144,14 +146,7 @@ function scrollTimelineGrids(host: HTMLElement, deltaPx: number): boolean {
 }
 
 function resolveTimelineWheelDelta(event: WheelEvent): number {
-    const { deltaX, deltaY } = event;
-    if (Math.abs(deltaY) > Math.abs(deltaX)) {
-        return deltaY;
-    }
-    if (deltaX !== 0) {
-        return deltaX;
-    }
-    return 0;
+    return event.deltaX || (event.shiftKey ? event.deltaY : 0);
 }
 
 function formatPlaybackClock(totalSec: number): string {
@@ -348,6 +343,7 @@ type Props = {
     beatActiveVersionId?: Record<string, string>;
     onRestoreBeatVersion?: (beatId: string, versionId: string, label: string) => Promise<string | null>;
     onTimeUpdate?: (timeSec: number) => void;
+    onPlaybackChange?: (playing: boolean) => void;
     copyingBeatHtmlPromptBeatId?: string;
     pastingBeatHtmlBeatId?: string;
     deletingBeatHtmlBeatId?: string;
@@ -462,6 +458,7 @@ export default function ShortVideoAgentVideoTimeline({
     beatActiveVersionId = {},
     onRestoreBeatVersion,
     onTimeUpdate,
+    onPlaybackChange,
     copyingBeatHtmlPromptBeatId = '',
     pastingBeatHtmlBeatId = '',
     deletingBeatHtmlBeatId = '',
@@ -518,11 +515,20 @@ export default function ShortVideoAgentVideoTimeline({
     const [mediaDurationSec, setMediaDurationSec] = React.useState<number | null>(null);
     const [currentTimeSec, setCurrentTimeSec] = React.useState(0);
     const [isPlaying, setIsPlaying] = React.useState(false);
+    React.useEffect(() => { onPlaybackChange?.(isPlaying); }, [isPlaying,onPlaybackChange]);
     const [tracksCollapsed, setTracksCollapsed] = usePersistedTimelineTracksCollapsed(
         SHORT_VIDEO_AGENT_TIMELINE_COLLAPSED_STORAGE_KEY,
     );
 
     const [timelineScrollLeft, setTimelineScrollLeft] = React.useState(0);
+    const [timelineScrollTop,setTimelineScrollTop]=React.useState(0);
+    const [audioDropLane,setAudioDropLane]=React.useState<number|null>(null);
+    const audioDragRef=React.useRef({id:'',y:0});
+    React.useEffect(()=>{const track=(e:PointerEvent)=>{audioDragRef.current.y=e.clientY;if(!audioDragRef.current.id)return;
+        const row=Array.from(timelineHostRef.current?.querySelectorAll('.timeline-editor-edit-row')||[]).find(el=>{const r=el.getBoundingClientRect();return e.clientY>=r.top&&e.clientY<r.bottom;});
+        const lane=row?.className.match(/audio-lane-(\d+)/);setAudioDropLane(lane?Number(lane[1]):null);
+    };document.addEventListener('pointermove',track,true);document.addEventListener('pointerdown',track,true);return()=>{document.removeEventListener('pointermove',track,true);document.removeEventListener('pointerdown',track,true);};},[]);
+
     const [restartMenuAnchor, setRestartMenuAnchor] = React.useState<null | HTMLElement>(null);
     const [beatDivisionManualOpen, setBeatDivisionManualOpen] = React.useState(false);
     // Dialog "Làm lại các ảnh không đúng tỉ lệ" (bước Ảnh beat).
@@ -858,9 +864,10 @@ export default function ShortVideoAgentVideoTimeline({
         [contentDurationSec],
     );
 
+    const timelineAudio=useTimelineAudio(shortVideoId,currentTimeSec,isPlaying && customHtmlPreview,contentDurationSec);
     const editorData = React.useMemo(
-        () => buildAgentVideoTimelineRows(contentDurationSec),
-        [contentDurationSec],
+        () => [...buildAgentVideoTimelineRows(contentDurationSec),...timelineAudio.rows],
+        [contentDurationSec,timelineAudio.rows],
     );
 
     const minScaleCount = Math.max(20, Math.ceil(timelineWorkspaceEndSec) + 2);
@@ -868,7 +875,7 @@ export default function ShortVideoAgentVideoTimeline({
         () => timeSecToTimelineLeftPx(minScaleCount, timelineLayout),
         [minScaleCount, timelineLayout],
     );
-    const tracksViewportHeight = TIMELINE_EDIT_AREA_TOP_GAP + AGENT_VIDEO_TRACK_ROW_HEIGHT;
+    const tracksViewportHeight = TIMELINE_EDIT_AREA_TOP_GAP + AGENT_VIDEO_TRACK_ROW_HEIGHT * (1+Math.min(3,timelineAudio.rows.length));
     const timelineContentHeight = TIMELINE_RULER_HEIGHT + tracksViewportHeight;
     const timelineTotalHeight = timelineContentHeight + HORIZONTAL_SCROLLBAR_HEIGHT + CURSOR_HEAD_OVERFLOW;
 
@@ -1206,6 +1213,8 @@ export default function ShortVideoAgentVideoTimeline({
         return true;
     }, [seekToTime]);
 
+    React.useLayoutEffect(()=>{syncTimelineCursor(currentTimeSec);timelineRef.current?.setScrollLeft(timelineScrollLeft);},[timelineAudio.uiEpoch]); // eslint-disable-line react-hooks/exhaustive-deps
+
     const handleTimelineChange = React.useCallback(() => {
         // Read-only timeline — clip edits disabled via disableDrag.
     }, []);
@@ -1223,6 +1232,7 @@ export default function ShortVideoAgentVideoTimeline({
 
         const syncScrollLeft = () => {
             setTimelineScrollLeft(getTimelineHorizontalScrollLeft(host));
+            const grid=host.querySelector('.timeline-editor-edit-area .ReactVirtualized__Grid');setTimelineScrollTop(grid?.scrollTop||0);
         };
 
         syncScrollLeft();
@@ -1422,7 +1432,7 @@ export default function ShortVideoAgentVideoTimeline({
                 <Typography variant="caption" sx={{ fontVariantNumeric: 'tabular-nums' }}>
                     {formatPlaybackClock(currentTimeSec)} / {formatPlaybackClock(contentDurationSec)}
                 </Typography>
-                <Box sx={{ flex: 1, minWidth: 8 }} />
+                {timelineAudio.controls}{timelineAudio.dialogs}<Box sx={{ flex: 1, minWidth: 8 }} />
                 {showWhiteboardRenderProgress && whiteboardRenderProgress ? (
                     <Tooltip
                         title={whiteboardRenderProgressLabel(whiteboardRenderProgress)}
@@ -1465,7 +1475,7 @@ export default function ShortVideoAgentVideoTimeline({
                         {`Ổn: ${beatQaCounts.approved} · HTML: ${beatQaCounts.needs_html_refill} · Visual: ${beatQaCounts.needs_visual_tweak}`}
                     </Typography>
                 ) : null}
-                {showBeatTimelineOverlay ? (
+                {showBeatTimelineOverlay && timelineScrollTop<AGENT_VIDEO_TRACK_ROW_HEIGHT ? (
                     <Tooltip title="Scroll timeline về beat đang active (playhead / beat đang chọn)">
                         <span>
                             <IconButton
@@ -1790,7 +1800,9 @@ export default function ShortVideoAgentVideoTimeline({
                         />
                         <Box
                             sx={{
-                                height: AGENT_VIDEO_TRACK_ROW_HEIGHT + TIMELINE_EDIT_AREA_TOP_GAP,
+                                height: Math.max(0,AGENT_VIDEO_TRACK_ROW_HEIGHT-timelineScrollTop) + TIMELINE_EDIT_AREA_TOP_GAP,
+                                overflow: 'hidden',
+                                visibility: timelineScrollTop>0?'hidden':'visible',
                                 display: 'flex',
                                 alignItems: 'center',
                                 gap: 0.5,
@@ -1819,6 +1831,7 @@ export default function ShortVideoAgentVideoTimeline({
                                 </IconButton>
                             </Tooltip>
                         </Box>
+                        {timelineAudio.rows.length>0&&<Box sx={{px:1,pt:2,color:'#73d7e5',fontSize:12}}>Âm thanh</Box>}
                     </Box>
 
                     <Box
@@ -1857,18 +1870,34 @@ export default function ShortVideoAgentVideoTimeline({
                                 marginTop: `${TIMELINE_EDIT_AREA_TOP_GAP}px`,
                                 overflow: 'hidden',
                             },
+                            '& .timeline-editor-edit-area .ReactVirtualized__Grid::-webkit-scrollbar': {width:8,height:8},
+                            ...(audioDropLane!==null?{['& .audio-lane-'+audioDropLane]:{boxShadow:'inset 0 0 0 2px #73d7e5'}}:{}),
                             '& .timeline-editor-action': {
                                 backgroundColor: 'transparent !important',
                             },
-                            '& .timeline-editor-action .timeline-editor-action-left-stretch, & .timeline-editor-action .timeline-editor-action-right-stretch': {
-                                opacity: '0 !important',
+                            '& .timeline-editor-action-effect-audio': { overflow: 'visible' },
+                            '& .timeline-editor-action-effect-audio .timeline-editor-action-left-stretch, & .timeline-editor-action-effect-audio .timeline-editor-action-right-stretch': {
+                                opacity: '1 !important', width: 10, top: 3, height: 'calc(100% - 6px)',
+                                borderRadius: '3px', cursor: 'ew-resize', zIndex: 3, overflow: 'visible',
+                                bgcolor: 'rgba(115,215,229,0.28)',
+                                '&:hover': { bgcolor: '#3d97a9', boxShadow: '0 0 0 1px #b6f6ff' },
+                                '&::after': { content: '""', border: '0 !important', borderRadius: 0, top: 3, bottom: 3, width: 2, height: 'auto', bgcolor: '#c4f7ff' },
+                            },
+                            '& .timeline-editor-action-effect-audio .timeline-editor-action-left-stretch': {
+                                left: -10, '&::after': { left: 'auto', right: 0 },
+                                '&::before': { content: '"‹"', position: 'absolute', left: 1, top: 2, fontSize: 14, color: '#fff' },
+                            },
+                            '& .timeline-editor-action-effect-audio .timeline-editor-action-right-stretch': {
+                                right: -10, '&::after': { right: 'auto', left: 0 },
+                                '&::before': { content: '"›"', position: 'absolute', right: 1, top: 2, fontSize: 14, color: '#fff' },
                             },
                         }}
                     >
                         <Timeline
+                            key={timelineAudio.uiEpoch}
                             ref={timelineRef}
                             editorData={editorData}
-                            effects={AGENT_VIDEO_TIMELINE_EFFECTS}
+                            effects={{...AGENT_VIDEO_TIMELINE_EFFECTS,audio:{id:'audio',name:'Âm thanh'}}}
                             scale={TIMELINE_SCALE}
                             scaleWidth={timelineScaleWidth}
                             scaleSplitCount={TIMELINE_SCALE_SPLIT_COUNT}
@@ -1877,23 +1906,32 @@ export default function ShortVideoAgentVideoTimeline({
                             rowHeight={AGENT_VIDEO_TRACK_ROW_HEIGHT}
                             gridSnap
                             dragLine
-                            disableDrag
                             autoScroll
                             style={{
                                 width: '100%',
                                 height: timelineTotalHeight - CURSOR_HEAD_OVERFLOW,
                             }}
-                            onChange={handleTimelineChange}
+                            onChange={(data)=>{handleTimelineChange();const drag=audioDragRef.current;
+                                const row=Array.from(timelineHostRef.current?.querySelectorAll('.timeline-editor-edit-row')||[]).find(el=>{const r=el.getBoundingClientRect();return drag.y>=r.top&&drag.y<r.bottom;});
+                                const lane=row?.className.match(/audio-lane-(\d+)/);
+                                return timelineAudio.changeRows(data,drag.id&&lane?{id:drag.id,lane:Number(lane[1])}:undefined);
+                            }}
+                            onActionMoveStart={p=>{audioDragRef.current.id=p.action.effectId==='audio'?p.action.id:'';}}
+                            onActionMoveEnd={()=>{audioDragRef.current.id='';setAudioDropLane(null);}}
+                            onActionResizeStart={()=>{audioDragRef.current.id='';}}
+                            onClickActionOnly={(_,p)=>{if(p.action.effectId==='audio')timelineAudio.select(p.action.id);}}
+                            onContextMenuAction={(e,p)=>{if(p.action.effectId==='audio'){e.preventDefault();timelineAudio.contextMenu(p.action.id,e.clientX,e.clientY);}}}
+                            onActionResizing={p=>timelineAudio.canResize(p.action.id,p.start,p.end)}
                             onCursorDrag={handleCursorDrag}
                             onClickTimeArea={handleClickTimeArea}
-                            getActionRender={() => (
+                            getActionRender={(action) => action.effectId==='audio' ? <TimelineAudioClipView clip={timelineAudio.clips.find(c=>c.id===action.id)} selected={timelineAudio.selected===action.id} onSelect={()=>timelineAudio.select(action.id)} onVolume={volume=>timelineAudio.patch(action.id,{volume})}/> : (
                                 <AgentVideoSimpleClip
                                     clipLabel={clipLabel}
                                 />
                             )}
                         />
-                        {showBeatTimelineOverlay ? (
-                            <AgentVideoBeatBoundaryOverlay
+                        {showBeatTimelineOverlay && timelineScrollTop<AGENT_VIDEO_TRACK_ROW_HEIGHT ? (
+                            <Box sx={{position:'absolute',inset:0,overflow:'hidden',pointerEvents:'none',clipPath:`inset(${TIMELINE_RULER_HEIGHT+TIMELINE_EDIT_AREA_TOP_GAP}px 0 0 0)`}}><AgentVideoBeatBoundaryOverlay
                                 beatMap={beatMap}
                                 beatHtml={beatHtml}
                                 beatImage={beatImage}
@@ -1936,10 +1974,10 @@ export default function ShortVideoAgentVideoTimeline({
                                 contentWidthPx={timelineContentWidthPx}
                                 layout={timelineLayout}
                                 rulerHeight={TIMELINE_RULER_HEIGHT}
-                                trackTopGap={TIMELINE_EDIT_AREA_TOP_GAP}
+                                trackTopGap={TIMELINE_EDIT_AREA_TOP_GAP-timelineScrollTop}
                                 trackHeight={AGENT_VIDEO_TRACK_ROW_HEIGHT}
                                 totalHeight={timelineContentHeight}
-                            />
+                            /></Box>
                         ) : null}
                     </Box>
                 </Box>

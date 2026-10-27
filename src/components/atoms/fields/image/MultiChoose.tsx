@@ -418,7 +418,7 @@ export default React.memo(function MultiChoose2(props: FieldFormItemProps) {
                         //eslint-disable-next-line
                         // @ts-ignore: vanilla javascript
                         data.index = child.dataset.index;
-                        child.dataset.index = index;
+                        if (child instanceof HTMLElement) child.dataset.index = String(index);
                         child.id = 'div' + index;
                         return data;
                     }

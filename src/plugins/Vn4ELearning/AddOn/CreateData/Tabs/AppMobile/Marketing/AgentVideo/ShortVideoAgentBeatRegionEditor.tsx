@@ -307,6 +307,7 @@ type Props = {
      * HTML motion seek theo khi user kéo thanh timeline — giống chế độ Motion HTML.
      */
     timelinePlayheadSec?: number | null;
+    timelinePlaying?: boolean;
 };
 
 const REGION_COLORS = [
@@ -511,6 +512,7 @@ export default function ShortVideoAgentBeatRegionEditor({
     imageUrl: primaryImageUrl,
     onEditHtml,
     timelinePlayheadSec = null,
+    timelinePlaying = false,
 }: Props) {
     const currentOverride = state.agentWhiteboardBeatOverrides?.[beatId] || {};
 
@@ -1922,7 +1924,7 @@ export default function ShortVideoAgentBeatRegionEditor({
         // Edit mode: về đầu timeline để thấy vùng được chọn (chưa bị che theo playhead).
         if (canvasMode === 'edit') {
             setPlayheadSec(0);
-            playheadRef.current = { sec: 0, playing: false };
+            playheadRef.current = { sec: 0, playing: false };setModelAudioPlaying(false);
             videoPreviewRef.current?.seekTo(0, false);
             setTimelineSeekRequest((prev) => ({
                 sec: 0,
@@ -1939,7 +1941,7 @@ export default function ShortVideoAgentBeatRegionEditor({
         // Giống chọn vùng: về đầu timeline để thấy ảnh upload rõ (chưa bị che theo playhead).
         if (canvasMode === 'edit') {
             setPlayheadSec(0);
-            playheadRef.current = { sec: 0, playing: false };
+            playheadRef.current = { sec: 0, playing: false };setModelAudioPlaying(false);
             videoPreviewRef.current?.seekTo(0, false);
             setTimelineSeekRequest((prev) => ({
                 sec: 0,
@@ -4202,6 +4204,7 @@ export default function ShortVideoAgentBeatRegionEditor({
     const [beatVideoPreviewOpen, setBeatVideoPreviewOpen] = React.useState(false);
     const [renderConfirmOpen, setRenderConfirmOpen] = React.useState(false);
     const videoPreviewRef = React.useRef<WhiteboardBeatVideoPreviewHandle | null>(null);
+    const [modelAudioPlaying,setModelAudioPlaying]=React.useState(false);
     const playheadRef = React.useRef({ sec: 0, playing: false });
     // URL phát được: endpoint stream yêu cầu access_token — resolve như BeatQaPanel.
     const beatVideoPlayUrl = React.useMemo(() => {
@@ -4409,7 +4412,7 @@ export default function ShortVideoAgentBeatRegionEditor({
         zoom,
     ]);
     React.useEffect(() => {
-        playheadRef.current = { sec: 0, playing: false };
+        playheadRef.current = { sec: 0, playing: false };setModelAudioPlaying(false);
         setCanvasMode('edit');
         setRenderConfirmOpen(false);
     }, [beatId]);
@@ -5772,7 +5775,7 @@ export default function ShortVideoAgentBeatRegionEditor({
                                     }}
                                 >
                                     {isHtmlMotionPreview ? (
-                                        <BeatHtmlMotionPreview
+                                        <BeatHtmlMotionPreview playing={previewTimeSource === 'external' ? timelinePlaying : modelAudioPlaying}
                                             key={`html-motion:${beatId}:${beatHtmlMotionSource.length}`}
                                             html={beatHtmlMotionSource}
                                             timeSec={htmlMotionPreviewSec}
@@ -5962,6 +5965,8 @@ export default function ShortVideoAgentBeatRegionEditor({
                         onGoToBeat={handleGoToBeat}
                         onCopyError={(msg) => notify(msg, 'error')}
                         onPlayheadChange={(sec, isPlaying, origin) => {
+                            document.dispatchEvent(new CustomEvent('timeline-audio-playhead',{detail:{videoId:shortVideoId,time:mainTimelineBeatStartSec+sec,playing:isPlaying && isHtmlMotionPreview}}));
+                            setModelAudioPlaying(isPlaying);
                             setPlayheadSec(sec);
                             // Người dùng vừa kéo/play timeline audio → ưu tiên nguồn internal.
                             if (origin === 'user') {

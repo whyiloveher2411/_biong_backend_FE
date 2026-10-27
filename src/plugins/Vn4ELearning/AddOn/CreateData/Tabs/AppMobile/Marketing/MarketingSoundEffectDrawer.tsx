@@ -1,3 +1,4 @@
+import SoundLibraryDrawer from './SoundLibraryDrawer';
 import React from 'react';
 import {
     Alert,
@@ -344,11 +345,12 @@ export default function MarketingSoundEffectDrawer({ open, onClose }: Props) {
         return <Chip size="small" color="error" label="Chưa cài service" />;
     })();
 
+    const [libraryOpen,setLibraryOpen]=React.useState(false);
     const isMusic = mode === 'music';
     const downloadUrl = result?.download_url || result?.preview_url;
 
     return (
-        <DrawerCustom
+        <><SoundLibraryDrawer open={libraryOpen} onClose={()=>setLibraryOpen(false)}/><DrawerCustom
             open={open}
             onClose={onClose}
             title="Sound effect & nhạc nền (AudioCraft)"
@@ -362,7 +364,7 @@ export default function MarketingSoundEffectDrawer({ open, onClose }: Props) {
                 },
             }}
         >
-            <Stack spacing={2.5} sx={{ pb: 1 }}>
+            <Stack spacing={2.5} sx={{ pb: 1 }}><Button variant="contained" onClick={()=>setLibraryOpen(true)}>Thư viện âm thanh · nghe thử / thêm mới</Button>
                 <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
                     {serviceChip}
                     <Button
@@ -731,6 +733,6 @@ export default function MarketingSoundEffectDrawer({ open, onClose }: Props) {
                     </>
                 )}
             </Stack>
-        </DrawerCustom>
+        </DrawerCustom></>
     );
 }

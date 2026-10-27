@@ -1,3 +1,4 @@
+import SoundLibraryDrawer from '../SoundLibraryDrawer';
 import React from 'react';
 import { Box, Typography } from '@mui/material';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
@@ -68,6 +69,8 @@ export default function ShortVideoAgentVideoWorkspace({
     const [editBeatImageId, setEditBeatImageId] = React.useState('');
     const [infoBeatId, setInfoBeatId] = React.useState('');
     const [currentTimeSec, setCurrentTimeSec] = React.useState(0);
+    const [soundLibraryOpen,setSoundLibraryOpen]=React.useState(false);
+    const [timelinePlaying,setTimelinePlaying] = React.useState(false);
 
     const currentBeatId = React.useMemo(() => {
         const beat = resolveActiveBeatSection(
@@ -619,6 +622,7 @@ export default function ShortVideoAgentVideoWorkspace({
             >
                 Quản lý model 3D
             </Button>
+            <Button size="small" variant="contained" color="info" sx={HEADER_BTN_SX} onClick={()=>setSoundLibraryOpen(true)}>Thư viện âm thanh</Button><SoundLibraryDrawer open={soundLibraryOpen} onClose={()=>setSoundLibraryOpen(false)}/>
             <Button
                 size="small"
                 variant="contained"
@@ -820,6 +824,7 @@ export default function ShortVideoAgentVideoWorkspace({
                                 imageUrl={currentBeatImageUrl}
                                 onEditHtml={handleOpenEditBeatHtml}
                                 timelinePlayheadSec={currentTimeSec}
+                                timelinePlaying={timelinePlaying}
                             />
                         ) : !state.isWhiteboardMode && currentBeatId ? (
                             /* MOTION HTML: 2 cột — TRÁI preview HTML ĐỒNG BỘ timeline
@@ -1142,6 +1147,7 @@ export default function ShortVideoAgentVideoWorkspace({
                         void state.handleCancelFullAutoPipeline();
                     }}
                     onTimeUpdate={setCurrentTimeSec}
+                    onPlaybackChange={setTimelinePlaying}
                 />
             </Box>
             <DrawerCustom
