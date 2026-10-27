@@ -1,8 +1,10 @@
+import type {ShortVideoModel3d} from './marketingShortVideoModel3dApi';
 import { ajax } from 'hook/useApi';
 
 export type SceneAsset = {
     id: string; kind: 'character' | 'environment'; name: string; spec: string;
     spec_hash: string; has_html?: boolean; html?: string; ready?: boolean; module_hash?: string;
+    model_snapshot?: ShortVideoModel3d;
     chat_url?: string;
     generation?: {status: 'queued' | 'processing' | 'completed' | 'failed' | 'superseded' | 'cancelled'; job_id?: number; error?: string; continue_clicks?: number; phase?: string; repair_attempt?: number; preview_checked?: boolean};
 };

@@ -1,6 +1,11 @@
 import React from 'react';
+import {CHARACTER_EMOTIONS} from 'helpers/characterEmotions';
 import {
     Box,
+    Alert,
+    Slider,
+    TextField,
+    MenuItem,
     Button,
     CircularProgress,
     IconButton,
@@ -11,6 +16,7 @@ import {
 import RestartAltOutlinedIcon from '@mui/icons-material/RestartAltOutlined';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import PauseIcon from '@mui/icons-material/Pause';
+import {CharacterConfig, loadCharacterRuntime} from 'helpers/marketingShortVideoModel3dApi';
 import type { SxProps, Theme } from '@mui/material/styles';
 
 export type Model3dPreviewHandle = {
@@ -23,6 +29,7 @@ export type Model3dPreviewHandle = {
 type Props = {
     /** URL file .glb/.gltf (nên là URL proxy same-origin để tránh CORS). */
     url: string;
+    character?: CharacterConfig;
     height?: number;
     sx?: SxProps<Theme>;
     onLoaded?: () => void;
@@ -46,7 +53,7 @@ const NO_CLIP = '';
  * Dùng dynamic import để chỉ tải three.js khi thực sự mở preview.
  */
 const Model3dPreview = React.forwardRef<Model3dPreviewHandle, Props>(function Model3dPreview(
-    { url, sx, onLoaded, onError },
+    { url, sx, onLoaded, onError, character },
     ref,
 ) {
     const containerRef = React.useRef<HTMLDivElement | null>(null);
@@ -56,6 +63,20 @@ const Model3dPreview = React.forwardRef<Model3dPreviewHandle, Props>(function Mo
     const [activeClip, setActiveClip] = React.useState<string>(NO_CLIP);
     const [paused, setPaused] = React.useState(false);
 
+    const characterRef = React.useRef(character); characterRef.current=character;
+    const engineRef = React.useRef<ANY>(null);
+    const [additiveNames,setAdditiveNames] = React.useState<string[]>([]);
+    const [weights,setWeights] = React.useState<Record<string,number>>({});
+    const weightsRef = React.useRef(weights); weightsRef.current=weights;
+    const clipRef = React.useRef(activeClip); clipRef.current=activeClip;
+    const pausedRef = React.useRef(paused); pausedRef.current=paused;
+    const [appearanceError,setAppearanceError] = React.useState('');
+    const [expression,setExpression]=React.useState('default');
+    const expressionRef=React.useRef(expression); expressionRef.current=expression;
+    const [faceCloseup,setFaceCloseup]=React.useState(false);
+    const faceViewRef=React.useRef<((closeup:boolean)=>void) | null>(null);
+    const [speaking,setSpeaking] = React.useState(false);
+    const speakingRef = React.useRef(speaking); speakingRef.current=speaking;
     const runtimeRef = React.useRef<PreviewRuntime | null>(null);
     const actionsRef = React.useRef<Map<string, ANY> | null>(null);
     const activeActionRef = React.useRef<ANY>(null);
@@ -66,6 +87,10 @@ const Model3dPreview = React.forwardRef<Model3dPreviewHandle, Props>(function Mo
     const onErrorRef = React.useRef(onError);
     onErrorRef.current = onError;
 
+    React.useEffect(() => {
+        if (engineRef.current) { try {engineRef.current.rebuild(character); setAppearanceError('');} catch(e) {setAppearanceError(e instanceof Error?e.message:'Không lắp được ngoại hình.');} }
+    },[character]);
+
     React.useImperativeHandle(ref, () => ({
         captureThumbnail: () => (runtimeRef.current ? runtimeRef.current.capture() : Promise.resolve(null)),
         resetView: () => {
@@ -75,6 +100,7 @@ const Model3dPreview = React.forwardRef<Model3dPreviewHandle, Props>(function Mo
 
     /** Phát 1 clip theo tên (NO_CLIP = dừng về bind pose). */
     const playClip = React.useCallback((name: string) => {
+        if (engineRef.current) return;
         const mixer = mixerRef.current;
         const actions = actionsRef.current;
         if (!mixer || !actions) {
@@ -147,6 +173,7 @@ const Model3dPreview = React.forwardRef<Model3dPreviewHandle, Props>(function Mo
         setLoading(true);
         setFailed(false);
         setClipNames([]);
+        setAdditiveNames([]); setWeights({}); setSpeaking(false); setExpression('default'); setFaceCloseup(false); setAppearanceError('');
         setActiveClip(NO_CLIP);
         setPaused(false);
         container.innerHTML = '';
@@ -249,16 +276,38 @@ const Model3dPreview = React.forwardRef<Model3dPreviewHandle, Props>(function Mo
                     }
                 }
 
-                clock = new three.Clock();
+                if (characterRef.current) {
+                    const shared = await loadCharacterRuntime();
+                    if (disposed) return;
+                    if (mixer) {mixer.stopAllAction(); mixer.uncacheRoot(root);}
+                    const engine=shared.create(three,root,clips,characterRef.current);
+                    engineRef.current=engine;
+                    setClipNames(engine.baseClips); setAdditiveNames(engine.additiveClips);
+                    setActiveClip(engine.baseClips.includes('idle')?'idle':engine.baseClips[0] || NO_CLIP);
+                    mixer=null; mixerRef.current=null;
+                }
+                faceViewRef.current=(closeup:boolean)=>{
+                    if(!closeup){applyDefaultView();return;}
+                    const head=engineRef.current?.bones.head;
+                    if(!head)return;
+                    const target=head.getWorldPosition(new three.Vector3());target.y+=maxDim*.06;
+                    controls.target.copy(target);camera.position.copy(target).add(new three.Vector3(0,.02,maxDim*.70));controls.update();
+                };
+                clock = new three.Timer();
+                let elapsed=0, emotionStart=0, previousEmotion='';
 
                 const render = () => {
                     if (disposed) {
                         return;
                     }
                     raf = requestAnimationFrame(render);
-                    if (mixer) {
-                        mixer.update(clock.getDelta());
-                    }
+                    clock.update(); const delta=clock.getDelta();
+                    if (engineRef.current) {
+                        if (!pausedRef.current) elapsed+=delta;
+                        const emotion=expressionRef.current==='default'?characterRef.current?.expression:expressionRef.current;
+                        if(emotion!==previousEmotion){previousEmotion=emotion || '';emotionStart=elapsed;}
+                        engineRef.current.pose(elapsed,{emotionTime:elapsed-emotionStart,clip:clipRef.current,additive:weightsRef.current,speaking:speakingRef.current,expression:expressionRef.current==='default'?characterRef.current?.expression:expressionRef.current});
+                    } else if (mixer) {mixer.update(delta);}
                     controls.update();
                     renderer.render(scene, camera);
                 };
@@ -302,6 +351,7 @@ const Model3dPreview = React.forwardRef<Model3dPreviewHandle, Props>(function Mo
                 cancelAnimationFrame(raf);
             }
             try {
+                if (engineRef.current) {engineRef.current.dispose(); engineRef.current=null;}
                 if (mixer) {
                     mixer.stopAllAction();
                     if (root && typeof mixer.uncacheRoot === 'function') {
@@ -336,10 +386,10 @@ const Model3dPreview = React.forwardRef<Model3dPreviewHandle, Props>(function Mo
             actionsRef.current = null;
             activeActionRef.current = null;
             mixerRef.current = null;
-            runtimeRef.current = null;
+            runtimeRef.current = null; faceViewRef.current=null;
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [url]);
+    }, [url, !!character]);
 
     const hasClips = clipNames.length > 0;
 
@@ -380,7 +430,7 @@ const Model3dPreview = React.forwardRef<Model3dPreviewHandle, Props>(function Mo
                             onClick={() => handleSelectClip(name)}
                             sx={{ textTransform: 'none' }}
                         >
-                            {name}
+                            {({idle:'Đứng',walk:'Đi bộ',run:'Chạy'} as Record<string,string>)[name] || name}
                         </Button>
                     ))}
                     <Tooltip title={paused ? 'Chạy' : 'Tạm dừng'}>
@@ -392,6 +442,14 @@ const Model3dPreview = React.forwardRef<Model3dPreviewHandle, Props>(function Mo
                     </Tooltip>
                 </Stack>
             ) : null}
+            {appearanceError && <Alert severity="error">{appearanceError}</Alert>}
+            {character?.enabled && <Stack spacing={1}>
+                <TextField select size="small" label="Thử biểu cảm" value={expression} onChange={e=>setExpression(e.target.value)}>
+                    <MenuItem value="default">Theo cấu hình đã lưu</MenuItem>
+                    {Object.entries(CHARACTER_EMOTIONS).map(([id,label])=><MenuItem key={id} value={id}>{label}</MenuItem>)}
+                </TextField>
+                <Stack direction="row" spacing={1}><Button size="small" variant={speaking?'contained':'outlined'} onClick={()=>setSpeaking(v=>!v)}>Thử nói chuyện</Button><Button size="small" variant={faceCloseup?'contained':'outlined'} onClick={()=>{setFaceCloseup(!faceCloseup);faceViewRef.current?.(!faceCloseup);}}>{faceCloseup?'Xem toàn thân':'Cận khuôn mặt'}</Button></Stack>
+            </Stack>}
             <Box
                 sx={{
                     position: 'relative',
@@ -459,6 +517,12 @@ const Model3dPreview = React.forwardRef<Model3dPreviewHandle, Props>(function Mo
                     </Tooltip>
                 ) : null}
             </Box>
+            {additiveNames.length>0 && <Box component="details"><Box component="summary" sx={{cursor:'pointer',fontWeight:600,p:1}}>Phối thêm chuyển động</Box><Stack spacing={1} sx={{p:1.5,border:'1px solid',borderColor:'divider',borderRadius:1.5}}>
+                <Typography variant="subtitle2">Phối thêm chuyển động</Typography>
+                {additiveNames.map(name=><Box key={name}><Typography variant="caption">{({sneak_pose:'Dáng rón rén',sad_pose:'Dáng buồn',agree:'Gật đầu',headShake:'Lắc đầu'} as Record<string,string>)[name] || name} · {Math.round((weights[name] || 0)*100)}%</Typography>
+                    <Slider aria-label={name} min={0} max={1} step={.01} value={weights[name] || 0} onChange={(_,v)=>setWeights(prev=>({...prev,[name]:v as number}))}/></Box>)}
+                <Button size="small" onClick={()=>setWeights({})}>Đặt lại phối chuyển động</Button>
+            </Stack></Box>}
         </Box>
     );
 });

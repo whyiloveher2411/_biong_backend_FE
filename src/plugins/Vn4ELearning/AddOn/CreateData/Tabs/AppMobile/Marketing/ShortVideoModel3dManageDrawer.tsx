@@ -27,9 +27,13 @@ import PhotoCameraOutlinedIcon from '@mui/icons-material/PhotoCameraOutlined';
 import ViewInArOutlinedIcon from '@mui/icons-material/ViewInArOutlined';
 import DrawerCustom from 'components/molecules/DrawerCustom';
 import { useFloatingMessages } from 'hook/useFloatingMessages';
+import CharacterWardrobeEditor from './CharacterWardrobeEditor';
 import Model3dPreview, { type Model3dPreviewHandle } from './Model3dPreview';
 import {
     buildModel3dPreviewUrl,
+    characterRequest,
+    CharacterConfig,
+    CharacterGeneration,
     deleteShortVideoModel3ds,
     listShortVideoModel3ds,
     parseShortVideoModel3dApiMessage,
@@ -53,6 +57,8 @@ type ModelMedia = {
 };
 
 type ModelFormState = {
+    character: CharacterConfig;
+    generation?: CharacterGeneration;
     id: number;
     title: string;
     slug: string;
@@ -68,6 +74,7 @@ type ModelFormState = {
 };
 
 const EMPTY_FORM: ModelFormState = {
+    character: {enabled:false, additive:['sneak_pose','sad_pose','agree','headShake']},
     id: 0,
     title: '',
     slug: '',
@@ -536,6 +543,16 @@ export default function ShortVideoModel3dManageDrawer({ open, onClose }: Props) 
         }
     }, [open, reloadList]);
 
+    const [creatingXbot,setCreatingXbot] = React.useState(false);
+    const createXbot = async () => {
+        setCreatingXbot(true);
+        try {
+            const res = await characterRequest('xbot');
+            if (res.success === false || !res.model) throw new Error(parseShortVideoModel3dApiMessage(res));
+            reloadList(); openEditForm(res.model);
+        } catch (e) { showMessage(e instanceof Error ? e.message : 'Không tạo được nhân vật mẫu', 'error'); }
+        finally { setCreatingXbot(false); }
+    };
     const openAddForm = () => {
         autoCapturedUrlRef.current = '';
         setForm(EMPTY_FORM);
@@ -545,6 +562,8 @@ export default function ShortVideoModel3dManageDrawer({ open, onClose }: Props) 
     const openEditForm = (model: ShortVideoModel3d) => {
         autoCapturedUrlRef.current = '';
         setForm({
+            character: model.character || EMPTY_FORM.character,
+            generation: model.character_generation,
             id: model.id,
             title: model.title || '',
             slug: model.slug || '',
@@ -613,6 +632,7 @@ export default function ShortVideoModel3dManageDrawer({ open, onClose }: Props) 
                         file_size: Number(result.file_size || 0),
                         file_format: result.file_format || fileExt(file.name),
                     },
+                    character: {...EMPTY_FORM.character, enabled:false},
                     thumbnail: null,
                 }));
                 showMessage('Đã phân tích model và điền thông tin', 'success');
@@ -693,6 +713,7 @@ export default function ShortVideoModel3dManageDrawer({ open, onClose }: Props) 
         const heightNumber = Number(form.height);
         setSaving(true);
         saveShortVideoModel3d({
+            character: form.character,
             id: form.id > 0 ? form.id : 0,
             title,
             slug: form.slug.trim(),
@@ -797,6 +818,7 @@ export default function ShortVideoModel3dManageDrawer({ open, onClose }: Props) 
 
     const headerAction = (
         <Stack direction="row" spacing={1} alignItems="center">
+            {mode === 'list' && <Button size="small" variant="contained" disabled={creatingXbot} onClick={createXbot}>{creatingXbot ? 'Đang tạo…' : 'Tạo nhân vật cartoon Xbot'}</Button>}
             {mode === 'form' ? (
                 <Button
                     size="small"
@@ -905,10 +927,13 @@ export default function ShortVideoModel3dManageDrawer({ open, onClose }: Props) 
                                     <Model3dPreview
                                         ref={previewRef}
                                         url={previewUrl}
+                                        character={form.kind === 'person' ? form.character : undefined}
                                         onLoaded={handlePreviewLoaded}
                                         onError={handlePreviewError}
-                                        sx={{ maxWidth: 760 }}
+                                        sx={{ maxWidth: 520 }}
                                     />
+                                    {form.kind === 'person' && form.id>0 && <Button variant="outlined" disabled={saving || uploading} onClick={()=>{autoCapturedUrlRef.current='';setForm(prev=>({...prev,id:0,title:prev.title+' · bản mới',slug:'',generation:undefined,thumbnail:null}));}}>Tạo bản sao để chỉnh ngoại hình riêng</Button>}
+                                    {form.kind === 'person' && <CharacterWardrobeEditor value={form.character} onChange={character=>handleFormChange({character})} modelId={form.id} initialGeneration={form.generation} library={models.flatMap(m=>m.character?.library || [])} disabled={saving || uploading}/>}
                                     <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap">
                                         <Box
                                             sx={{

@@ -113,7 +113,7 @@ export function localizeImportHtmlAssetScripts(
     ctx: { shortVideoId?: number; beatId?: string; revision?: number } = {},
 ): string {
     const source = String(html || '');
-    if (!source || source.indexOf('assets/') === -1) {
+    if (!source || !source.includes('assets/') && !/\bAssets\s*\.\s*(?:start|person)\s*\(/.test(source)) {
         return source;
     }
     const runtimeUrl = buildModel3dRuntimeAssetUrl(Number(ctx.revision || 0));
@@ -123,13 +123,12 @@ export function localizeImportHtmlAssetScripts(
         Number(ctx.revision || 0),
     );
 
-    return source
-        .replace(
-            /<script\b[^>]*\bsrc\s*=\s*["']assets\/dist\/assets-config\.js["'][^>]*>\s*<\/script>/gi,
-            () => `<script src="${configUrl}"></script>`,
-        )
-        .replace(
-            /<script\b[^>]*\bsrc\s*=\s*["']assets\/assets-runtime\.js["'][^>]*>\s*<\/script>/gi,
-            () => `<script src="${runtimeUrl}"></script>`,
-        );
+    // The saved canonical factory can need Assets even when the generated HTML
+    // omitted scaffold tags. Own this dependency here, before any scene code.
+    const clean = source.replace(/<script\b([^>]*)>\s*<\/script>/gi, (tag, attrs: string) => {
+        const match = attrs.match(/\bsrc\s*=\s*["']([^"']+)["']/i);
+        return match && /(?:assets\/(?:dist\/assets-config|assets-runtime)\.js|model-3d\/(?:asset-config|runtime)(?:[?"']|$))/.test(match[1]) ? '' : tag;
+    });
+    const scaffold = `<script src="${configUrl}"></script><script src="${runtimeUrl}"></script>`;
+    return clean.replace(/<script\b[^>]*\bsrc\s*=\s*["'][^"']*\bthree(?:\.min)?\.js[^"']*["'][^>]*>\s*<\/script>/i, tag => tag + scaffold);
 }

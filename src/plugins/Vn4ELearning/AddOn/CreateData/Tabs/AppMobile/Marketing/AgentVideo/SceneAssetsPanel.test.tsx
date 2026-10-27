@@ -3,6 +3,8 @@ import {act, fireEvent, render, screen, waitFor, within} from '@testing-library/
 import {ajax} from 'hook/useApi';
 import SceneAssetsPanel from './SceneAssetsPanel';
 
+jest.mock('../ShortVideoModel3dManageDrawer',()=>()=>null);
+jest.mock('components/molecules/DrawerCustom',()=>({open,children,title}: ANY)=>open?<div role="dialog" aria-label={title}>{children}</div>:null);
 jest.mock('hook/useApi', () => ({ajax: jest.fn()}));
 const request = ajax as jest.Mock;
 const registry = {
@@ -208,3 +210,13 @@ test('large beat mapping mounts in batches instead of blocking on every beat', a
 });
 
 
+
+test('adds a library character before a prompt manifest exists',async()=>{
+    request.mockImplementation(({url,data})=>Promise.resolve(url.endsWith('/model-3d/list') ? {success:true,models:[{id:4,title:'Aster · Urban Explorer',slug:'aster-urban-explorer',kind:'person',character:{enabled:true}}]} : {success:true,registry:{assets:{},beats:{}}}));
+    const view=render(<SceneAssetsPanel shortVideoId={42}/>);
+    const add=await screen.findByRole('button',{name:'Thêm nhân vật từ thư viện'});
+    await waitFor(()=>expect(add.hasAttribute('disabled')).toBe(false));fireEvent.click(add);
+    fireEvent.click(await screen.findByText('aster-urban-explorer'));
+    await waitFor(()=>expect(request).toHaveBeenCalledWith(expect.objectContaining({data:{short_video_id:42,operation:'add_model',model_id:4}})));
+    view.unmount();
+});

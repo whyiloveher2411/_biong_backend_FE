@@ -110,7 +110,7 @@ export default function Model3dLibraryPickerDrawer({
 
     return (
         <DrawerCustom open={open} onClose={onClose} title={title} width={720} activeOnClose headerAction={headerAction}>
-            <Stack direction="row" spacing={1} sx={{ mb: 1.5 }}>
+            <Stack direction="row" spacing={1} sx={{ mb: 1.5, pt: 2 }}>
                 <TextField
                     size="small"
                     placeholder="Tìm theo slug / tên / mô tả…"

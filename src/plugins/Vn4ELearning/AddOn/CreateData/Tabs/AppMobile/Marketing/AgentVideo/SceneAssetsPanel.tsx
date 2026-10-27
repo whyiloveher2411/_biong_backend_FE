@@ -1,4 +1,7 @@
 import React from 'react';
+import ShortVideoModel3dManageDrawer from '../ShortVideoModel3dManageDrawer';
+import Model3dLibraryPickerDrawer from './Model3dLibraryPickerDrawer';
+import {listShortVideoModel3ds, ShortVideoModel3d} from 'helpers/marketingShortVideoModel3dApi';
 import SceneAssetPreviewDialog from './SceneAssetPreviewDialog';
 import PersonOutlineIcon from '@mui/icons-material/PersonOutline';
 import CottageOutlinedIcon from '@mui/icons-material/CottageOutlined';
@@ -49,6 +52,16 @@ const startTransition: (callback: () => void) => void = (
 
 /** One row per reusable asset. Background polling observes saves made in the headless overlay. */
 export default function SceneAssetsPanel({shortVideoId}: Props) {
+    const [libraryOpen,setLibraryOpen]=React.useState(false);
+    const [addingModel,setAddingModel]=React.useState(false);
+    const [pickAsset,setPickAsset]=React.useState<SceneAsset | null>(null);
+    const [models,setModels]=React.useState<ShortVideoModel3d[]>([]);
+    const [modelsLoading,setModelsLoading]=React.useState(false);
+    const pickCharacter=async (asset: SceneAsset | null) => {
+        setPickAsset(asset); setAddingModel(!asset); setModels([]); setModelsLoading(true);
+        try {const res=await listShortVideoModel3ds(); if(res.success===false) throw new Error('Không tải được thư viện'); setModels((res.models || []).filter(m=>m.kind==='person' && m.character?.enabled));}
+        catch(e) {setError(e instanceof Error?e.message:'Không tải được thư viện');} finally {setModelsLoading(false);}
+    };
     const [registry, setRegistry] = React.useState<SceneAssetRegistry>({});
     const [loading, setLoading] = React.useState(true);
     const [error, setError] = React.useState('');
@@ -186,6 +199,11 @@ export default function SceneAssetsPanel({shortVideoId}: Props) {
         return {...base, beats: {...base.beats, [id]: {...current, ...patch}}};
     });
     return <Stack spacing={1.25} sx={{mt: 1.5}} aria-busy={loading}>
+        <ShortVideoModel3dManageDrawer open={libraryOpen} onClose={()=>setLibraryOpen(false)}/>
+        <Model3dLibraryPickerDrawer open={!!pickAsset || addingModel} onClose={()=>{setPickAsset(null);setAddingModel(false);}} models={models} loading={modelsLoading} kind="person" title="Chọn nhân vật cartoon đã lưu" onPick={modelId=>{if(pickAsset) void run('bind:'+pickAsset.id,'bind_model',{asset_id:pickAsset.id,model_id:modelId}); else if(addingModel) void run('add-model','add_model',{model_id:modelId});}}/>
+        <Button variant="contained" disabled={locked} onClick={()=>void pickCharacter(null)} sx={{alignSelf:'flex-start'}}>Thêm nhân vật từ thư viện</Button>
+        <Button variant="outlined" onClick={()=>setLibraryOpen(true)} sx={{alignSelf:'flex-start'}}>Thư viện nhân vật & tủ đồ · Tạo Xbot / thêm asset</Button>
+        <Alert severity="info">Bấm “Thêm nhân vật từ thư viện” để dùng Aster hoặc Xbot ngay. Nếu đã có hồ sơ, dùng “Chọn nhân vật thư viện” ở dòng tương ứng để thay thế. Lựa chọn được chốt riêng cho video; chỉnh tủ đồ về sau không đổi video cũ.</Alert>
         <Alert severity="info">Lập danh sách → tạo HTML từng hồ sơ → kiểm tra gán beat → tạo visual/HTML beat. Các beat cùng cảnh dùng chung bối cảnh, đồ vật và mã nhân vật.</Alert>
         {loading && <Box role="status" aria-live="polite" sx={{display: 'flex', alignItems: 'center', gap: 1.25, p: 1.5, border: '1px dashed', borderColor: 'divider', borderRadius: 2}}>
             <CircularProgress size={18}/>
@@ -220,7 +238,7 @@ export default function SceneAssetsPanel({shortVideoId}: Props) {
                     {rows.map(asset => {
                         const generation = asset.generation;
                         const running = ['queued', 'processing'].includes(generation?.status || '');
-                        const label = generation?.status === 'queued' ? 'Đang chờ queue' : generation?.status === 'processing' ? generation.phase === 'repairing' ? `Đang tự sửa (${generation.repair_attempt || 0}/3)` : 'Đang tạo / chạy kiểm tra…' : generation?.status === 'failed' ? 'Tạo HTML lỗi' : generation?.status === 'cancelled' ? 'Job queue đã dừng' : asset.ready ? 'Đã có HTML' : asset.has_html ? 'Cần cập nhật' : 'Chưa có HTML';
+                        const label = generation?.status === 'queued' ? 'Đang chờ queue' : generation?.status === 'processing' ? generation.phase === 'repairing' ? `Đang tự sửa (${generation.repair_attempt || 0}/3)` : 'Đang tạo / chạy kiểm tra…' : generation?.status === 'failed' ? 'Tạo HTML lỗi' : generation?.status === 'cancelled' ? 'Job queue đã dừng' : asset.model_snapshot ? 'Nhân vật thư viện' : asset.ready ? 'Đã có HTML' : asset.has_html ? 'Cần cập nhật' : 'Chưa có HTML';
                         return <Box key={asset.id} data-testid={'scene-asset-' + asset.id} sx={{p: 1.5, border: '1px solid', borderColor: 'divider', borderLeft: '4px solid', borderLeftColor: isCharacter ? 'primary.main' : 'secondary.main', borderRadius: isCharacter ? 3 : 1, bgcolor: 'background.paper', contentVisibility: 'auto', containIntrinsicSize: 'auto 180px'}}>
                             <Stack direction="row" alignItems="center" flexWrap="wrap" gap={1}>
                                 <Box sx={{width: 36, height: 36, borderRadius: isCharacter ? '50%' : 1, display: 'grid', placeItems: 'center', bgcolor: isCharacter ? 'rgba(25,118,210,.1)' : 'rgba(156,39,176,.1)'}}>{isCharacter ? <PersonOutlineIcon color="primary"/> : <CottageOutlinedIcon color="secondary"/>}</Box>
@@ -230,6 +248,8 @@ export default function SceneAssetsPanel({shortVideoId}: Props) {
                             {generation?.error && ['failed', 'superseded', 'cancelled'].includes(generation.status) && <Alert severity={generation.status === 'failed' ? 'error' : 'info'} sx={{mt: 1}}>{generation.error}</Alert>}
                             {generation?.status === 'completed' && <Typography variant="caption" color="text.secondary">{generation.preview_checked ? 'Đã chạy preview và lưu HTML' : 'HTML cũ chưa kiểm tra preview đầy đủ'}{generation.repair_attempt ? ` · ${generation.repair_attempt} lần tự sửa` : ''}{generation.continue_clicks ? ` · ${generation.continue_clicks} lần Continue` : ''}</Typography>}
                             <Box sx={{mt: 1.25, pt: 1.25, borderTop: '1px solid', borderColor: 'divider', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 0.75}}>
+                                {isCharacter && <Button size="small" sx={compactButtonSx} variant="contained" disabled={locked || running} onClick={()=>void pickCharacter(asset)}>Chọn nhân vật thư viện</Button>}
+                                {asset.model_snapshot ? <Button size="small" sx={compactButtonSx} variant="outlined" onClick={()=>setPreview(asset)}>Xem nhân vật đã chọn</Button> : <>
                                 {asset.has_html ? <>
                                     <Button size="small" sx={compactButtonSx} variant="contained" color="success" startIcon={<VisibilityOutlinedIcon/>} disabled={locked || !asset.has_html} onClick={() => setPreview(asset)}>Xem HTML</Button>
                                     <Button size="small" sx={compactButtonSx} variant="outlined" color="primary" startIcon={<PlayArrowIcon/>} disabled={locked || running} onClick={() => void run('queue:' + asset.id, 'enqueue', {asset_id: asset.id, force: true})}>{generation?.status === 'failed' || generation?.status === 'cancelled' ? 'Chạy lại queue' : 'Tạo bằng queue'}</Button>
@@ -244,6 +264,7 @@ export default function SceneAssetsPanel({shortVideoId}: Props) {
                                     <Button size="small" sx={compactUtilitySx} variant="text" color="inherit" startIcon={<CodeIcon/>} disabled={locked} onClick={() => void loadAsset(asset)}>Cập nhật HTML</Button>
                                     <Button size="small" sx={compactUtilitySx} variant="text" color="inherit" startIcon={<EditOutlinedIcon/>} disabled={locked} onClick={() => {profileBase.current = registry; setProfile({...asset});}}>Sửa hồ sơ</Button>
                                 </Box>
+                                </>}
                             </Box>
                             <Box component="details" sx={{fontSize: 12, color: 'text.secondary', mt: 1}}><summary>Đặc tả cố định</summary><Box sx={{whiteSpace: 'pre-wrap', mt: 0.5}}>{asset.spec}</Box></Box>
                         </Box>;

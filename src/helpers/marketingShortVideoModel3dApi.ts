@@ -1,3 +1,4 @@
+import type {CharacterEmotion} from './characterEmotions';
 import { ajax } from 'hook/useApi';
 import { getAdminApiPrefix } from 'helpers/apiHost';
 import { getLanguage } from 'helpers/i18n';
@@ -8,6 +9,8 @@ const MODEL_3D_BASE_PATH = 'plugin/vn4-e-learning/app-mobile/marketing/short-vid
 
 /** Model 3D — post type spacedev_app_short_video_model_3d (thư viện toàn cục). */
 export type ShortVideoModel3d = {
+    character?: CharacterConfig;
+    character_generation?: CharacterGeneration;
     id: number;
     title: string;
     /** ID catalog (^[a-z0-9_]+$) dùng cho runtime Assets. */
@@ -36,6 +39,7 @@ export type ShortVideoModel3d = {
 };
 
 export type ShortVideoModel3dSavePayload = {
+    character?: CharacterConfig;
     id?: number;
     title: string;
     slug?: string;
@@ -109,6 +113,7 @@ export function saveShortVideoModel3d(payload: ShortVideoModel3dSavePayload): Pr
         method: 'POST',
         loading: false,
         data: {
+            ...(payload.character ? {character: JSON.stringify(payload.character)} : {}),
             id: payload.id ?? 0,
             title: payload.title,
             slug: payload.slug ?? '',
@@ -343,7 +348,7 @@ export async function uploadShortVideoModel3dThumbnail(
 }
 
 /** Phiên bản asset runtime — tăng khi runtime thay đổi để bust cache trình duyệt. */
-export const MODEL3D_ASSET_RUNTIME_VERSION = '7';
+export const MODEL3D_ASSET_RUNTIME_VERSION = '12';
 
 /** Sự kiện yêu cầu preview định vị (bay camera tới) 1 asset slot. */
 export const MODEL3D_LOCATE_ASSET_EVENT = 'vn4-model3d-locate-asset';
@@ -395,4 +400,35 @@ export function buildModel3dAssetConfigUrl(shortVideoId: number, beatId: string,
         params.set('access_token', token);
     }
     return `${url}?${params.toString()}`;
+}
+
+export type CharacterPart = { id: string; name: string; slot: string; parts: Array<{bone: string; shape: string; size: number[]; position?: number[]; rotation?: number[]; color: string}> };
+export type CharacterConfig = {
+    enabled?: boolean;
+    surface_mode?: 'skinned_v2';
+    expression?: CharacterEmotion;
+    emotionEffects?: boolean; emotionIntensity?: number;
+    outfit?: 'explorer' | 'sport' | 'minimal';
+    accent?: string; shoeColor?: string; trimColor?: string;
+    skin?: string; shirt?: string; trousers?: string; hairColor?: string;
+    selections?: Record<string, string>;
+    library?: CharacterPart[];
+    additive?: string[];
+};
+export type CharacterGeneration = {status?: string; error?: string; asset_id?: string; job_id?: number};
+export function characterRequest(operation: string, data: Record<string, unknown> = {}): Promise<{success?: boolean; message?: unknown; model?: ShortVideoModel3d}> {
+    return ajax({url: `${MODEL_3D_BASE_PATH}/character`, method: 'POST', loading: false, data: {operation, ...data}}) as ANY;
+}
+let characterRuntimePromise: Promise<ANY> | null = null;
+export function loadCharacterRuntime(): Promise<ANY> {
+    if ((window as ANY).HFCharacterRuntime?.version === 'anime_v2') return Promise.resolve((window as ANY).HFCharacterRuntime);
+    if (!characterRuntimePromise) characterRuntimePromise = new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = `${buildModel3dRuntimeAssetUrl()}&module=character`;
+        script.onload = () => { script.remove(); const runtime = (window as ANY).HFCharacterRuntime;
+            if (runtime) resolve(runtime); else { characterRuntimePromise = null; reject(new Error('Không khởi tạo được bộ điều khiển nhân vật.')); } };
+        script.onerror = () => { script.remove(); characterRuntimePromise = null; reject(new Error('Không tải được bộ điều khiển nhân vật.')); };
+        document.head.appendChild(script);
+    });
+    return characterRuntimePromise;
 }

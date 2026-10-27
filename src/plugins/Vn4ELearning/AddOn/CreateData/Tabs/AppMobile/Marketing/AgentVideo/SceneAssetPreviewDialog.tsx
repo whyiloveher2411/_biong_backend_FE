@@ -1,6 +1,8 @@
 import React from 'react';
 import {Alert, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Stack, Typography} from '@mui/material';
 import {SceneAsset, SceneAssetRegistry, sceneAssetMessage, sceneAssetsRequest} from 'helpers/shortVideoSceneAssets';
+import Model3dPreview from '../Model3dPreview';
+import {buildModel3dPreviewUrl} from 'helpers/marketingShortVideoModel3dApi';
 import SceneAssetHtmlPreview from './SceneAssetHtmlPreview';
 
 type Props = {shortVideoId: number; asset: SceneAsset | null; onClose: () => void; onRegistryChange?: (registry: SceneAssetRegistry) => void; previewTitle?: string};
@@ -84,13 +86,13 @@ export default function SceneAssetPreviewDialog({shortVideoId, asset, onClose, o
                 {running && <Alert severity="info">{current?.generation?.status === 'queued' ? 'Đang chờ queue tạo HTML' : 'Đang tạo và kiểm tra HTML'}{current?.generation?.job_id ? ` · Job ${current.generation.job_id}` : ''}</Alert>}
                 {current?.generation?.error && !running && <Alert severity="warning">{current.generation.error}</Alert>}
                 {visible?.html && visible.ready === false && !running && <Alert severity="warning">HTML hiện tại cần cập nhật theo hồ sơ mới. Bạn có thể tạo lại bằng queue bên dưới.</Alert>}
-                {!loading && (visible?.html ? <SceneAssetHtmlPreview kind={visible.kind} title={previewTitle || `Asset ${visible.id}`} html={visible.html}/> : <Alert severity="info">Chưa có HTML {visible?.kind === 'character' ? 'nhân vật' : 'bối cảnh'}. Bạn có thể tạo bằng queue hoặc mở DeepSeek bên dưới.</Alert>)}
+                {!loading && (visible?.model_snapshot ? <Model3dPreview url={buildModel3dPreviewUrl(visible.model_snapshot.model_url)} character={visible.model_snapshot.character}/> : visible?.html ? <SceneAssetHtmlPreview kind={visible.kind} title={previewTitle || `Asset ${visible.id}`} html={visible.html}/> : <Alert severity="info">Chưa có HTML {visible?.kind === 'character' ? 'nhân vật' : 'bối cảnh'}. Bạn có thể tạo bằng queue hoặc mở DeepSeek bên dưới.</Alert>)}
                 {visible?.spec && !visible.html && <Typography variant="body2" sx={{whiteSpace:'pre-wrap'}}>{visible.spec}</Typography>}
             </Stack>
         </DialogContent>
         <DialogActions sx={{flexWrap:'wrap', gap:1}}>
-            <Button variant="contained" disabled={loading || busy || running} onClick={() => void act('enqueue')}>{current?.generation?.status === 'failed' || current?.generation?.status === 'cancelled' ? 'Chạy lại queue' : visible?.html ? 'Tạo lại HTML bằng queue' : 'Tạo HTML bằng queue'}</Button>
-            <Button disabled={loading || busy || running} onClick={() => void act('open')}>Mở DeepSeek</Button>
+            <Button variant="contained" sx={{display:visible?.model_snapshot?'none':undefined}} disabled={loading || busy || running} onClick={() => void act('enqueue')}>{current?.generation?.status === 'failed' || current?.generation?.status === 'cancelled' ? 'Chạy lại queue' : visible?.html ? 'Tạo lại HTML bằng queue' : 'Tạo HTML bằng queue'}</Button>
+            <Button sx={{display:visible?.model_snapshot?'none':undefined}} disabled={loading || busy || running} onClick={() => void act('open')}>Mở DeepSeek</Button>
             <Button onClick={onClose}>Đóng</Button>
         </DialogActions>
     </Dialog>;
