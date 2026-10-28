@@ -1,12 +1,14 @@
 import {ajax} from 'hook/useApi';
 import type {LibrarySound} from './modelAudio';
-export type TimelineAudioClip={id:string;sound_id:string;sound:LibrarySound;start_sec:number;duration_sec:number;offset_sec:number;volume:number;loop:boolean;speed?:number;lane?:number;fade_in:number;fade_out:number};
-export type TimelineAudioResponse={success:boolean;clips:TimelineAudioClip[];revision:string;message?:string};
+export type TimelineAudioClip={id:string;sound_id:string;sound:LibrarySound;start_sec:number;duration_sec:number;offset_sec:number;volume:number;loop:boolean;speed?:number;lane?:number;fade_in:number;fade_out:number;suggestion_key?:string};
+export type TimelineAudioSuggestion={id:string;beat_id:string;start_sec:number;end_sec:number;title:string;description:string;pixabay_query:string;category:'foley'|'emotion'|'ambience';volume:number;reason:string;loop:boolean};
+export type TimelineAudioPlanEntry={status:'queued'|'processing'|'completed'|'failed'|string;suggestions:TimelineAudioSuggestion[];error?:string;beat_start_sec?:number;duration_sec?:number;updated_at?:string};
+export type TimelineAudioResponse={success:boolean;clips:TimelineAudioClip[];suggestions?:Record<string,TimelineAudioPlanEntry>;revision:string;message?:string};
 export function timelineAudioApi(id:number,clips?:TimelineAudioClip[],revision?:string){return ajax({url:'plugin/vn4-e-learning/app-mobile/marketing/short-video/timeline-audio/'+(clips?'save':'get'),method:'POST',loading:false,data:{short_video_id:id,...(clips?{clips,revision}:{})}}) as Promise<TimelineAudioResponse>;}
 export function timelineAudioMaxDuration(c:TimelineAudioClip){return Math.max(0,(c.sound.duration_sec-c.offset_sec)/(c.speed||1));}
 export function normalizeTimelineAudio(c:TimelineAudioClip):TimelineAudioClip {
- const speed=Math.max(.25,Math.min(4,c.speed||1)),offset_sec=Math.max(0,Math.min(c.sound.duration_sec-.01,c.offset_sec));
- const next={...c,speed,offset_sec,loop:false};return {...next,duration_sec:Math.min(Math.max(.01,c.duration_sec),timelineAudioMaxDuration(next))};
+ const speed=Math.max(.25,Math.min(4,c.speed||1)),offset_sec=Math.max(0,Math.min(c.sound.duration_sec-.01,c.offset_sec)),volume=Math.max(0,Math.min(2,Number(c.volume)||0));
+ const next={...c,speed,offset_sec,volume,loop:false};return {...next,duration_sec:Math.min(Math.max(.01,c.duration_sec),timelineAudioMaxDuration(next))};
 }
 export function timelineAudioSample(c:TimelineAudioClip,time:number){
  const elapsed=time-c.start_sec,sourceDuration=c.sound.duration_sec,raw=c.offset_sec+elapsed*(c.speed||1);

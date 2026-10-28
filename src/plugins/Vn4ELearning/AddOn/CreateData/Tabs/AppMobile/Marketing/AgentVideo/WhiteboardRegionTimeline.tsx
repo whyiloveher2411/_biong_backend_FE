@@ -1,3 +1,4 @@
+import {videoTimeToBeat} from './timelinePlaybackSync';
 import React from 'react';
 import {
     Box,
@@ -126,6 +127,7 @@ type Props = {
     /** Thời lượng chuyển cảnh cuối beat (giây THỰC TẾ) — 0/không có = ẩn box đỏ. */
     transitionDurationSec?: number;
     shortVideoId?: number;
+    timelineStartSec?: number;
     beatId?: string;
     /** Beat hiện tại (1-based) — hiển thị trên audio script. */
     beatCurrent?: number;
@@ -214,6 +216,9 @@ const ROW_H = 26;
 const AUDIO_ROW_H = 30;
 const LABEL_W = 118;
 const MIN_DUR = 1.0;
+// Keep the stopped playhead just inside the current beat. At the exact end
+// boundary the global preview resolves that timestamp as the next beat.
+const BEAT_END_PLAYHEAD_INSET_SEC = 0.05;
 /** Màu hàng slot lớp ảnh (multi-image per beat). */
 const LAYER_ROW_COLOR = '#ffb300';
 /** Thu gọn: 5 dòng (1 audio + 4 track). Mở rộng: 10 dòng (1 audio + 9 track). */
@@ -269,6 +274,7 @@ export default function WhiteboardRegionTimeline({
     beatDurationSec,
     effectTimelineDurationSec,
     beatStartSec,
+    timelineStartSec = beatStartSec,
     beatWords,
     beatContent = '',
     beatTranslation = '',
@@ -384,6 +390,9 @@ export default function WhiteboardRegionTimeline({
     const rafRef = React.useRef<number>(0);
     const onPlayheadChangeRef = React.useRef(onPlayheadChange);
     onPlayheadChangeRef.current = onPlayheadChange;
+    const externalPlaybackRef=React.useRef(false);
+    const transportCommandRef=React.useRef<(d:{time:number;action:string})=>void>(()=>{ /* Assigned to the current audio controller below. */ });
+    const audioTimingRef=React.useRef({beatStartSec,duration});audioTimingRef.current={beatStartSec,duration};
     const playingRef = React.useRef(false);
     playingRef.current = playing;
 
@@ -391,10 +400,27 @@ export default function WhiteboardRegionTimeline({
         onPlayheadChangeRef.current?.(sec, isPlaying, origin);
     };
 
+    const stoppedPlayheadSec = (timeSec: number, timing: { beatStartSec: number; duration: number }) => {
+        const local = Math.max(0, Math.min(timing.duration, timeSec - timing.beatStartSec));
+        if (local >= timing.duration - 0.02) {
+            return Math.max(0, timing.duration - Math.min(BEAT_END_PLAYHEAD_INSET_SEC, timing.duration / 2));
+        }
+        return local;
+    };
+
+    React.useEffect(()=>{
+        const receive=(event:Event)=>{const d=(event as CustomEvent).detail;if(d?.videoId!==shortVideoId)return;
+            externalPlaybackRef.current=true;if(rafRef.current)cancelAnimationFrame(rafRef.current);
+            audioRef.current?.pause();setPlayhead(videoTimeToBeat(d.time,timelineStartSec,duration));setPlaying(!!d.playing);
+        };
+        const command=(event:Event)=>{const d=(event as CustomEvent).detail;if(d?.videoId===shortVideoId)transportCommandRef.current(d);};
+        document.addEventListener('timeline-main-transport',receive);document.addEventListener('timeline-beat-command',command);
+        return()=>{document.removeEventListener('timeline-main-transport',receive);document.removeEventListener('timeline-beat-command',command);};
+    },[shortVideoId,timelineStartSec,duration]);
     React.useEffect(() => {
         const audio = audioRef.current;
         if (!audio) return undefined;
-        const stop = () => setPlaying(false);
+    const stop = () => {if(!externalPlaybackRef.current){if(rafRef.current)cancelAnimationFrame(rafRef.current);setPlaying(false);const timing=audioTimingRef.current;const stoppedAt=stoppedPlayheadSec(audio.currentTime,timing);setPlayhead(stoppedAt);onPlayheadChangeRef.current?.(stoppedAt,false,'user');}};
         audio.addEventListener('ended', stop);
         audio.addEventListener('pause', stop);
         return () => {
@@ -413,16 +439,19 @@ export default function WhiteboardRegionTimeline({
     }, [beatStartSec, beatDurationSec]);
 
     const updatePlayhead = () => {
+        if(externalPlaybackRef.current)return;
         const audio = audioRef.current;
-        if (!audio) return;
+        if (!audio || audio.paused) return;
         const t = Math.max(beatStartSec, Math.min(beatStartSec + duration, audio.currentTime));
         const local = t - beatStartSec;
         setPlayhead(local);
         emitPlayhead(local, true, 'user');
         if (t >= beatStartSec + duration - 0.02) {
+            const stoppedAt = stoppedPlayheadSec(t, { beatStartSec, duration });
             audio.pause();
             setPlaying(false);
-            emitPlayhead(local, false, 'user');
+            setPlayhead(stoppedAt);
+            emitPlayhead(stoppedAt, false, 'user');
             return;
         }
         rafRef.current = requestAnimationFrame(updatePlayhead);
@@ -431,7 +460,10 @@ export default function WhiteboardRegionTimeline({
     const togglePlay = () => {
         const audio = audioRef.current;
         if (!audio) return;
+        if(externalPlaybackRef.current)audio.currentTime=beatStartSec+playhead;
+        externalPlaybackRef.current=false;
         if (playing) {
+            if(rafRef.current)cancelAnimationFrame(rafRef.current);
             audio.pause();
             setPlaying(false);
             emitPlayhead(playhead, false, 'user');
@@ -456,7 +488,8 @@ export default function WhiteboardRegionTimeline({
             audio.currentTime = Math.max(0, beatStartSec + next);
         }
         setPlayhead(next);
-        emitPlayhead(next, playingRef.current, origin);
+        if(origin==='user'&&externalPlaybackRef.current){externalPlaybackRef.current=false;audio?.pause();setPlaying(false);emitPlayhead(next,false,origin);}
+        else emitPlayhead(next, playingRef.current, origin);
     };
 
     React.useEffect(() => {
@@ -474,6 +507,7 @@ export default function WhiteboardRegionTimeline({
     }, [seekRequest?.token]);
 
     const replay = () => {
+        externalPlaybackRef.current=false;
         const audio = audioRef.current;
         if (!audio) return;
         audio.currentTime = beatStartSec;
@@ -484,6 +518,18 @@ export default function WhiteboardRegionTimeline({
             if (rafRef.current) cancelAnimationFrame(rafRef.current);
             rafRef.current = requestAnimationFrame(updatePlayhead);
         }).catch(() => setPlaying(false));
+    };
+
+    // With per-beat TTS there may be no global narration media element. The
+    // global transport delegates to this beat's real audio clock in that case.
+    transportCommandRef.current=d=>{
+        const audio=audioRef.current;const local=videoTimeToBeat(d.time,timelineStartSec,duration);
+        externalPlaybackRef.current=false;if(rafRef.current)cancelAnimationFrame(rafRef.current);
+        audio?.pause();setPlayhead(local);
+        if(!audio){setPlaying(false);emitPlayhead(local,false,'user');return;}
+        audio.currentTime=beatStartSec+local;
+        if(d.action==='play')void audio.play().then(()=>{setPlaying(true);emitPlayhead(local,true,'user');rafRef.current=requestAnimationFrame(updatePlayhead);}).catch(()=>{setPlaying(false);emitPlayhead(local,false,'user');});
+        else {setPlaying(false);emitPlayhead(local,false,'user');}
     };
 
     // ---- Timing helpers ----

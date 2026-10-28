@@ -1,6 +1,7 @@
 import SceneAssetBeatSummary from './SceneAssetBeatSummary';
 import StoryV2BeatToolbar from './StoryV2BeatToolbar';
 import StoryV2Preview from './StoryV2Preview';
+import {beatTimeToVideo} from './timelinePlaybackSync';
 import React from 'react';
 import { keyframes } from '@emotion/react';
 import {
@@ -3903,20 +3904,23 @@ export default function ShortVideoAgentBeatRegionEditor({
     const focusX = parseRatio(currentOverride.focus_x, 0.5);
     const focusY = parseRatio(currentOverride.focus_y, 0.5);
     const customBgUrl = String(currentOverride.custom_background_url || '').trim();
-    const useCustomBg = customBgUrl !== '' && !currentOverride.custom_background_hidden;
+    const useCustomBg = !state.isHtmlBeatWorkflow
+        && customBgUrl !== ''
+        && !currentOverride.custom_background_hidden;
     // Nguồn render của beat: HTML motion / video thay thế / ảnh beat.
     const beatReplacementVideoUrl = String(state.beatImage?.[beatId]?.video_url || '').trim();
-    const beatReplacementMediaSource: 'image' | 'video' | 'html' = state.beatImage?.[beatId]?.media_source
-        || (beatReplacementVideoUrl ? 'video' : 'image');
+    const beatReplacementMediaSource: 'image' | 'video' | 'html' = state.isHtmlBeatWorkflow
+        ? 'html'
+        : (state.beatImage?.[beatId]?.media_source || (beatReplacementVideoUrl ? 'video' : 'image'));
     const beatHasHtmlMotion = Boolean(String(state.beatHtml?.[beatId]?.html || '').trim());
     const beatHtmlMotionSource = String(state.beatHtml?.[beatId]?.html || '');
     const beatImageUrl = String(state.beatImage?.[beatId]?.image_url || '').trim();
     // Chọn preview HTML khi beat đặt media_source='html', HOẶC khi beat chỉ có HTML
     // (không ảnh/video) — tránh rơi về nhánh ảnh và hiện "Beat chưa có ảnh".
-    const isHtmlMotionPreview = beatHasHtmlMotion && (
+    const isHtmlMotionPreview = state.isHtmlBeatWorkflow || (beatHasHtmlMotion && (
         beatReplacementMediaSource === 'html'
         || (beatImageUrl === '' && beatReplacementVideoUrl === '')
-    );
+    ));
     const stageRect = isHtmlMotionPreview ? (containRect ?? htmlMotionFallbackRect) : containRect;
 
     // Mốc bắt đầu beat trên timeline video (giây, toàn video) — quy chiếu playhead
@@ -4234,6 +4238,9 @@ export default function ShortVideoAgentBeatRegionEditor({
     }, [hasVideoPreview]);
     // Shortcut 1 phím P: toggle Edit <-> Preview (cần đã có video beat).
     React.useEffect(() => {
+        if (state.isHtmlBeatWorkflow) {
+            return undefined;
+        }
         const onKeyDown = (event: KeyboardEvent) => {
             if (event.key !== 'q' && event.key !== 'Q') {
                 return;
@@ -4253,7 +4260,7 @@ export default function ShortVideoAgentBeatRegionEditor({
         };
         window.addEventListener('keydown', onKeyDown);
         return () => window.removeEventListener('keydown', onKeyDown);
-    }, [canvasMode, handleToggleCanvasMode, hasVideoPreview]);
+    }, [canvasMode, handleToggleCanvasMode, hasVideoPreview, state.isHtmlBeatWorkflow]);
     const handleOpenBeatImage = React.useCallback(() => {
         const raw = String(imageUrl || '').trim();
         if (!raw) {
@@ -4277,10 +4284,10 @@ export default function ShortVideoAgentBeatRegionEditor({
         anchor.click();
         anchor.remove();
     }, [imageUrl]);
-    const canRenderBeatVideo = Boolean(imageUrl)
+    const canRenderBeatVideo = (state.isHtmlBeatWorkflow || Boolean(imageUrl))
         && !isBeatRendering
         && !saving
-        && !state.agentWhiteboardConfig?.assets_mode;
+        && (state.isHtmlBeatWorkflow || !state.agentWhiteboardConfig?.assets_mode);
     const canOpenBeatVideo = Boolean(beatVideoPlayUrl) && !isBeatRendering;
     const handleRequestRenderBeatVideo = React.useCallback(() => {
         if (!canRenderBeatVideo) {
@@ -4554,7 +4561,7 @@ export default function ShortVideoAgentBeatRegionEditor({
                     }}
                 >
                     {state.workflowActive === 'video-html-2d' ? <StoryV2BeatToolbar state={state} beatId={beatId} /> : null}
-                    {state.workflowActive !== 'video-html-2d' && imageLayers.length > 0 ? (
+                    {state.workflowActive !== 'video-html-2d' && !state.isHtmlBeatWorkflow && imageLayers.length > 0 ? (
                         <WhiteboardBeatImageLayerTabs
                             layers={imageLayers}
                             activeLayerId={activeLayerId}
@@ -4587,7 +4594,22 @@ export default function ShortVideoAgentBeatRegionEditor({
                         }}
                     >
                         {/* img luôn mount để onLoad/onError chạy — containRect phụ thuộc imgNatural */}
-                        {!previewActive ? (
+                        {!previewActive ? state.isHtmlBeatWorkflow ? (
+                            onEditHtml ? (
+                                <Box sx={{ position: 'absolute', top: 8, left: 8, zIndex: 5 }}>
+                                    <WhiteboardBeatHtmlMotionControl
+                                        hasHtml={beatHasHtmlMotion}
+                                        selected
+                                        hideSelection
+                                        saving={state.savingImportHtml}
+                                        onOpenEditor={() => onEditHtml(beatId)}
+                                        onSelectChange={() => true}
+                                        onOpenDeepSeek={() => state.handleOpenBeatDeepSeekChat(beatId)}
+                                        openingDeepSeek={state.openingBeatDeepSeekChatBeatIds.includes(beatId)}
+                                    />
+                                </Box>
+                            ) : null
+                        ) : (
                         <Stack
                             spacing={0.75}
                             alignItems="flex-start"
@@ -4849,7 +4871,7 @@ export default function ShortVideoAgentBeatRegionEditor({
                                 </IconButton>
                             </Stack>
                         </Tooltip>
-                        <Tooltip
+                        {!state.isHtmlBeatWorkflow ? <Tooltip
                             placement="left"
                             title={canvasMode === 'preview'
                                 ? 'Chuyển sang Edit — thêm / sửa vùng (Q)'
@@ -4883,8 +4905,8 @@ export default function ShortVideoAgentBeatRegionEditor({
                                         : <VideocamIcon fontSize="small" />}
                                 </IconButton>
                             </span>
-                        </Tooltip>
-                        {imageUrl ? (
+                        </Tooltip> : null}
+                        {!state.isHtmlBeatWorkflow && imageUrl ? (
                             <Tooltip placement="left" title="Mở ảnh beat (I)">
                                 <IconButton
                                     size="small"
@@ -4913,8 +4935,8 @@ export default function ShortVideoAgentBeatRegionEditor({
                                     disabled={
                                         isBeatRendering
                                         || saving
-                                        || !imageUrl
-                                        || Boolean(state.agentWhiteboardConfig?.assets_mode)
+                                        || (!state.isHtmlBeatWorkflow && !imageUrl)
+                                        || (!state.isHtmlBeatWorkflow && Boolean(state.agentWhiteboardConfig?.assets_mode))
                                     }
                                     onClick={handleRequestRenderBeatVideo}
                                     sx={{
@@ -4970,7 +4992,7 @@ export default function ShortVideoAgentBeatRegionEditor({
 
                         {/* Layer nội dung: phóng THẬT kích thước khung (contain×zoom) + pan.
                             Không dùng scale()+overflow trong box cố định — tránh crop 1 góc. */}
-                        {imageUrl && !imageError ? (
+                        {!state.isHtmlBeatWorkflow && imageUrl && !imageError ? (
                             <>
                                 <Box
                                     sx={{
@@ -5964,8 +5986,9 @@ export default function ShortVideoAgentBeatRegionEditor({
                         beatTotal={beatSegments.length}
                         onGoToBeat={handleGoToBeat}
                         onCopyError={(msg) => notify(msg, 'error')}
+                        timelineStartSec={mainTimelineBeatStartSec}
                         onPlayheadChange={(sec, isPlaying, origin) => {
-                            document.dispatchEvent(new CustomEvent('timeline-audio-playhead',{detail:{videoId:shortVideoId,time:mainTimelineBeatStartSec+sec,playing:isPlaying && isHtmlMotionPreview}}));
+                            document.dispatchEvent(new CustomEvent('timeline-audio-playhead',{detail:{videoId:shortVideoId,time:beatTimeToVideo(mainTimelineBeatStartSec,sec),playing:isPlaying,soundPlaying:isPlaying && isHtmlMotionPreview,origin}}));
                             setModelAudioPlaying(isPlaying);
                             setPlayheadSec(sec);
                             // Người dùng vừa kéo/play timeline audio → ưu tiên nguồn internal.

@@ -533,7 +533,7 @@ export default function AgentVideoBeatBoundaryOverlay({
                                         event.preventDefault();setMenuBeatId(segment.beatId);setMenuAnchorEl(event.currentTarget);
                                     }
                                 }}
-                                sx={{width:'100%',height:'100%',minWidth:0,border:0,bgcolor:'transparent',color:'inherit',px:1,textAlign:'left',fontSize:12,lineHeight:'32px',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',cursor:'pointer','&:focus-visible':{outline:'2px solid white',outlineOffset:-2}}}
+                                sx={{width:'100%',height:'100%',minWidth:0,border:0, borderRight: '2px solid red !important', bgcolor:'transparent',color:'inherit',px:1,textAlign:'left',fontSize:12,lineHeight:'32px',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',cursor:'pointer','&:focus-visible':{outline:'2px solid white',outlineOffset:-2}}}
                             >{`beat ${segment.beatIndex}`}</Box>}
                             <Box
                                 sx={{

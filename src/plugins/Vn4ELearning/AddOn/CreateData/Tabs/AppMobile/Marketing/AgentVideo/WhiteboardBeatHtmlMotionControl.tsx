@@ -18,10 +18,12 @@ type Props = {
     /** Click box → mở popup nhập/sửa HTML. */
     onOpenEditor: () => Promise<void> | void;
     /** Tick/bỏ tick checkbox chọn nguồn render HTML motion. */
-    onSelectChange: (selected: boolean) => Promise<boolean> | void;
+    onSelectChange: (selected: boolean) => Promise<boolean> | void | boolean;
     /** Mở DeepSeek tự gửi prompt, Continue và lưu HTML beat. */
     onOpenDeepSeek?: () => Promise<void> | void;
     openingDeepSeek?: boolean;
+    /** Hide the per-beat toggle when HTML is the workflow-wide render source. */
+    hideSelection?: boolean;
 };
 
 /**
@@ -38,6 +40,7 @@ export default function WhiteboardBeatHtmlMotionControl({
     onSelectChange,
     onOpenDeepSeek,
     openingDeepSeek = false,
+    hideSelection = false,
 }: Props) {
     const busy = Boolean(saving);
 
@@ -77,7 +80,7 @@ export default function WhiteboardBeatHtmlMotionControl({
                         inset: 0,
                         borderRadius: 1,
                         border: '1.5px dashed',
-                        borderColor: hasHtml && selected ? 'primary.light' : 'rgba(255,255,255,0.45)',
+                        borderColor: selected ? 'primary.light' : 'rgba(255,255,255,0.45)',
                         bgcolor: 'rgba(0,0,0,0.45)',
                         display: 'flex',
                         flexDirection: 'column',
@@ -95,14 +98,14 @@ export default function WhiteboardBeatHtmlMotionControl({
                     <CodeIcon
                         sx={{
                             fontSize: 18,
-                            color: hasHtml ? 'common.white' : 'rgba(255,255,255,0.85)',
+                            color: hasHtml || selected ? 'common.white' : 'rgba(255,255,255,0.85)',
                             filter: hasHtml && !selected ? 'grayscale(0.35)' : 'none',
                         }}
                     />
                     <Typography
                         variant="caption"
                         sx={{
-                            color: hasHtml ? 'common.white' : 'rgba(255,255,255,0.85)',
+                            color: hasHtml || selected ? 'common.white' : 'rgba(255,255,255,0.85)',
                             fontSize: 9,
                             lineHeight: 1.15,
                             textAlign: 'center',
@@ -192,7 +195,7 @@ export default function WhiteboardBeatHtmlMotionControl({
                 </Tooltip>
             ) : null}
 
-            {hasHtml && !busy ? (
+            {hasHtml && !busy && !hideSelection ? (
                 <Tooltip
                     placement="top"
                     title={selected

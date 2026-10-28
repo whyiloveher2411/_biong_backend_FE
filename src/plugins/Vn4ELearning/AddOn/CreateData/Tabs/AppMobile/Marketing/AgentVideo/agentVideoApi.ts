@@ -3248,6 +3248,17 @@ export async function fetchDeepseekHtmlBeatSessionStatus(
     ) as Promise<DeepseekHtmlBeatSessionResponse>;
 }
 
+export async function enqueueBeatAudioPlan(
+    shortVideoId: number,
+    beatId: string,
+    force = false,
+): Promise<JsonResponse & { queued?: boolean; job_id?: number }> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/beat-audio-plan-enqueue',
+        shortVideoBody(shortVideoId, { beat_id: beatId, force }),
+    ) as Promise<JsonResponse & { queued?: boolean; job_id?: number }>;
+}
+
 export type AgentImportHtmlBeatUpdateResponse = JsonResponse & {
     changed?: boolean;
     beat_html?: unknown;

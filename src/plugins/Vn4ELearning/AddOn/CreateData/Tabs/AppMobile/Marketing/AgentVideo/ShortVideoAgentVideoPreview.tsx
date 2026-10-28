@@ -174,7 +174,7 @@ function LegacyShortVideoAgentVideoPreview({
     const showTabs = canShowPreviewSourceTabs(previewInput);
     const showHtmlBeat = activeSource === 'html_beat' && canShowHtmlBeatPreview(previewInput);
     const isWhiteboardMode = state.isWhiteboardMode;
-    const beatPreviewTabLabel = isWhiteboardMode ? 'Ảnh beat' : 'HTML beat';
+    const beatPreviewTabLabel = state.isHtmlBeatWorkflow ? 'HTML beat' : (isWhiteboardMode ? 'Ảnh beat' : 'HTML beat');
     const whiteboardRenderProgress = state.whiteboardRenderProgress;
     const showWhiteboardRenderProgress = Boolean(
         isWhiteboardMode
@@ -225,11 +225,12 @@ function LegacyShortVideoAgentVideoPreview({
     // bên dưới — KHÔNG còn box preview ảnh lớn phía trên (ảnh chỉ là hình, xem ở dưới rõ hơn).
     const showImageAnimationControls = activeSource === 'html_beat'
         && isWhiteboardMode
+        && !state.isHtmlBeatWorkflow
         && Boolean(currentBeatId)
         && Boolean(state.beatImage[currentBeatId || '']?.image_url);
 
     // URL ảnh beat hiện tại — button mở tab mới để check ảnh gốc.
-    const currentBeatImageUrl = String(
+    const currentBeatImageUrl = state.isHtmlBeatWorkflow ? '' : String(
         state.beatImage[currentBeatId || '']?.image_url || '',
     ).trim();
 
@@ -519,7 +520,7 @@ function LegacyShortVideoAgentVideoPreview({
                                     beatMap={state.beatMap}
                                     beatHtml={state.beatHtml}
                                     beatImage={state.beatImage}
-                                    isWhiteboardMode={isWhiteboardMode}
+                                    isWhiteboardMode={isWhiteboardMode && !state.isHtmlBeatWorkflow}
                                     audioUrl={state.audioPreviewUrl}
                                     audioDurationSec={state.audioDurationSec}
                                     videoRef={videoRef}
@@ -531,7 +532,7 @@ function LegacyShortVideoAgentVideoPreview({
                                     shortVideoId={Number(state.shortVideoId || 0)}
                                 />
                             ) : activeSource === 'html_beat' ? (
-                                <HtmlBeatMissingPlaceholder isWhiteboardMode={isWhiteboardMode} />
+                                <HtmlBeatMissingPlaceholder isWhiteboardMode={isWhiteboardMode && !state.isHtmlBeatWorkflow} />
                             ) : placeholder ? (
                                 <Box
                                     sx={{
@@ -664,6 +665,7 @@ function LegacyShortVideoAgentVideoPreview({
                                 beatHtml={state.beatHtml[currentBeatId] || null}
                                 beatImage={state.beatImage[currentBeatId] || null}
                                 isWhiteboardMode={isWhiteboardMode}
+                                htmlBeatWorkflow={state.isHtmlBeatWorkflow}
                                 versions={currentBeatVersions}
                                 activeVersionId={String(state.beatActiveVersionId?.[currentBeatId] || '')}
                                 visualDescription={String(currentBeatSection?.visual_description || '')}
@@ -694,13 +696,13 @@ function LegacyShortVideoAgentVideoPreview({
                                 onSaveBeatVersion={handleSaveCurrentBeatVersion}
                                 onRestoreBeatVersion={handleRestoreCurrentBeatVersion}
                                 onRenderWhiteboardBeat={
-                                    isWhiteboardMode && !state.agentWhiteboardConfig?.assets_mode
+                                    state.isHtmlBeatWorkflow || (isWhiteboardMode && !state.agentWhiteboardConfig?.assets_mode)
                                         ? () => { void state.handleRenderWhiteboardBeat(currentBeatId); }
                                         : undefined
                                 }
                                 renderingBeatVideo={state.renderingWhiteboardBeatIds.includes(currentBeatId)}
                                 onAddBeatVideoToCapcut={
-                                    isWhiteboardMode
+                                    isWhiteboardMode && !state.isHtmlBeatWorkflow
                                         ? () => { void state.handleAddBeatVideoToCapcut(currentBeatId); }
                                         : undefined
                                 }

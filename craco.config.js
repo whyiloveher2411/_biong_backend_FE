@@ -137,6 +137,19 @@ module.exports = {
       },
     ];
 
+    // The timeline needs an authenticated binary response for Web Audio gain > 100%.
+    // Keep this one asset route same-origin in local development so the dev SPA
+    // fallback does not return index.html and media playback stays readable.
+    const apiTarget = process.env.REACT_APP_HOST_API_KEY || 'http://localhost:9999';
+    devServerConfig.proxy = [
+      ...(Array.isArray(devServerConfig.proxy) ? devServerConfig.proxy : []),
+      {
+        context: ['/api/admin/plugin/vn4-e-learning/app-mobile/marketing/sound-effect/asset'],
+        target: apiTarget,
+        changeOrigin: true,
+      },
+    ];
+
     return devServerConfig;
   },
   webpack: {

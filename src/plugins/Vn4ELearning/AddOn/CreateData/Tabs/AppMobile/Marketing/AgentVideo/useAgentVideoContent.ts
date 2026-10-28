@@ -58,6 +58,7 @@ import {
     saveAgentImportHtml,
     openDeepseekHtmlBeatSession,
     fetchDeepseekHtmlBeatSessionStatus,
+    enqueueBeatAudioPlan as enqueueBeatAudioPlanApi,
     fetchAgentImportHtmlBeatUpdate,
     bulkDeleteBeatAssets,
     type BulkDeleteBeatAssetsTarget,
@@ -696,6 +697,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [workflowActive, setWorkflowActive] = React.useState('');
     const [workflowHasBeatHtmlPrompt, setWorkflowHasBeatHtmlPrompt] = React.useState(false);
     const [openingBeatDeepSeekChatBeatIds, setOpeningBeatDeepSeekChatBeatIds] = React.useState<string[]>([]);
+    const [planningBeatAudioPlanBeatIds, setPlanningBeatAudioPlanBeatIds] = React.useState<string[]>([]);
     const [agentVisualMode, setAgentVisualMode] = React.useState<AgentVisualMode>('hyperframes');
     // Settings toàn video — field parse từ prompts/{folder}/setting-field.md theo visual type,
     // value lưu agent_video_json.video_settings. Key mới trong md tự hiện UI, không hard-code.
@@ -6095,6 +6097,24 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         handleOpenBeatDeepSeekChat(beatId, 'reopen');
     };
 
+    const handleEnqueueBeatAudioPlan = (beatId: string, force = false) => {
+        const id = String(beatId || '').trim();
+        if (!id || planningBeatAudioPlanBeatIds.includes(id)) return;
+        setPlanningBeatAudioPlanBeatIds((previous) => [...previous, id]);
+        void (async () => {
+            try {
+                const response = await enqueueBeatAudioPlanApi(shortVideoId, id, force);
+                if (!response?.success) throw new Error(parseApiMessage(response?.message) || 'Không tạo được gợi ý âm thanh.');
+                showMessage(parseApiMessage(response?.message) || `Đã đưa gợi ý âm thanh ${id} vào hàng đợi DeepSeek`, 'success');
+                document.dispatchEvent(new CustomEvent('timeline-audio-suggestions-updated', { detail: { videoId: shortVideoId } }));
+            } catch (error) {
+                showMessage(error instanceof Error ? error.message : String(error), 'error');
+            } finally {
+                setPlanningBeatAudioPlanBeatIds((previous) => previous.filter((beat) => beat !== id));
+            }
+        })();
+    };
+
     const handleOpenBeatGeminiHeadless = (beatId: string) => {
         if (!beatMapReady || !beatMap) {
             showMessage('Cần beat-map hợp lệ trước', 'warning');
@@ -7077,7 +7097,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         if (!id || renderingWhiteboardBeatIds.includes(id)) {
             return;
         }
-        if (!isAgentWhiteboardMode(agentVisualMode)) {
+        if (!isAgentWhiteboardMode(agentVisualMode) && !workflowHasBeatHtmlPrompt && agentVisualMode !== 'hyperframes') {
             showMessage('Chỉ render video beat ở chế độ whiteboard', 'warning');
             return;
         }
@@ -10291,6 +10311,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         // Workflow khai báo HTML beat hoặc đang ở chế độ Motion HTML → không dùng ảnh beat.
         isHtmlBeatWorkflow: workflowHasBeatHtmlPrompt || agentVisualMode === 'hyperframes',
         openingBeatDeepSeekChatBeatIds,
+        planningBeatAudioPlanBeatIds,
+        handleEnqueueBeatAudioPlan,
         handleOpenBeatDeepSeekChat,
         handleOpenBeatDeepSeekSavedChat,
         agentVisualMode,

@@ -47,6 +47,7 @@ type Props = {
     beatHtml: BeatHtmlEntry | null;
     beatImage?: BeatImageEntry | null;
     isWhiteboardMode?: boolean;
+    htmlBeatWorkflow?: boolean;
     versions?: BeatVersion[];
     activeVersionId?: string;
     visualDescription?: string;
@@ -343,6 +344,7 @@ export default function ShortVideoAgentBeatQaPanel({
     beatHtml,
     beatImage = null,
     isWhiteboardMode = false,
+    htmlBeatWorkflow = false,
     versions = [],
     activeVersionId = '',
     visualDescription = '',
@@ -427,10 +429,10 @@ export default function ShortVideoAgentBeatQaPanel({
     }, [qaRefineNoteValue, qaStatusValue, beatId]);
 
     React.useEffect(() => {
-        if (!isWhiteboardMode && tab === 'video') {
+        if ((!isWhiteboardMode || htmlBeatWorkflow) && tab === 'video') {
             setTab('qa');
         }
-    }, [isWhiteboardMode, tab]);
+    }, [htmlBeatWorkflow, isWhiteboardMode, tab]);
 
     React.useEffect(() => {
         if (!beatId) {
@@ -647,7 +649,7 @@ export default function ShortVideoAgentBeatQaPanel({
                 >
                     <Tab label="QA" value="qa" />
                     <Tab label={`Version · ${versions.length}`} value="version" />
-                    {isWhiteboardMode ? (
+                    {isWhiteboardMode && !htmlBeatWorkflow ? (
                         <Tab label="Video beat" value="video" />
                     ) : null}
                 </Tabs>
@@ -1017,7 +1019,7 @@ export default function ShortVideoAgentBeatQaPanel({
                 </Box>
             ) : null}
 
-            {tab === 'video' && isWhiteboardMode ? (
+            {tab === 'video' && isWhiteboardMode && !htmlBeatWorkflow ? (
                 <Box
                     sx={{
                         flex: 1,

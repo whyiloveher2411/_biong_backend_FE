@@ -1,31 +1,55 @@
 import React from 'react';
-import {Alert,Box,Button,Chip,MenuItem,Stack,TextField,Typography} from '@mui/material';
+import {Alert,Box,Button,Chip,MenuItem,Pagination,Paper,Stack,Table,TableBody,TableCell,TableContainer,TableHead,TableRow,TextField,ToggleButton,ToggleButtonGroup,Typography} from '@mui/material';
 import DrawerCustom from 'components/molecules/DrawerCustom';
-import {LibrarySound,listLibrarySounds,librarySoundUrl,uploadLibrarySound} from 'helpers/modelAudio';
-export default function SoundLibraryDrawer({open,onClose,onSelect}:{open:boolean;onClose:()=>void;onSelect?:(sound:LibrarySound)=>void}){
- const [sounds,setSounds]=React.useState<LibrarySound[]>([]),[query,setQuery]=React.useState(''),[error,setError]=React.useState(''),[busy,setBusy]=React.useState(false);
- const [meta,setMeta]=React.useState({title:'',license:'',source:'',category:'foley'}),[file,setFile]=React.useState<File|null>(null);
+import {LibrarySound,listLibrarySounds,librarySoundUrl,uploadLibrarySound,translateSoundSearchQuery} from 'helpers/modelAudio';
+import SoundLibraryAiGenerator from './SoundLibraryAiGenerator';
+
+type SourceMode='upload'|'ai';
+const PAGE_SIZE=8;
+export default function SoundLibraryDrawer({open,onClose,onSelect,initialPixabayQuery='',initialPixabayQueryIsEnglish=false,initialTitle='',initialCategory='foley',initialAudioPrompt='',initialTimingSummary=''}:{open:boolean;onClose:()=>void;onSelect?:(sound:LibrarySound)=>void;initialPixabayQuery?:string;initialPixabayQueryIsEnglish?:boolean;initialTitle?:string;initialCategory?:string;initialAudioPrompt?:string;initialTimingSummary?:string}){
+ const [sounds,setSounds]=React.useState<LibrarySound[]>([]),[query,setQuery]=React.useState(''),[page,setPage]=React.useState(1),[error,setError]=React.useState(''),[busy,setBusy]=React.useState(false);
+ const [mode,setMode]=React.useState<SourceMode>('upload'),[meta,setMeta]=React.useState({title:'',license:'Bản thu của tôi',source:'',category:'foley'}),[file,setFile]=React.useState<File|null>(null),[draggingFile,setDraggingFile]=React.useState(false);
+ const [pixQuery,setPixQuery]=React.useState(''),[translatedPixQuery,setTranslatedPixQuery]=React.useState(''),[translationBusy,setTranslationBusy]=React.useState(false);
+ const [pixQueryIsEnglish,setPixQueryIsEnglish]=React.useState(false);
+ React.useEffect(()=>{if(!open)return;setPixQuery(initialPixabayQuery);setPixQueryIsEnglish(initialPixabayQueryIsEnglish);setTranslatedPixQuery(initialPixabayQueryIsEnglish?initialPixabayQuery:'');if(initialTitle||initialCategory)setMeta(m=>({...m,title:initialTitle||m.title,category:initialCategory||m.category}));},[open,initialPixabayQuery,initialPixabayQueryIsEnglish,initialTitle,initialCategory]);
  const load=async()=>{try{const r=await listLibrarySounds();if(!r.success)throw new Error(r.message);setSounds(r.sounds||[]);}catch(e){setError(e instanceof Error?e.message:'Không tải được thư viện.');}};
  React.useEffect(()=>{if(open)void load();},[open]);
- return <DrawerCustom open={open} onClose={onClose} title="Thư viện âm thanh" width={800} activeOnClose>
+ const filtered=React.useMemo(()=>sounds.filter(s=>(s.title+' '+s.category+' '+s.license+' '+s.source).toLowerCase().includes(query.toLowerCase())),[sounds,query]);
+ const visible=filtered.slice((page-1)*PAGE_SIZE,page*PAGE_SIZE);
+ const acceptUploadFile=(next:File)=>{const supported=/\.(wav|mp3|ogg|m4a|flac)$/i.test(next.name)||/^audio\//i.test(next.type);if(!supported){setError('Chọn file WAV, MP3, OGG, M4A hoặc FLAC.');return;}if(next.size>20*1024*1024){setError('File audio tối đa 20 MB.');return;}setError('');setFile(next);setMeta(m=>({...m,title:m.title||next.name}));};
+ const pixabaySearchUrl=(term:string)=>`https://pixabay.com/sound-effects/search/${encodeURIComponent(term.trim().toLowerCase().replace(/\s+/g,'-'))}/`;
+ const searchEnglishPixabay=()=>{const term=pixQuery.trim();if(!term)return;setError('');setTranslatedPixQuery(term);setMeta(m=>({...m,license:'Pixabay Content License',source:pixabaySearchUrl(term)}));window.open(pixabaySearchUrl(term),'_blank','noopener,noreferrer');};
+ const translateAndSearchPixabay=async()=>{const source=pixQuery.trim();if(!source)return;setError('');setTranslationBusy(true);setTranslatedPixQuery('');const popup=window.open('about:blank','_blank');if(popup)popup.opener=null;try{const response=await translateSoundSearchQuery(source);if(!response.success||!response.translated_text)throw new Error(response.message||'Không dịch được từ khóa.');const english=response.translated_text.trim();setTranslatedPixQuery(english);const url=pixabaySearchUrl(english);setMeta(m=>({...m,license:'Pixabay Content License',source:url}));if(popup&&!popup.closed)popup.location.href=url;}catch(e){if(popup&&!popup.closed)popup.close();setError(e instanceof Error?e.message:'Không dịch được từ khóa.');}finally{setTranslationBusy(false);}};
+ return <DrawerCustom open={open} onClose={onClose} title="Thư viện âm thanh" width={980} activeOnClose>
   <Stack spacing={2}>
-   <Typography variant="body2">Dùng lại âm thanh cho model và hiệu ứng. File có thông tin nguồn, giấy phép; âm thanh gán vào model sẽ tự đi theo hành động.</Typography>
-   {error&&<Alert severity="error">{error}</Alert>}
-   <Box component="details" sx={{p:2,border:'1px solid',borderColor:'divider',borderRadius:2}}><summary>Thêm âm thanh mới</summary><Stack spacing={1.5} sx={{mt:2}}>
-    <Button component="label" variant="outlined">{file?file.name:'Chọn file audio (tối đa 20MB / 120 giây)'}<input hidden type="file" accept=".wav,.mp3,.ogg,.m4a,.flac" onChange={e=>{const f=e.target.files?.[0];if(f){setFile(f);setMeta(m=>({...m,title:m.title||f.name}));}}}/></Button>
-    <TextField size="small" label="Tên âm thanh" value={meta.title} onChange={e=>setMeta({...meta,title:e.target.value})}/>
-    <TextField size="small" select label="Phân loại" value={meta.category} onChange={e=>setMeta({...meta,category:e.target.value})}>{[['foley','Hành động / đồ vật'],['emotion','Biểu cảm cartoon'],['ambience','Âm thanh nền']].map(([id,label])=><MenuItem key={id} value={id}>{label}</MenuItem>)}</TextField>
-    <TextField size="small" label="Nguồn (URL hoặc tự thu)" value={meta.source} onChange={e=>setMeta({...meta,source:e.target.value})}/>
-    <TextField size="small" label="Giấy phép / quyền sử dụng" placeholder="Ví dụ: CC0-1.0 hoặc bản thu của tôi" value={meta.license} onChange={e=>setMeta({...meta,license:e.target.value})}/>
-    <Button variant="contained" disabled={busy||!file||!meta.title||!meta.license} onClick={async()=>{if(!file)return;setBusy(true);setError('');try{const r=await uploadLibrarySound(file,meta);if(!r.success)throw new Error(r.message);setFile(null);setMeta({title:'',license:'',source:'',category:'foley'});await load();}catch(e){setError(e instanceof Error?e.message:'Upload thất bại');}finally{setBusy(false);}}}>{busy?'Đang lưu…':'Thêm vào thư viện'}</Button>
-   </Stack></Box>
-   <TextField size="small" label="Tìm âm thanh" value={query} onChange={e=>setQuery(e.target.value)}/>
-   <Typography variant="caption">{sounds.length} âm thanh</Typography>
-   {sounds.filter(s=>(s.title+' '+s.category+' '+s.license).toLowerCase().includes(query.toLowerCase())).map(s=><Box key={s.id} sx={{p:1.5,border:'1px solid',borderColor:'divider',borderRadius:2}}>
-    <Typography fontWeight={700}>{s.title}</Typography>{onSelect&&<Button size="small" variant="outlined" onClick={()=>onSelect(s)}>Thêm vào timeline</Button>}<Chip size="small" label={s.license}/><Typography variant="caption" sx={{ml:1}}>{s.duration_sec.toFixed(2)} giây · {s.category}</Typography>
-    <Box component="audio" controls preload="none" src={librarySoundUrl(s.file)} sx={{display:'block',width:'100%',mt:1}}/>
-    {s.source&&<Typography variant="caption" sx={{overflowWrap:'anywhere'}}>{s.source}</Typography>}
-   </Box>)}
+   <Typography variant="body2">Tìm, nghe thử và thêm âm thanh vào timeline. Nguồn file có thể là tải lên, AudioGen hoặc Pixabay.</Typography>
+   {initialTimingSummary&&<Alert severity="info">{initialTimingSummary} Khi chọn hoặc lưu file, âm thanh sẽ được đặt vào đúng thời điểm này.</Alert>}
+   {error&&<Alert severity="error" onClose={()=>setError('')}>{error}</Alert>}
+   <Paper variant="outlined" sx={{p:2}}>
+    <Typography variant="h6" sx={{mb:1.5}}>Thêm âm thanh vào thư viện</Typography>
+    <Stack spacing={1.5}>
+     <ToggleButtonGroup exclusive fullWidth size="small" value={mode} onChange={(_,v)=>{if(v){setMode(v);if(v==='ai')setMeta(m=>({...m,license:'AudioGen model: CC-BY-NC-4.0 (phi thương mại)',source:'https://huggingface.co/facebook/audiogen-medium'}));}setError('');}} aria-label="Nguồn âm thanh">
+      <ToggleButton value="upload">Tải file lên</ToggleButton><ToggleButton value="ai">Tạo bằng AI</ToggleButton>
+     </ToggleButtonGroup>
+     <Stack direction={{xs:'column',sm:'row'}} spacing={1.5}>
+      <TextField fullWidth size="small" label="Tên âm thanh" value={meta.title} onChange={e=>setMeta(m=>({...m,title:e.target.value}))}/>
+      <TextField fullWidth size="small" select label="Phân loại" value={meta.category} onChange={e=>setMeta(m=>({...m,category:e.target.value}))}>{[['foley','Hành động / đồ vật'],['emotion','Biểu cảm cartoon'],['ambience','Âm thanh nền']].map(([id,label])=><MenuItem key={id} value={id}>{label}</MenuItem>)}</TextField>
+     </Stack>
+     <Stack direction={{xs:'column',sm:'row'}} spacing={1.5}><TextField fullWidth size="small" label="Nguồn" value={meta.source} onChange={e=>setMeta(m=>({...m,source:e.target.value}))}/><TextField fullWidth size="small" label="Giấy phép / quyền sử dụng" value={meta.license} onChange={e=>setMeta(m=>({...m,license:e.target.value}))} InputProps={{readOnly:mode==='ai'}} helperText={mode==='ai'?'AudioGen dùng theo CC-BY-NC-4.0, phi thương mại.':''}/></Stack>
+     {mode==='upload'&&<>
+      <Box onDragEnter={e=>{e.preventDefault();e.stopPropagation();setDraggingFile(true);}} onDragOver={e=>{e.preventDefault();e.stopPropagation();e.dataTransfer.dropEffect='copy';setDraggingFile(true);}} onDragLeave={e=>{e.preventDefault();e.stopPropagation();if(!e.currentTarget.contains(e.relatedTarget as Node|null))setDraggingFile(false);}} onDrop={e=>{e.preventDefault();e.stopPropagation();setDraggingFile(false);const dropped=e.dataTransfer.files?.[0];if(dropped)acceptUploadFile(dropped);}} sx={{p:1.5,border:'2px dashed',borderColor:draggingFile?'primary.main':'divider',bgcolor:draggingFile?'action.hover':'transparent',borderRadius:1,transition:'background-color .15s,border-color .15s'}}>
+       <Button component="label" variant="outlined" fullWidth sx={{minHeight:54,borderStyle:'dashed'}}>{file?`Đã chọn: ${file.name}`:'Kéo file audio vào đây hoặc bấm để chọn (tối đa 20 MB)'}<input hidden type="file" accept=".wav,.mp3,.ogg,.m4a,.flac" onChange={e=>{const f=e.target.files?.[0];if(f)acceptUploadFile(f);e.currentTarget.value='';}}/></Button>
+       <Typography variant="caption" sx={{display:'block',textAlign:'center',mt:1}}>WAV, MP3, OGG, M4A hoặc FLAC · Tối đa 120 giây</Typography>
+      </Box>
+      <Paper variant="outlined" sx={{p:1.5}}><Typography fontWeight={600} sx={{mb:1}}>Tìm file trên Pixabay</Typography><Stack direction={{xs:'column',sm:'row'}} spacing={1}><TextField fullWidth size="small" label="Từ khóa (có thể nhập tiếng Việt)" placeholder="Ví dụ: tiếng bước chân trên sỏi" value={pixQuery} onChange={e=>{setPixQuery(e.target.value);setPixQueryIsEnglish(false);setTranslatedPixQuery('');}} onKeyDown={e=>{if(e.key==='Enter')void (pixQueryIsEnglish?searchEnglishPixabay():translateAndSearchPixabay());}}/><Button variant="outlined" disabled={!pixQuery.trim()||translationBusy} onClick={()=>void (pixQueryIsEnglish?searchEnglishPixabay():translateAndSearchPixabay())}>{translationBusy?'Đang dịch…':pixQueryIsEnglish?'Tìm trên Pixabay':'Dịch & tìm'}</Button></Stack>{translatedPixQuery&&<Stack direction={{xs:'column',sm:'row'}} spacing={1} alignItems={{sm:'center'}} sx={{mt:1}}><Typography variant="body2">{pixQueryIsEnglish?'Từ khóa tiếng Anh từ chatbot:':'Từ khóa tiếng Anh:'} <strong>{translatedPixQuery}</strong></Typography><Button component="a" size="small" href={pixabaySearchUrl(translatedPixQuery)} target="_blank" rel="noreferrer">Mở lại kết quả</Button></Stack>}<Typography variant="caption" sx={{display:'block',mt:1}}>{pixQueryIsEnglish?'Từ khóa chatbot đã được gửi thẳng lên Pixabay, không cần dịch.':'Từ khóa nhập thủ công sẽ được dịch sang tiếng Anh trước khi tìm.'} Tải file từ Pixabay, chọn file ở phía trên và thay “Nguồn” bằng URL trang âm thanh cụ thể.</Typography></Paper>
+      <Button variant="contained" disabled={busy||!file||!meta.title.trim()||!meta.license.trim()} onClick={async()=>{if(!file)return;setBusy(true);setError('');try{const r=await uploadLibrarySound(file,meta);if(!r.success)throw new Error(r.message);setFile(null);setMeta({title:'',license:'Bản thu của tôi',source:'',category:'foley'});await load();if(r.sound&&onSelect)onSelect(r.sound);}catch(e){setError(e instanceof Error?e.message:'Tải file thất bại.');}finally{setBusy(false);}}}>{busy?'Đang lưu…':onSelect?'Lưu và thêm vào timeline':'Lưu vào thư viện'}</Button>
+     </>}
+     {mode==='ai'&&<SoundLibraryAiGenerator active={open&&mode==='ai'} title={meta.title} category={meta.category} license={meta.license} source={meta.source} initialPrompt={initialAudioPrompt} onCreated={()=>void load()} onSelect={onSelect}/>}
+    </Stack>
+   </Paper>
+   <Stack direction={{xs:'column',sm:'row'}} spacing={1} alignItems={{sm:'center'}}><TextField size="small" label="Tìm trong thư viện" value={query} onChange={e=>{setQuery(e.target.value);setPage(1);}} sx={{flex:1}}/><Chip label={`${filtered.length} âm thanh`}/></Stack>
+   <TableContainer component={Paper} variant="outlined"><Table size="small" aria-label="Danh sách thư viện âm thanh"><TableHead><TableRow><TableCell>Tên âm thanh</TableCell><TableCell width={260}>Nghe thử</TableCell><TableCell>Thông tin</TableCell>{onSelect&&<TableCell align="right">Thao tác</TableCell>}</TableRow></TableHead><TableBody>{visible.map(s=><TableRow key={s.id} hover><TableCell sx={{maxWidth:220}}><Typography fontWeight={600} noWrap title={s.title}>{s.title}</Typography></TableCell><TableCell><Box component="audio" controls preload="none" src={librarySoundUrl(s.file)} sx={{width:'100%',height:36}}/></TableCell><TableCell><Stack direction="row" spacing={.5} flexWrap="wrap" useFlexGap><Chip size="small" label={s.category}/><Chip size="small" variant="outlined" label={s.license}/>{s.generation&&<Chip size="small" color="primary" label="AI"/>}<Typography variant="caption" sx={{alignSelf:'center'}}>{s.duration_sec.toFixed(1)} giây</Typography></Stack></TableCell>{onSelect&&<TableCell align="right"><Button size="small" variant="outlined" onClick={()=>onSelect(s)}>Thêm vào timeline</Button></TableCell>}</TableRow>)}{visible.length===0&&<TableRow><TableCell colSpan={onSelect?4:3} align="center">Không có âm thanh phù hợp.</TableCell></TableRow>}</TableBody></Table></TableContainer>
+   <Pagination count={Math.max(1,Math.ceil(filtered.length/PAGE_SIZE))} page={Math.min(page,Math.max(1,Math.ceil(filtered.length/PAGE_SIZE)))} onChange={(_,p)=>setPage(p)} sx={{display:'flex',justifyContent:'center'}}/>
   </Stack>
  </DrawerCustom>;
 }

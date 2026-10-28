@@ -500,6 +500,7 @@ export default function ShortVideoAgentVideoWorkspace({
             beatHtml={state.beatHtml[currentBeatId] || null}
             beatImage={state.beatImage[currentBeatId] || null}
             isWhiteboardMode={state.isWhiteboardMode}
+            htmlBeatWorkflow={state.isHtmlBeatWorkflow}
             versions={currentBeatVersions}
             activeVersionId={String(state.beatActiveVersionId?.[currentBeatId] || '')}
             visualDescription={String(currentBeatSection?.visual_description || '')}
@@ -530,13 +531,13 @@ export default function ShortVideoAgentVideoWorkspace({
             onSaveBeatVersion={handleSaveCurrentBeatVersion}
             onRestoreBeatVersion={handleRestoreCurrentBeatVersion}
             onRenderWhiteboardBeat={
-                state.isWhiteboardMode && !state.agentWhiteboardConfig?.assets_mode
+                state.isHtmlBeatWorkflow || (state.isWhiteboardMode && !state.agentWhiteboardConfig?.assets_mode)
                     ? () => { void state.handleRenderWhiteboardBeat(currentBeatId); }
                     : undefined
             }
             renderingBeatVideo={state.renderingWhiteboardBeatIds.includes(currentBeatId)}
             onAddBeatVideoToCapcut={
-                state.isWhiteboardMode
+                state.isWhiteboardMode && !state.isHtmlBeatWorkflow
                     ? () => { void state.handleAddBeatVideoToCapcut(currentBeatId); }
                     : undefined
             }
@@ -1006,7 +1007,7 @@ export default function ShortVideoAgentVideoWorkspace({
                         setPreviewSource('html_beat');
                         void state.handlePasteBeatHtml(beatId);
                     }}
-                    onEditBeatHtml={state.isWhiteboardMode ? handleOpenEditBeatImage : handleOpenEditBeatHtml}
+                    onEditBeatHtml={state.isWhiteboardMode && !state.isHtmlBeatWorkflow ? handleOpenEditBeatImage : handleOpenEditBeatHtml}
                     onOpenBeatInfo={handleOpenBeatInfo}
                     onDeleteBeatHtml={(beatId) => {
                         void state.handleDeleteBeatHtml(beatId);
@@ -1035,15 +1036,15 @@ export default function ShortVideoAgentVideoWorkspace({
                     onOpenBeatGeminiHeadless={(beatId) => {
                         void state.handleOpenBeatGeminiHeadless(beatId);
                     }}
-                    onRenderWhiteboardBeat={state.agentWhiteboardConfig?.assets_mode
+                    onRenderWhiteboardBeat={!state.isHtmlBeatWorkflow && state.agentWhiteboardConfig?.assets_mode
                         ? undefined
                         : (beatId) => {
                             void state.handleRenderWhiteboardBeat(beatId);
                         }}
-                    onAddBeatVideoToCapcut={(beatId) => {
+                    onAddBeatVideoToCapcut={state.isHtmlBeatWorkflow ? undefined : (beatId) => {
                         void state.handleAddBeatVideoToCapcut(beatId);
                     }}
-                    onAnimateBeatVibes={(beatId) => {
+                    onAnimateBeatVibes={state.isHtmlBeatWorkflow ? undefined : (beatId) => {
                         void state.handleAnimateBeatVibes(beatId);
                     }}
                     animatingBeatVibesIds={state.animatingBeatVibesIds}
