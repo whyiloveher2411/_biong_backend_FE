@@ -58,6 +58,7 @@ import {
     saveAgentImportHtml,
     openDeepseekHtmlBeatSession,
     fetchDeepseekHtmlBeatSessionStatus,
+    enqueueDeepseekHtmlBeatWithClipPreflight,
     enqueueBeatAudioPlan as enqueueBeatAudioPlanApi,
     fetchAgentImportHtmlBeatUpdate,
     bulkDeleteBeatAssets,
@@ -1417,6 +1418,11 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                     key: String(field?.key || '').trim(),
                     title: String(field?.title || '').trim(),
                     field_type: String(field?.field_type || '').trim(),
+                    options: Array.isArray(field?.options)
+                        ? field.options.map((option) => ({value: String(option?.value || ''), label: String(option?.label || option?.value || '')})).filter((option) => option.value !== '')
+                        : [],
+                    default_value: String(field?.default_value || ''),
+                    description: String(field?.description || ''),
                 }))
                 .filter((field) => field.key !== '')
             : [];
@@ -6093,6 +6099,32 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         })();
     };
 
+    const handleGenerateBeatHtmlWithClipPreflight = (beatId: string) => {
+        const id = String(beatId || '').trim();
+        if (!id || openingBeatDeepSeekChatBeatIds.includes(id)) return;
+        setOpeningBeatDeepSeekChatBeatIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+        void (async () => {
+            try {
+                const res = await enqueueDeepseekHtmlBeatWithClipPreflight(shortVideoId, id);
+                if (!res?.success) {
+                    showMessage(parseApiMessage(res?.message) || `Không đưa được ${id} vào queue DeepSeek`, 'error');
+                    return;
+                }
+                startDeepseekWatch(id);
+                loadRow({ syncAggregate: true });
+                showMessage(
+                    parseApiMessage(res?.message)
+                        || `Đã đưa ${id} vào queue. Hệ thống sẽ kiểm tra thư viện, tự tạo clip còn thiếu rồi sinh HTML beat.`,
+                    'success',
+                );
+            } catch (e) {
+                showMessage(e instanceof Error ? e.message : String(e), 'error');
+            } finally {
+                setOpeningBeatDeepSeekChatBeatIds((prev) => prev.filter((x) => x !== id));
+            }
+        })();
+    };
+
     const handleOpenBeatDeepSeekSavedChat = (beatId: string) => {
         handleOpenBeatDeepSeekChat(beatId, 'reopen');
     };
@@ -10314,6 +10346,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         planningBeatAudioPlanBeatIds,
         handleEnqueueBeatAudioPlan,
         handleOpenBeatDeepSeekChat,
+        handleGenerateBeatHtmlWithClipPreflight,
         handleOpenBeatDeepSeekSavedChat,
         agentVisualMode,
         settingFields,

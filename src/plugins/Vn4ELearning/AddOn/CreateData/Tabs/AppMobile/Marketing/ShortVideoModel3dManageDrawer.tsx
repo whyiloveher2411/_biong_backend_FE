@@ -31,16 +31,19 @@ import CharacterWardrobeEditor from './CharacterWardrobeEditor';
 import Model3dPreview, { type Model3dPreviewHandle } from './Model3dPreview';
 import {
     buildModel3dPreviewUrl,
+    buildModelAnimationCandidateUrl,
     characterRequest,
     CharacterConfig,
     CharacterGeneration,
     deleteShortVideoModel3ds,
     listShortVideoModel3ds,
+    modelAnimationRequest,
     parseShortVideoModel3dApiMessage,
     saveShortVideoModel3d,
     uploadShortVideoModel3dFile,
     uploadShortVideoModel3dThumbnail,
     type ShortVideoModel3d,
+    type ModelAnimationGeneration,
 } from 'helpers/marketingShortVideoModel3dApi';
 
 type Props = {
@@ -59,6 +62,7 @@ type ModelMedia = {
 type ModelFormState = {
     character: CharacterConfig;
     generation?: CharacterGeneration;
+    animationGeneration?: ModelAnimationGeneration;
     id: number;
     title: string;
     slug: string;
@@ -172,10 +176,12 @@ function serializeClipRows(rows: ClipRow[]): string {
 function ClipsEditor({
     value,
     onChange,
+    onRemoveClip,
     disabled,
 }: {
     value: string;
     onChange: (next: string) => void;
+    onRemoveClip?: (clipName: string) => void;
     disabled?: boolean;
 }) {
     const rows = React.useMemo(() => parseClipRows(value), [value]);
@@ -233,6 +239,13 @@ function ClipsEditor({
                                 placeholder="đi bộ, chạy…"
                                 sx={{ flex: 1.3, minWidth: 0 }}
                             />
+                            {row.name && onRemoveClip && (
+                                <Tooltip title={`Xóa clip ${row.name} khỏi model`}>
+                                    <span><IconButton size="small" color="error" aria-label={`Xóa clip ${row.name}`} onClick={() => onRemoveClip(row.name)} disabled={disabled}>
+                                        <DeleteOutlineOutlinedIcon fontSize="small" />
+                                    </IconButton></span>
+                                </Tooltip>
+                            )}
                         </Stack>
                     ))}
                 </Stack>
@@ -253,6 +266,7 @@ function ModelForm({
     onSubmit,
     onCancel,
     onUploadFile,
+    onRemoveClip,
 }: {
     form: ModelFormState;
     onFormChange: (patch: Partial<ModelFormState>) => void;
@@ -262,6 +276,7 @@ function ModelForm({
     onSubmit: () => void;
     onCancel: () => void;
     onUploadFile: (file: File) => void;
+    onRemoveClip: (clipName: string) => void;
 }) {
     const fileInputRef = React.useRef<HTMLInputElement>(null);
     const [dragOver, setDragOver] = React.useState(false);
@@ -369,6 +384,7 @@ function ModelForm({
             <ClipsEditor
                 value={form.clips}
                 onChange={(next) => onFormChange({ clips: next })}
+                onRemoveClip={onRemoveClip}
                 disabled={saving || uploading}
             />
             <Box>
@@ -564,6 +580,7 @@ export default function ShortVideoModel3dManageDrawer({ open, onClose }: Props) 
         setForm({
             character: model.character || EMPTY_FORM.character,
             generation: model.character_generation,
+            animationGeneration: model.animation_generation,
             id: model.id,
             title: model.title || '',
             slug: model.slug || '',
@@ -592,6 +609,86 @@ export default function ShortVideoModel3dManageDrawer({ open, onClose }: Props) 
 
     const handleFormChange = (patch: Partial<ModelFormState>) => {
         setForm((prev) => ({ ...prev, ...patch }));
+    };
+
+    const [animationAction, setAnimationAction] = React.useState('');
+    const [animationAlias, setAnimationAlias] = React.useState('');
+    const [animationDescription, setAnimationDescription] = React.useState('');
+    const [animationFeedback, setAnimationFeedback] = React.useState('');
+    const [animationBusy, setAnimationBusy] = React.useState(false);
+    const [animationClip, setAnimationClip] = React.useState('');
+    const refreshAnimation = React.useCallback(async () => {
+        if (form.id <= 0) return;
+        try {
+            const result = await modelAnimationRequest('status', {model_id: form.id});
+            if (result.model) setForm((prev) => ({...prev, animationGeneration: result.model?.animation_generation}));
+        } catch { /* polling is best effort; next poll retries */ }
+    }, [form.id]);
+    React.useEffect(() => {
+        if (!form.id || !['queued', 'processing'].includes(form.animationGeneration?.status || '')) return undefined;
+        const timer = window.setInterval(() => { void refreshAnimation(); }, 5000);
+        return () => window.clearInterval(timer);
+    }, [form.id, form.animationGeneration?.status, refreshAnimation]);
+    const generateAnimation = async () => {
+        setAnimationBusy(true);
+        try {
+            const result = await modelAnimationRequest('generate', {model_id: form.id, action: animationAction, alias: animationAlias, description: animationDescription});
+            if (result.success === false) throw new Error(parseShortVideoModel3dApiMessage(result));
+            setForm((prev) => ({...prev, animationGeneration: result.generation}));
+            showMessage('Đã gửi yêu cầu tạo animation. Có thể mất vài phút.', 'success');
+        } catch (e) { showMessage(e instanceof Error ? e.message : 'Không tạo được animation', 'error'); }
+        finally { setAnimationBusy(false); }
+    };
+    const reviseAnimation = async () => {
+        const generation = form.animationGeneration;
+        const requestId = generation?.status === 'failed' ? generation.previous_request_id : generation?.request_id;
+        if (!requestId || !animationFeedback.trim()) return;
+        setAnimationBusy(true);
+        try {
+            const result = await modelAnimationRequest('revise', {model_id: form.id, request_id: requestId, feedback: animationFeedback});
+            if (result.success === false) throw new Error(parseShortVideoModel3dApiMessage(result));
+            setForm((prev) => ({...prev, animationGeneration: result.generation}));
+            setAnimationClip('');
+            showMessage('Đã gửi feedback cho DeepSeek. Candidate cũ chỉ được bỏ sau khi bản mới tạo thành công.', 'success');
+        } catch (e) { showMessage(e instanceof Error ? e.message : 'Không gửi được feedback', 'error'); }
+        finally { setAnimationBusy(false); }
+    };
+    const approveAnimation = async () => {
+        if (!form.animationGeneration?.request_id || !animationClip) return;
+        setAnimationBusy(true);
+        try {
+            const result = await modelAnimationRequest('approve', {model_id: form.id, request_id: form.animationGeneration.request_id, clip_name: animationClip});
+            if (result.success === false || !result.model) throw new Error(parseShortVideoModel3dApiMessage(result, 'Không duyệt được animation'));
+            const m = result.model;
+            setForm((prev) => ({...prev, animationGeneration: m.animation_generation, clips: m.clips, model: {url: m.model_url, s3_key: m.model_s3_key, file_name: m.file_name, file_size: m.file_size, file_format: m.file_format}}));
+            showMessage('Đã duyệt và thêm clip vào thư viện nhân vật.', 'success');
+            reloadList();
+        } catch (e) { showMessage(e instanceof Error ? e.message : 'Không duyệt được animation', 'error'); }
+        finally { setAnimationBusy(false); }
+    };
+    const removeClip = async (clipName: string) => {
+        if (!form.id || !window.confirm(`Xóa clip “${clipName}” khỏi file model này?`)) return;
+        setSaving(true);
+        try {
+            const result = await modelAnimationRequest('remove_clip', {model_id: form.id, clip_name: clipName});
+            if (result.success === false || !result.model) throw new Error(parseShortVideoModel3dApiMessage(result, 'Không xóa được clip'));
+            const m = result.model;
+            setForm((prev) => ({...prev, clips: m.clips, animationGeneration: m.animation_generation, model: {url: m.model_url, s3_key: m.model_s3_key, file_name: m.file_name, file_size: m.file_size, file_format: m.file_format}}));
+            showMessage(`Đã xóa clip “${clipName}” khỏi model.`, 'success');
+            reloadList();
+        } catch (e) { showMessage(e instanceof Error ? e.message : 'Không xóa được clip', 'error'); }
+        finally { setSaving(false); }
+    };
+    const discardAnimation = async () => {
+        const requestId = form.animationGeneration?.request_id;
+        if (!requestId) return;
+        setAnimationBusy(true);
+        try {
+            const result = await modelAnimationRequest('discard', {model_id: form.id, request_id: requestId});
+            if (result.success === false) throw new Error(parseShortVideoModel3dApiMessage(result));
+            setForm((prev) => ({...prev, animationGeneration: {...(prev.animationGeneration || {}), status: 'discarded'}}));
+        } catch (e) { showMessage(e instanceof Error ? e.message : 'Không xóa được candidate', 'error'); }
+        finally { setAnimationBusy(false); }
     };
 
     const handleUploadFile = (file: File) => {
@@ -908,6 +1005,7 @@ export default function ShortVideoModel3dManageDrawer({ open, onClose }: Props) 
                                 onSubmit={handleSubmit}
                                 onCancel={() => setMode('list')}
                                 onUploadFile={handleUploadFile}
+                                onRemoveClip={removeClip}
                             />
                         </Box>
 
@@ -934,6 +1032,78 @@ export default function ShortVideoModel3dManageDrawer({ open, onClose }: Props) 
                                     />
                                     {form.kind === 'person' && form.id>0 && <Button variant="outlined" disabled={saving || uploading} onClick={()=>{autoCapturedUrlRef.current='';setForm(prev=>({...prev,id:0,title:prev.title+' · bản mới',slug:'',generation:undefined,thumbnail:null}));}}>Tạo bản sao để chỉnh ngoại hình riêng</Button>}
                                     {form.kind === 'person' && <CharacterWardrobeEditor value={form.character} onChange={character=>handleFormChange({character})} modelId={form.id} initialGeneration={form.generation} library={models.flatMap(m=>m.character?.library || [])} disabled={saving || uploading}/>}
+                                    {form.kind === 'person' && form.id > 0 && (
+                                        <Box sx={{border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 2, bgcolor: 'background.paper'}}>
+                                            <Typography variant="subtitle1" sx={{fontWeight: 700, mb: 0.5}}>Tạo animation dùng lại</Typography>
+                                            <Typography variant="caption" color="text.secondary" sx={{display: 'block', mb: 1.5}}>
+                                                Sinh clip trên bản sao qua Animato + DeepSeek. Model gốc chỉ thay đổi sau khi bạn preview và duyệt.
+                                            </Typography>
+                                            <Stack spacing={1}>
+                                                <TextField size="small" label="Mô tả hành động" value={animationAction} onChange={(e) => setAnimationAction(e.target.value)} placeholder="Ví dụ: nhân vật bước nhanh sang phải, dừng lại và chỉ tay về phía trước" disabled={animationBusy || ['queued','processing','ready'].includes(form.animationGeneration?.status || '')}/>
+                                                <Stack direction="row" spacing={1}>
+                                                    <TextField size="small" label="Tên clip trong beat" value={animationAlias} onChange={(e) => setAnimationAlias(e.target.value)} placeholder="point_forward" fullWidth disabled={animationBusy}/>
+                                                    <TextField size="small" label="Mô tả clip" value={animationDescription} onChange={(e) => setAnimationDescription(e.target.value)} placeholder="chỉ tay về phía trước" fullWidth disabled={animationBusy}/>
+                                                </Stack>
+                                                <Button variant="contained" onClick={generateAnimation} disabled={animationBusy || uploading || saving || !animationAction.trim() || !animationAlias.trim() || ['queued','processing','ready'].includes(form.animationGeneration?.status || '')}>
+                                                    {animationBusy || ['queued','processing'].includes(form.animationGeneration?.status || '') ? <CircularProgress size={16} color="inherit" sx={{mr: 1}}/> : null}
+                                                    {['queued','processing'].includes(form.animationGeneration?.status || '') ? 'Animato đang tạo animation…' : 'Tạo animation với DeepSeek'}
+                                                </Button>
+                                                {form.animationGeneration?.status === 'failed' && <Alert severity="error">{form.animationGeneration.error || 'Tạo animation thất bại.'}</Alert>}
+                                                {form.animationGeneration?.status === 'failed' && form.animationGeneration.previous_request_id && form.animationGeneration.candidate === `${form.animationGeneration.previous_request_id}.glb` && (
+                                                    <>
+                                                        <Alert severity="warning">Job sửa bị dừng, nhưng candidate trước vẫn được giữ. Bạn có thể preview và gửi feedback lại.</Alert>
+                                                        <Model3dPreview url={buildModelAnimationCandidateUrl(form.id, form.animationGeneration.previous_request_id)} sx={{maxWidth: 420}} onError={(message) => showMessage(message, 'warning')}/>
+                                                        <TextField
+                                                            size="small"
+                                                            label="Feedback để thử lại với DeepSeek"
+                                                            value={animationFeedback}
+                                                            onChange={(e) => setAnimationFeedback(e.target.value)}
+                                                            multiline
+                                                            minRows={2}
+                                                            maxRows={5}
+                                                            placeholder="Ví dụ: Hai tay vẫn dang ngang. Gập khuỷu và đặt cả hai bàn tay lên đùi suốt clip; không dang tay hoặc tạo dáng chữ T."
+                                                            helperText="Candidate trước sẽ được dùng làm ngữ cảnh; model gốc không thay đổi."
+                                                            disabled={animationBusy}
+                                                        />
+                                                        <Button variant="outlined" onClick={reviseAnimation} disabled={animationBusy || !animationFeedback.trim()}>
+                                                            {animationBusy ? <CircularProgress size={16} sx={{mr: 1}}/> : null}
+                                                            Gửi feedback tạo lại
+                                                        </Button>
+                                                    </>
+                                                )}
+                                                {form.animationGeneration?.status === 'ready' && form.animationGeneration.request_id && (
+                                                    <>
+                                                        <Alert severity="success">Candidate đã sẵn sàng. Preview clip bên dưới rồi chọn clip muốn thêm vào thư viện.</Alert>
+                                                        <Model3dPreview url={buildModelAnimationCandidateUrl(form.id, form.animationGeneration.request_id)} sx={{maxWidth: 420}} onError={(message) => showMessage(message, 'warning')}/>
+                                                        <TextField select size="small" label="Clip cần duyệt" value={animationClip} onChange={(e) => setAnimationClip(e.target.value)}>
+                                                            {(form.animationGeneration.clips || []).map((clip) => <MenuItem key={clip} value={clip}>{clip}</MenuItem>)}
+                                                        </TextField>
+                                                        <TextField
+                                                            size="small"
+                                                            label="Feedback để tạo lại với DeepSeek"
+                                                            value={animationFeedback}
+                                                            onChange={(e) => setAnimationFeedback(e.target.value)}
+                                                            multiline
+                                                            minRows={2}
+                                                            maxRows={5}
+                                                            placeholder="Ví dụ: Hai tay vẫn dang ngang. Giữ bắp tay sát thân, gập khuỷu và đặt cả hai bàn tay lên đùi xuyên suốt clip; không tạo dáng chữ T."
+                                                            helperText="Feedback được gửi cùng candidate hiện tại làm ngữ cảnh. Bản cũ chỉ bị dọn khi candidate mới tạo thành công."
+                                                            disabled={animationBusy}
+                                                        />
+                                                        <Stack direction="row" spacing={1}>
+                                                            <Button variant="outlined" onClick={reviseAnimation} disabled={animationBusy || !animationFeedback.trim()}>
+                                                                {animationBusy ? <CircularProgress size={16} sx={{mr: 1}}/> : null}
+                                                                Tạo lại theo feedback
+                                                            </Button>
+                                                            <Button variant="contained" onClick={approveAnimation} disabled={animationBusy || !animationClip}>Duyệt và thêm clip</Button>
+                                                            <Button color="error" onClick={discardAnimation} disabled={animationBusy}>Bỏ candidate</Button>
+                                                        </Stack>
+                                                    </>
+                                                )}
+                                                {form.animationGeneration?.status === 'approved' && <Alert severity="info">Đã thêm clip “{form.animationGeneration.approved_clip}”. Clip này hiện dùng được trong beat.</Alert>}
+                                            </Stack>
+                                        </Box>
+                                    )}
                                     <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap">
                                         <Box
                                             sx={{

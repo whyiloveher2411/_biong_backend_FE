@@ -12,6 +12,7 @@ const MODEL_3D_BASE_PATH = 'plugin/vn4-e-learning/app-mobile/marketing/short-vid
 export type ShortVideoModel3d = {
     character?: CharacterConfig;
     character_generation?: CharacterGeneration;
+    animation_generation?: ModelAnimationGeneration;
     id: number;
     title: string;
     /** ID catalog (^[a-z0-9_]+$) dùng cho runtime Assets. */
@@ -189,7 +190,7 @@ export function saveShortVideoModel3dBeatAssetMap(
 /** Sự kiện phát khi map asset / model chọn-trước của beat thay đổi → preview reload. */
 export const MODEL3D_BEAT_ASSET_CHANGED_EVENT = 'vn4-model3d-beat-asset-changed';
 
-function dispatchBeatAssetChanged(shortVideoId: number, beatId: string) {
+export function dispatchBeatAssetChanged(shortVideoId: number, beatId: string) {
     try {
         document.dispatchEvent(new CustomEvent(MODEL3D_BEAT_ASSET_CHANGED_EVENT, {
             detail: { shortVideoId, beatId },
@@ -418,6 +419,15 @@ export type CharacterConfig = {
     additive?: string[];
 };
 export type CharacterGeneration = {status?: string; error?: string; asset_id?: string; job_id?: number};
+export type ModelAnimationGeneration = {status?: string; request_id?: string; job_id?: number; action?: string; alias?: string; description?: string; clips?: string[]; error?: string; approved_clip?: string; feedback?: string; previous_request_id?: string; candidate?: string};
+export function modelAnimationRequest(operation: string, data: Record<string, unknown> = {}): Promise<{success?: boolean; message?: unknown; model?: ShortVideoModel3d; generation?: ModelAnimationGeneration}> {
+    return ajax({url: `${MODEL_3D_BASE_PATH}/animation`, method: 'POST', loading: false, data: {operation, ...data}}) as ANY;
+}
+export function buildModelAnimationCandidateUrl(modelId: number, requestId: string): string {
+    const url = convertToURL(getAdminApiPrefix(), 'plugin/vn4-e-learning/app-mobile/marketing/short-video/model-3d/animation-preview');
+    const token = getAccessToken() || '';
+    return `${url}?model_id=${encodeURIComponent(String(modelId))}&request_id=${encodeURIComponent(requestId)}&access_token=${encodeURIComponent(token)}`;
+}
 export function characterRequest(operation: string, data: Record<string, unknown> = {}): Promise<{success?: boolean; message?: unknown; model?: ShortVideoModel3d}> {
     return ajax({url: `${MODEL_3D_BASE_PATH}/character`, method: 'POST', loading: false, data: {operation, ...data}}) as ANY;
 }

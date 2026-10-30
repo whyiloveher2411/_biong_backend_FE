@@ -3,7 +3,7 @@ import CharacterWardrobeEditor from '../CharacterWardrobeEditor';
 import Model3dPreview from '../Model3dPreview';
 import ShortVideoModel3dManageDrawer from '../ShortVideoModel3dManageDrawer';
 import Model3dLibraryPickerDrawer from './Model3dLibraryPickerDrawer';
-import {listShortVideoModel3ds, ShortVideoModel3d, CharacterConfig, buildModel3dPreviewUrl} from 'helpers/marketingShortVideoModel3dApi';
+import {listShortVideoModel3ds, ShortVideoModel3d, CharacterConfig, buildModel3dPreviewUrl, dispatchBeatAssetChanged} from 'helpers/marketingShortVideoModel3dApi';
 import SceneAssetPreviewDialog from './SceneAssetPreviewDialog';
 import PersonOutlineIcon from '@mui/icons-material/PersonOutline';
 import CottageOutlinedIcon from '@mui/icons-material/CottageOutlined';
@@ -176,6 +176,9 @@ export default function SceneAssetsPanel({shortVideoId}: Props) {
             if (!mounted.current || currentVideo.current !== shortVideoId) return false;
             if (!res.success) { setError(sceneAssetMessage(res)); return false; }
             if (res.registry) applyRegistry(res.registry);
+            // Character source changes alter the asset-config consumed by every
+            // saved beat that still references its prior library GLB.
+            if (operation === 'unbind_model') dispatchBeatAssetChanged(shortVideoId, '');
             setNotice(operation === 'open' ? 'Đã mở DeepSeek. Gửi prompt, copy HTML rồi lưu ngay trong overlay.' : operation === 'enqueue' || operation === 'html' || operation === 'repair' ? sceneAssetMessage(res) : 'Đã lưu.');
             return true;
         } catch (e) { if (mounted.current) setError('Không kết nối được CMS.'); return false; }
@@ -291,7 +294,8 @@ export default function SceneAssetsPanel({shortVideoId}: Props) {
                 <Typography variant="caption" color="text.secondary">Sửa lựa chọn nếu cần. “Cần dựng lại” nghĩa là HTML beat chưa dùng phiên bản hồ sơ hiện tại; không tự ghi đè beat đã duyệt.</Typography>
                 <Stack spacing={1} sx={{mt: 1}}>{Object.values(working.beats || {}).slice(0, mappingCount).map(beat => <Box key={beat.id} sx={{p: 1, border: '1px solid', borderColor: 'divider', borderRadius: 1, contentVisibility: 'auto', containIntrinsicSize: 'auto 190px'}}>
                     <Stack direction="row" gap={1} alignItems="center" sx={{mb: 1}}><Typography variant="body2">{beat.id}</Typography><Chip size="small" color={beat.status === 'ready' ? 'success' : 'default'} label={beat.status === 'ready' ? 'Đồng bộ' : beat.status === 'stale' ? 'Cần dựng lại' : 'Chưa có HTML beat'}/></Stack>
-                    <FormControl size="small" fullWidth sx={{mb: 1}}><InputLabel>Bối cảnh</InputLabel><Select label="Bối cảnh" value={beat.environment_id} onChange={e => patchBeat(beat.id, {environment_id: e.target.value})}><MenuItem value="">Không dùng</MenuItem>{environments.map(a => <MenuItem key={a.id} value={a.id}>{a.name}{a.ready ? '' : ' — chưa có HTML'}</MenuItem>)}</Select></FormControl>
+                    <FormControl size="small" fullWidth sx={{mb: 1}}><InputLabel>Bối cảnh</InputLabel><Select label="Bối cảnh" value={beat.environment_id} onChange={e => patchBeat(beat.id, {environment_id: e.target.value, additional_environment_ids: (beat.additional_environment_ids || []).filter(id => id !== e.target.value)})}><MenuItem value="">Không dùng</MenuItem>{environments.map(a => <MenuItem key={a.id} value={a.id}>{a.name}{a.ready ? '' : ' — chưa có HTML'}</MenuItem>)}</Select></FormControl>
+                    <FormControl size="small" fullWidth sx={{mb: 1}}><InputLabel>Bối cảnh bổ sung trong beat</InputLabel><Select multiple label="Bối cảnh bổ sung trong beat" value={beat.additional_environment_ids || []} onChange={e => patchBeat(beat.id, {additional_environment_ids: typeof e.target.value === 'string' ? e.target.value.split(',') : e.target.value})}>{environments.filter(a => a.id !== beat.environment_id).map(a => <MenuItem key={a.id} value={a.id}>{a.name}{a.ready ? '' : ' — chưa có HTML'}</MenuItem>)}</Select></FormControl>
                     <FormControl size="small" fullWidth sx={{mb: 1}}><InputLabel>Nhân vật</InputLabel><Select multiple label="Nhân vật" value={beat.character_ids} onChange={e => patchBeat(beat.id, {character_ids: typeof e.target.value === 'string' ? e.target.value.split(',') : e.target.value})}>{characters.map(a => <MenuItem key={a.id} value={a.id}>{a.name}{a.ready ? '' : ' — chưa có HTML'}</MenuItem>)}</Select></FormControl>
                     <TextField fullWidth multiline size="small" label="Hành động / trạng thái nối cảnh" value={beat.continuity} onChange={e => patchBeat(beat.id, {continuity: e.target.value})}/>
                 </Box>)}</Stack>

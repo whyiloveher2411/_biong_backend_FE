@@ -31,3 +31,13 @@ test('creating the profile itself does not require a previous manifest or HTML',
  const result=await fetchWorkflowPromptText('video-html','define-character.md',context);
  expect(result.ok).toBe(true);expect(request).not.toHaveBeenCalled();
 });
+
+test('action planner receives measured durations and all internal shot locations', async()=>{
+ const timed: SceneAssetRegistry={...registry,beats:{beat_1:{...registry.beats!.beat_1,duration_sec:12.073,additional_environment_ids:['flat']}}};
+ request.mockResolvedValue({success:true,registry:timed});
+ const result=await fetchWorkflowPromptText('video-html','create-beat-visual.md',context);
+ expect(result.text).toContain('MEASURED BEAT DURATIONS');
+ expect(result.text).toContain('"duration_sec":12.073');
+ expect(result.text).toContain('"additional_environment_ids"');
+ expect(result.text).toContain('"flat"');
+});

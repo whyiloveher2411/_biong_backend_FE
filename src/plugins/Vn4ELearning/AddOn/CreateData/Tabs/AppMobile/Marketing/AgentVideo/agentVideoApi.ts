@@ -1779,6 +1779,9 @@ export type AgentVideoSettingField = {
     key: string;
     title: string;
     field_type: string;
+    options?: Array<{ value: string; label: string }>;
+    default_value?: string;
+    description?: string;
 };
 
 export type AgentVideoContentResponse = {
@@ -3246,6 +3249,17 @@ export async function fetchDeepseekHtmlBeatSessionStatus(
         'plugin/vn4-e-learning/app-mobile/marketing/short-video/deepseek-html-beat-status',
         shortVideoBody(shortVideoId, { beat_id: beatId }),
     ) as Promise<DeepseekHtmlBeatSessionResponse>;
+}
+
+/** Queue one HTML beat through clip preflight; missing library actions are generated before HTML. */
+export async function enqueueDeepseekHtmlBeatWithClipPreflight(
+    shortVideoId: number,
+    beatId: string,
+): Promise<JsonResponse & { queued?: number; job_ids?: number[]; total?: number }> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/enqueue-deepseek-html-beat',
+        shortVideoBody(shortVideoId, { beat_id: beatId }),
+    ) as Promise<JsonResponse & { queued?: number; job_ids?: number[]; total?: number }>;
 }
 
 export async function enqueueBeatAudioPlan(

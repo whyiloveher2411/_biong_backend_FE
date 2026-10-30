@@ -31,7 +31,7 @@ export default function SceneAssetBeatSummary({shortVideoId, beatId, variant = '
         if (asset) setPreview(asset);
     };
     const mapping = registry?.beats?.[beatId];
-    const ids = mapping ? [mapping.environment_id, ...mapping.character_ids].filter(Boolean) : [];
+    const ids = mapping ? [mapping.environment_id, ...(mapping.additional_environment_ids || []), ...mapping.character_ids].filter(Boolean) : [];
     const previewDialog = <SceneAssetPreviewDialog shortVideoId={shortVideoId} asset={preview} onClose={() => setPreview(null)} onRegistryChange={setRegistry}/>;
     if (variant === 'toolbar') {
         return <Stack role="group" aria-label="Asset dùng trong beat" direction="column" alignItems="center" spacing={0.75}
@@ -41,7 +41,7 @@ export default function SceneAssetBeatSummary({shortVideoId, beatId, variant = '
             {error && <Tooltip placement="left" title={error}><ErrorOutlineIcon role="alert" aria-label={error} sx={{color: 'warning.light', m: 0.5}}/></Tooltip>}
             {ids.map(id => {
                 const asset = registry?.assets?.[id];
-                const environment = id === mapping?.environment_id;
+                const environment = asset?.kind === 'environment';
                 const label = `Mở ${environment ? 'bối cảnh' : 'nhân vật'}: ${asset?.name || id}`;
                 return <Tooltip key={id} placement="left" title={`${label}${asset?.has_html ? '' : ' — chưa có HTML'}`}>
                     <span><IconButton size="small" aria-label={label} disabled={!asset} onClick={() => void loadPreview(id)}

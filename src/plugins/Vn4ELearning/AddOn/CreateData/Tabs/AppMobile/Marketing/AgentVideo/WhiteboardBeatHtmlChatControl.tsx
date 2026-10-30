@@ -44,7 +44,7 @@ export default function WhiteboardBeatHtmlChatControl({ state, beatId, inline = 
     const [settingsOpen, setSettingsOpen] = React.useState(false);
 
     if (inline) return <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
-        <Button variant="contained" size="small" startIcon={opening ? <CircularProgress size={14} color="inherit" /> : <OpenInNewIcon />} disabled={opening} onClick={() => state.handleOpenBeatDeepSeekChat(beatId, 'new')}>{opening ? 'Đang mở DeepSeek…' : 'Tạo HTML motion bằng DeepSeek'}</Button>
+        <Button variant="contained" size="small" startIcon={opening ? <CircularProgress size={14} color="inherit" /> : <OpenInNewIcon />} disabled={opening} onClick={() => state.handleGenerateBeatHtmlWithClipPreflight(beatId)}>{opening ? 'Đang chuẩn bị beat…' : 'Tạo HTML + tự tạo clip thiếu'}</Button>
         {chatUrl ? <Button variant="outlined" size="small" disabled={opening} onClick={() => state.handleOpenBeatDeepSeekSavedChat(beatId)}>Mở lại chat HTML đã lưu</Button> : null}
         <Button variant="outlined" size="small" startIcon={planningAudio ? <CircularProgress size={14} /> : <GraphicEqIcon />} disabled={opening || planningAudio || !String(state.beatHtml[beatId]?.html || '').trim()} onClick={() => state.handleEnqueueBeatAudioPlan(beatId, true)}>{planningAudio ? 'Đang tạo gợi ý âm thanh…' : 'Tạo lại gợi ý âm thanh'}</Button>
     </Stack>;
@@ -88,7 +88,7 @@ export default function WhiteboardBeatHtmlChatControl({ state, beatId, inline = 
                         placement="top"
                         title={chatUrl
                             ? 'Mở lại chat DeepSeek đã tạo HTML motion của beat bằng headless browser + cookie đã lưu'
-                            : 'Chưa lưu chat DeepSeek — bấm nút DeepSeek ở box HTML motion để mở chat mới, gửi prompt rồi lưu HTML beat'}
+                            : 'Chưa lưu chat DeepSeek — nút DS trên preview sẽ kiểm tra thư viện, tự tạo clip còn thiếu rồi sinh HTML beat'}
                     >
                         <span>
                             <Button

@@ -618,8 +618,11 @@ async function appendSceneAssetContext(workflow: string, file: string, context: 
     if (!registry.schema_version) throw new Error('Hoàn thành danh sách nhân vật/bối cảnh ở Bước 2 trước.');
     // Shot/action design consumes specifications and mappings, not compiled HTML factories.
     // Readiness is checked later by the server when generating/composing each HTML beat.
+    const timings = Object.values(registry.beats || {}).filter(beat => Number(beat.duration_sec) > 0)
+        .map(beat => ({id: beat.id, duration_sec: beat.duration_sec}));
     return text + '\n\nPLANNING STAGE: Design beat actions from saved asset specifications and mappings. Assets may have no HTML yet or require rebuilding; neither condition blocks planning. Do not request HTML creation at this stage. Factory readiness is checked later when generating/composing HTML beats.\nCANONICAL SCENE ASSET MANIFEST (source data):\n' + sceneAssetsManifest(registry)
-        + '\nCompose the mapped character/environment IDs. Follow each beat start_state → action → end_state and new_information; use scene_id and neighbouring states across input batches. Preserve identity, architecture and named rest anchors while allowing story props/joints to move. A fixed camera is valid; angle changes and particles do not count as a story turn. Off-screen narration never implies an on-screen presenter. Never silently substitute a studio for the actual story setting.';
+        + (timings.length ? '\nMEASURED BEAT DURATIONS (seconds; divide each into action shots, preserve total):\n' + JSON.stringify(timings) : '')
+        + '\nCompose the mapped character/environment IDs, including additional_environment_ids for internal location cuts. Show each explicit narrated physical event; report a missing set mapping instead of reducing a multi-event beat to faces in the arrival room. Follow each beat start_state → action → end_state and new_information; use scene_id and neighbouring states across input batches. Preserve identity, architecture and named rest anchors while allowing story props/joints to move. A fixed camera is valid; angle changes and particles do not count as a story turn. Off-screen narration never implies an on-screen presenter. Never silently substitute a studio for the actual story setting.';
 }
 
 export async function fetchWorkflowPromptText(

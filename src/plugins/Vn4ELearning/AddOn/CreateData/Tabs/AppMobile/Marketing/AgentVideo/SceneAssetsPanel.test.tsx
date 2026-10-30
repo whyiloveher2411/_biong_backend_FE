@@ -234,10 +234,13 @@ test('edits clothing per role without changing the shared model',async()=>{
 });
 test('provides an explicit return-to-HTML action for a library role',async()=>{
     request.mockImplementation(()=>Promise.resolve({success:true,registry:{...registry,assets:{...registry.assets,wife:{...registry.assets.wife,module_hash:'role-v1',has_html_backup:true,model_snapshot:{id:4,character:{enabled:true}}}}}}));
+    const changed=jest.fn();document.addEventListener('vn4-model3d-beat-asset-changed',changed);
     const view=render(<SceneAssetsPanel shortVideoId={42}/>);
     fireEvent.click(await screen.findByRole('button',{name:'Dùng HTML'}));
     expect(screen.getByText(/Bản HTML trước khi chọn thư viện sẽ được khôi phục/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button',{name:'Chuyển sang HTML'}));
     await waitFor(()=>expect(request).toHaveBeenCalledWith(expect.objectContaining({data:{short_video_id:42,operation:'unbind_model',asset_id:'wife',expected_module_hash:'role-v1'}})));
+    await waitFor(()=>expect(changed).toHaveBeenCalledWith(expect.objectContaining({detail:{shortVideoId:42,beatId:''}})));
+    document.removeEventListener('vn4-model3d-beat-asset-changed',changed);
     view.unmount();
 });

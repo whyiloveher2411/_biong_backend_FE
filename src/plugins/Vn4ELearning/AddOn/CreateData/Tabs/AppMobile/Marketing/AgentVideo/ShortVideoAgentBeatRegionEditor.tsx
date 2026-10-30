@@ -4604,7 +4604,7 @@ export default function ShortVideoAgentBeatRegionEditor({
                                         saving={state.savingImportHtml}
                                         onOpenEditor={() => onEditHtml(beatId)}
                                         onSelectChange={() => true}
-                                        onOpenDeepSeek={() => state.handleOpenBeatDeepSeekChat(beatId)}
+                                        onOpenDeepSeek={() => state.handleGenerateBeatHtmlWithClipPreflight(beatId)}
                                         openingDeepSeek={state.openingBeatDeepSeekChatBeatIds.includes(beatId)}
                                     />
                                 </Box>
@@ -4816,7 +4816,7 @@ export default function ShortVideoAgentBeatRegionEditor({
                                 onSelectChange={(next) => {
                                     void state.handleSetBeatMediaSource(beatId, next ? 'html' : 'image');
                                 }}
-                                onOpenDeepSeek={() => state.handleOpenBeatDeepSeekChat(beatId)}
+                                onOpenDeepSeek={() => state.handleGenerateBeatHtmlWithClipPreflight(beatId)}
                                 openingDeepSeek={state.openingBeatDeepSeekChatBeatIds.includes(beatId)}
                             />
                         ) : null}

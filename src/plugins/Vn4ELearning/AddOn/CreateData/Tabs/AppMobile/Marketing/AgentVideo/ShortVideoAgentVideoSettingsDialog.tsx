@@ -10,6 +10,7 @@ import {
     DialogTitle,
     IconButton,
     InputAdornment,
+    MenuItem,
     Stack,
     TextField,
     Tooltip,
@@ -25,12 +26,21 @@ type Props = {
 };
 
 const AUTO_SAVE_DEBOUNCE_MS = 800;
+const TEXT_OVERLAY_DENSITY_OPTIONS = [
+    {value: 'low', label: 'Ít'},
+    {value: 'medium', label: 'Vừa'},
+    {value: 'high', label: 'Nhiều'},
+];
+
+function settingDefaultValue(field: {key: string; default_value?: string}): string {
+    return String(field.default_value || (field.key === 'text-overlay-density' ? 'medium' : ''));
+}
 
 /**
  * Dialog settings TOÀN video — render động theo danh sách field parse từ
- * prompts/{folder}/setting-field.md của visual type hiện tại. Thêm block/key
+ * prompts/{folder}/setting-field.md của workflow/visual type hiện tại. Thêm block/key
  * mới vào md là field tự hiện ở đây, không cần sửa UI.
- * Hiện hỗ trợ field-type: url (TextField auto-save + nút mở tab mới).
+ * Hỗ trợ url và select; cả hai loại tự lưu sau khi người dùng thay đổi.
  */
 export default function ShortVideoAgentVideoSettingsDialog({ state, open, onClose }: Props) {
     const [drafts, setDrafts] = React.useState<Record<string, string>>({});
@@ -48,7 +58,7 @@ export default function ShortVideoAgentVideoSettingsDialog({ state, open, onClos
         if (open) {
             const next: Record<string, string> = {};
             state.settingFields.forEach((field) => {
-                next[field.key] = String(state.videoSettings[field.key] ?? '');
+                next[field.key] = String(state.videoSettings[field.key] ?? settingDefaultValue(field));
             });
             draftsRef.current = next;
             setDrafts(next);
@@ -99,7 +109,8 @@ export default function ShortVideoAgentVideoSettingsDialog({ state, open, onClos
     }, [flushSave, onClose]);
 
     const urlFields = state.settingFields.filter((field) => field.field_type === 'url');
-    const unsupportedFields = state.settingFields.filter((field) => field.field_type !== 'url');
+    const selectFields = state.settingFields.filter((field) => field.field_type === 'select');
+    const unsupportedFields = state.settingFields.filter((field) => !['url', 'select'].includes(field.field_type));
 
     return (
         <Dialog
@@ -116,11 +127,35 @@ export default function ShortVideoAgentVideoSettingsDialog({ state, open, onClos
             <DialogContent dividers>
                 {state.settingFields.length === 0 ? (
                     <Alert severity="info">
-                        Visual type này chưa có setting field nào — thêm block mới vào{' '}
-                        <b>prompts/&lt;visual-type&gt;/setting-field.md</b> là field tự hiện ở đây.
+                        Workflow/visual type này chưa có setting field nào — thêm block mới vào{' '}
+                        <b>prompts/&lt;workflow-or-visual-type&gt;/setting-field.md</b> là field tự hiện ở đây.
                     </Alert>
                 ) : null}
                 <Stack spacing={2} sx={{ pt: state.settingFields.length ? 0.5 : 0 }}>
+                    {selectFields.map((field) => {
+                        const saving = Boolean(state.savingVideoSettingKeys[field.key]);
+                        const options = field.options?.length
+                            ? field.options
+                            : (field.key === 'text-overlay-density' ? TEXT_OVERLAY_DENSITY_OPTIONS : []);
+                        return (
+                            <TextField
+                                key={field.key}
+                                fullWidth
+                                select
+                                size="small"
+                                margin="dense"
+                                label={field.title || field.key}
+                                value={String(drafts[field.key] ?? settingDefaultValue(field))}
+                                onChange={(event) => { handleChange(field.key, event.target.value); }}
+                                onBlur={() => { handleBlur(field.key); }}
+                                helperText={saving ? 'Đang lưu…' : (field.description || (field.key === 'text-overlay-density' ? 'Áp dụng thống nhất cho các beat HTML được tạo hoặc chỉnh sửa tiếp theo.' : 'Tự lưu khi thay đổi'))}
+                            >
+                                {options.map((option) => (
+                                    <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
+                                ))}
+                            </TextField>
+                        );
+                    })}
                     {urlFields.map((field) => {
                         const savedUrl = String(state.videoSettings[field.key] ?? '').trim();
                         const draft = String(drafts[field.key] ?? '');
