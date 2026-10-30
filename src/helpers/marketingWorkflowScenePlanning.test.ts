@@ -41,3 +41,13 @@ test('action planner receives measured durations and all internal shot locations
  expect(result.text).toContain('"additional_environment_ids"');
  expect(result.text).toContain('"flat"');
 });
+
+test('free mode plans and copies without requesting a registry, even if old assets exist', async () => {
+    request.mockRejectedValue(new Error('stale registry unavailable'));
+    const freeContext = {...context, '__prompt-choice': JSON.stringify({'asset-mode': 'free'})};
+    const result = await fetchWorkflowPromptText('video-html', 'create-beat-visual.md', freeContext);
+    expect(result.text).toBe('Design actions for 67');
+    expect((await copyWorkflowPromptToClipboard('video-html', 'create-beat-visual.md', freeContext)).ok).toBe(true);
+    expect(request).not.toHaveBeenCalled();
+    expect(writePromptTextToClipboard).toHaveBeenCalledWith('Design actions for 67');
+});

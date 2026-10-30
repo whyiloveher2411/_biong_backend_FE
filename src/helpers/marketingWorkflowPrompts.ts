@@ -610,6 +610,7 @@ export function replaceWorkflowPromptKeys(
  */
 async function appendSceneAssetContext(workflow: string, file: string, context: WorkflowPromptContext, text: string): Promise<string> {
     if (workflow !== 'video-html' || !file.startsWith('create-beat-visual')) return text;
+    if (parseWorkflowPromptChoiceValues(context['__prompt-choice'] || '')['asset-mode'] === 'free') return text;
     const id = Number(context['SHORT-VIDEO-ID'] || 0);
     if (!id) throw new Error('Thiếu short video để tải hồ sơ Three.js.');
     const res = await sceneAssetsRequest(id, 'get');

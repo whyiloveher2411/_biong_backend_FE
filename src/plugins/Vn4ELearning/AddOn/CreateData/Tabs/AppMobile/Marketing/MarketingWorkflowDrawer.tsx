@@ -955,10 +955,10 @@ export default function MarketingWorkflowDrawer({
             .flatMap((step, index) => {
                 const keys: string[] = [];
                 if (step.prompts.some((p) => Boolean(p.deepseekSession))) {
-                    keys.push(`${workflow.key}#${workflow.key === 'video-html-2d' ? 'handoff-v2-' : ''}${index}`);
+                    keys.push(`${workflow.key}#${workflow.key === 'video-html-2d' ? 'handoff-v2-' : (workflow.key === 'video-html' && effectiveChoiceValues['asset-mode'] === 'free' ? 'free-' : '')}${index}`);
                 }
                 if (ENABLE_CHATGPT_SESSION && step.prompts.some((p) => Boolean(p.chatgptSession))) {
-                    keys.push(`${workflow.key}#${workflow.key === 'video-html-2d' ? 'handoff-v2-' : ''}${index}::chatgpt`);
+                    keys.push(`${workflow.key}#${workflow.key === 'video-html-2d' ? 'handoff-v2-' : (workflow.key === 'video-html' && effectiveChoiceValues['asset-mode'] === 'free' ? 'free-' : '')}${index}::chatgpt`);
                 }
                 return keys;
             });
@@ -1021,7 +1021,7 @@ export default function MarketingWorkflowDrawer({
             }
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [open, workflow?.key, shortVideoId, refreshDeepseekSession]);
+    }, [open, workflow?.key, shortVideoId, refreshDeepseekSession, effectiveChoiceValues['asset-mode']]);
 
     /**
      * Đồng bộ REALTIME: khi user thao tác trên browser DeepSeek (lưu beat / dịch / audio gốc / URL chat),
@@ -1409,6 +1409,27 @@ export default function MarketingWorkflowDrawer({
                         </Box>
                     )}
 
+                    {workflow.key === 'video-html' && (
+                        <Box sx={{mb: 1.5}}>
+                            <Typography variant="subtitle2" sx={{mb: 0.75}}>Chế độ asset</Typography>
+                            <Stack direction="row" spacing={1}>
+                                {([{value: 'shared', label: 'Quản lý asset chung'}, {value: 'free', label: 'Asset tự do'}]).map((mode) => (
+                                    <Button key={mode.value} size="small"
+                                        variant={(effectiveChoiceValues['asset-mode'] || 'shared') === mode.value ? 'contained' : 'outlined'}
+                                        disabled={Boolean(savingChoice)}
+                                        onClick={() => { void handleSelectChoice('asset-mode', mode.value); }}>
+                                        {mode.label}
+                                    </Button>
+                                ))}
+                            </Stack>
+                            <Typography variant="caption" sx={{display: 'block', mt: 0.75, color: 'text.secondary'}}>
+                                {effectiveChoiceValues['asset-mode'] === 'free'
+                                    ? 'HTML beat tự thiết kế nhân vật, bối cảnh và đạo cụ; dùng prompt tự do với vật liệu chi tiết, màu đậm và bão hòa như trước. Hãy tạo lại visual/HTML để áp dụng chế độ mới.'
+                                    : 'Dùng hồ sơ nhân vật, bối cảnh và asset chung xuyên suốt clip.'}
+                            </Typography>
+                        </Box>
+                    )}
+
                     {workflow.documentFile ? (
                         <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1.5 }}>
                             <Tooltip
@@ -1508,6 +1529,7 @@ export default function MarketingWorkflowDrawer({
 
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
                         {workflow.steps.map((step, index) => {
+                            if (workflow.key === 'video-html' && effectiveChoiceValues['asset-mode'] === 'free' && index === 1) return null;
                             const { number, label } = splitWorkflowStepTitle(step.title, index + 1);
                             const stepKey = String(index);
                             const isCopying = copyingStep === stepKey;
@@ -1562,14 +1584,16 @@ export default function MarketingWorkflowDrawer({
 
                                     <Box sx={{ flex: 1, minWidth: 0 }}>
                                         <Typography sx={{ fontWeight: 600, fontSize: 14 }}>
-                                            {label || step.title}
+                                            {workflow.key === 'video-html' && effectiveChoiceValues['asset-mode'] === 'free' && index === 3 ? 'Thiết kế hình ảnh và hành động từng beat tự do' : (label || step.title)}
                                         </Typography>
                                         {workflow.key === 'video-html' && index === 0 && Number(shortVideoId) > 0 && <ShortVideoAgentSaydiCastSettings shortVideoId={Number(shortVideoId)} revision={String(audioScript || '')} />}
                                         {workflow.key === 'video-html' && index === 1 && Number(shortVideoId) > 0 && <SceneAssetsPanel shortVideoId={Number(shortVideoId)}/>}
 
                                         {step.description.length > 0 && (
                                             <Box component="ul" sx={{ m: 0, mt: 0.75, p: 0, listStyle: 'none' }}>
-                                                {step.description.map((item, itemIndex) => (
+                                                {(workflow.key === 'video-html' && effectiveChoiceValues['asset-mode'] === 'free' && index === 3
+                                                    ? ['Tự do thiết kế bối cảnh, nhân vật, đạo cụ, camera và hành động theo lời kể; không cần gán hồ sơ asset. Giữ vật liệu có chi tiết, sắc tố đậm, màu bão hòa và tương phản rõ.']
+                                                    : step.description).map((item, itemIndex) => (
                                                     <Box
                                                         component="li"
                                                         key={itemIndex}
@@ -1773,7 +1797,7 @@ export default function MarketingWorkflowDrawer({
                                                             onClick={() => handleCopy(itemKey, choiceInfo.file)}
                                                             sx={{ textTransform: 'none' }}
                                                         >
-                                                            {itemCopied ? 'Đã copy' : promptItem.label}
+                                                            {itemCopied ? 'Đã copy' : (workflow.key === 'video-html' && effectiveChoiceValues['asset-mode'] === 'free' && promptItem.file === 'create-beat-visual.md' ? 'Thiết kế visual tự do từng beat' : promptItem.label)}
                                                         </Button>
                                                     );
 
@@ -1938,7 +1962,7 @@ export default function MarketingWorkflowDrawer({
                                         {chatSessionProviders.map(({ provider, label, keySuffix, prompts: providerPrompts }) => {
                                             // Khớp ĐÚNG vai trò — không fallback sang prompt khác
                                             // (tránh gửi nhầm prompt beat/translate thành generate).
-                                            const sessionKey = `${workflow.key}#${workflow.key === 'video-html-2d' ? 'handoff-v2-' : ''}${index}${keySuffix}`;
+                                            const sessionKey = `${workflow.key}#${workflow.key === 'video-html-2d' ? 'handoff-v2-' : (workflow.key === 'video-html' && effectiveChoiceValues['asset-mode'] === 'free' ? 'free-' : '')}${index}${keySuffix}`;
                                             const dsState = deepseekStates[sessionKey] || EMPTY_DEEPSEEK_STATE;
                                             const findPrompt = (role: '' | 'generate' | 'beat' | 'translate') => (
                                                 providerPrompts.find((p) => (
