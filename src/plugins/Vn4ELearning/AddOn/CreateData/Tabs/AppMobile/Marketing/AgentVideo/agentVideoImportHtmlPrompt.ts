@@ -131,6 +131,7 @@ export type ImportHtmlContextPayload = {
     workflow_active?: string;
     beat_html_prompt_workflow?: string;
     beat_html_prompt_file?: string;
+    asset_mode?: 'shared' | 'free';
     beat_map?: {
         totalVideoSec?: number;
         sections?: BeatMapSection[];
@@ -301,19 +302,21 @@ const importHtmlBeatHtmlTemplateCache = new Map<string, string>();
 export async function loadImportHtmlBeatHtmlTemplate(
     workflow = DEFAULT_IMPORT_HTML_BEAT_WORKFLOW,
     file = DEFAULT_IMPORT_HTML_BEAT_FILE,
+    shortVideoId?: number,
 ): Promise<string> {
     const wf = String(workflow || '').trim() || DEFAULT_IMPORT_HTML_BEAT_WORKFLOW;
     const fn = String(file || '').trim() || DEFAULT_IMPORT_HTML_BEAT_FILE;
     const cacheKey = `${wf}/${fn}`;
-    const cached = importHtmlBeatHtmlTemplateCache.get(cacheKey);
+    // Video-bound prompts contain the saved asset mode/style; never reuse a stale mode.
+    const cached = shortVideoId ? undefined : importHtmlBeatHtmlTemplateCache.get(cacheKey);
     if (cached !== undefined) {
         return cached;
     }
-    const res = await fetchWorkflowPromptContent(wf, fn);
+    const res = await fetchWorkflowPromptContent(wf, fn, shortVideoId);
     if (!res.ok || !String(res.content || '').trim()) {
         throw new Error(res.message || `Không tải được template prompt HTML beat (${cacheKey})`);
     }
-    importHtmlBeatHtmlTemplateCache.set(cacheKey, res.content);
+    if (!shortVideoId) importHtmlBeatHtmlTemplateCache.set(cacheKey, res.content);
     return res.content;
 }
 
@@ -700,10 +703,10 @@ export async function buildBeatHtmlPrompt(
         : filterWhisperForBeat(context.whisper_words || [], beat.startSec, beat.endSec);
     const beatWhisperOffsetSec = perBeatWhisperForPrompt.length > 0 ? 0 : Number(beat.startSec || 0);
     const beatWhisperPrompt = formatWhisperWordsForPrompt(beatWhisper, { timeOffsetSec: beatWhisperOffsetSec });
-    // Pacing: chỉ mốc thời gian (không đưa text Whisper — dễ sai chính tả).
+    // Local timing + word align scene actions with narration; they are not caption copy.
     const beatWhisperTimingPrompt = beatWhisper.length > 0
         ? beatWhisper
-            .map((word) => `${Math.max(0, word.start - beatWhisperOffsetSec).toFixed(1)}–${Math.max(0, word.end - beatWhisperOffsetSec).toFixed(1)}`)
+            .map((word) => `${Math.max(0, word.start - beatWhisperOffsetSec).toFixed(1)}–${Math.max(0, word.end - beatWhisperOffsetSec).toFixed(1)} | ${String(word.text || '').trim()}`)
             .join('\n')
         : '';
     const clipTotal = formatDurationSec(Number(context.audio_file_duration_sec || 0));
@@ -757,6 +760,7 @@ export async function buildBeatHtmlPrompt(
                 || String(context.workflow_active || '').trim()
                 || DEFAULT_IMPORT_HTML_BEAT_WORKFLOW,
             String(context.beat_html_prompt_file || '').trim() || DEFAULT_IMPORT_HTML_BEAT_FILE,
+            context.short_video_id,
         );
         const area = clipSpec.content_area;
         const canvasWidth = Number(clipSpec.width || 1080);
@@ -771,7 +775,9 @@ export async function buildBeatHtmlPrompt(
             CANVAS_HEIGHT: String(canvasHeight),
             VISUAL_STYLE: visualStyle,
             VISUAL_STYLE_SOURCE: String(context.visual_style || '').trim() ? 'clip' : 'default',
-            RESOLVED_ART_DIRECTION: resolveImportHtmlArtDirection(resolvedStyle),
+            RESOLVED_ART_DIRECTION: context.asset_mode === 'free'
+                ? 'Apply the complete IMAGE-STYLE: a vivid cinematic stylised 3D world, continuous populated depth, tactile procedural PBR materials, expressive characters and cinematic camera travel.'
+                : resolveImportHtmlArtDirection(resolvedStyle),
             VISUAL_DESCRIPTION: visualDescription,
             BACKGROUND: background,
             VFX_LEVEL: vfxLevel,
@@ -799,7 +805,9 @@ export async function buildBeatHtmlPrompt(
         if (filled) {
             return filled;
         }
-    } catch {
+    } catch (error) {
+        // Free mode requires the complete video-bound style; never silently degrade it.
+        if (context.asset_mode === 'free') throw error;
         // im lặng — dùng assembly legacy bên dưới.
     }
 
@@ -889,3 +897,13 @@ export async function buildBeatHtmlPrompt(
 }
 
 export { parseMessage as parseImportHtmlContextMessage };
+
+/** The skill handshake and generation task must be sent as separate chat turns. */
+export function beatHtmlPromptCopyPart(prompt: string, part: 'task' | 'prepare' = 'task'): string {
+    if (!prompt.startsWith('THREEJS_SKILL_CONTEXT r186')) return part === 'task' ? prompt : '';
+    const delimiter = 'Wait for the next user message containing the task.\n\n';
+    const offset = prompt.indexOf(delimiter);
+    if (offset < 0) throw new Error('Prompt Three.js thiếu ranh giới giữa nạp skill và sinh HTML.');
+    const splitAt = offset + delimiter.length;
+    return (part === 'prepare' ? prompt.slice(0, splitAt) : prompt.slice(splitAt)).trim();
+}

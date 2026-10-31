@@ -1,6 +1,7 @@
 import SceneAssetBeatSummary from './SceneAssetBeatSummary';
 import React from 'react';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import CodeIcon from '@mui/icons-material/Code';
 import SaveIcon from '@mui/icons-material/Save';
 import {
@@ -38,6 +39,9 @@ type Props = {
         visualDescription: string;
         background: string;
     }) => Promise<boolean>;
+    onCopyPrompt?: () => Promise<void> | void;
+    onCopySkillPrompt?: () => Promise<void> | void;
+    copyingPrompt?: boolean;
     onAiRefine: (payload: { prompt: string; html: string }) => Promise<string | null>;
 };
 
@@ -56,6 +60,9 @@ export default function ShortVideoAgentBeatHtmlEditDrawer({
     refining = false,
     onSave,
     onAiRefine,
+    onCopyPrompt,
+    onCopySkillPrompt,
+    copyingPrompt = false,
 }: Props) {
     const { showMessage } = useFloatingMessages();
     const [draftHtml, setDraftHtml] = React.useState(initialHtml);
@@ -156,7 +163,7 @@ export default function ShortVideoAgentBeatHtmlEditDrawer({
                     display: 'flex',
                     flexDirection: 'column',
                     minHeight: 0,
-                    overflow: 'hidden',
+                    overflowY: 'auto',
                     pb: 1,
                 },
             }}
@@ -173,11 +180,60 @@ export default function ShortVideoAgentBeatHtmlEditDrawer({
                 </LoadingButton>
             )}
         >
-            <Stack spacing={1.5} sx={{ height: '100%', minHeight: 0 }}>
-                {open && sceneAssetsVideoId > 0 && <SceneAssetBeatSummary shortVideoId={sceneAssetsVideoId} beatId={beatId}/>}
+            <Stack spacing={1.5} sx={{ minHeight: '100%', pb: 1, '& > *': { flexShrink: 0 } }}>
+
                 <Alert severity="info" sx={{ py: 0.5, flexShrink: 0 }}>
-                    Nhập prompt sáng tạo → AI refine (Gemini Headless) đổ vào draft. Bấm Lưu mới ghi HTML lên CMS.
+                    Dán hoặc sửa code trong ô HTML beat bên dưới, rồi bấm “Lưu HTML beat”. Bạn cũng có thể dùng prompt refine ở phía dưới.
                 </Alert>
+
+                {onCopyPrompt && (
+                    <Box>
+                        <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+                            {onCopySkillPrompt && (
+                                <LoadingButton size="small" variant="outlined" loading={copyingPrompt}
+                                    disabled={busy || copyingPrompt} startIcon={<ContentCopyIcon/>}
+                                    onClick={() => { void onCopySkillPrompt(); }}>
+                                    Copy prompt nạp skill
+                                </LoadingButton>
+                            )}
+                            <LoadingButton size="small" variant="contained" loading={copyingPrompt}
+                                disabled={busy || copyingPrompt} startIcon={<ContentCopyIcon/>}
+                                onClick={() => { void onCopyPrompt(); }}>
+                                Copy prompt sinh HTML beat
+                            </LoadingButton>
+                        </Stack>
+                        <Typography variant="caption" color="text.secondary" sx={{display: 'block', mt: 0.75}}>
+                            {onCopySkillPrompt
+                                ? 'Gửi prompt nạp skill trước, chờ AI xác nhận rồi gửi prompt sinh HTML trong cùng chat. Dán HTML trả về vào ô bên dưới để lưu.'
+                                : 'Dán prompt vào AI, sau đó dán HTML trả về vào ô bên dưới để lưu.'}
+                        </Typography>
+                    </Box>
+                )}
+
+                <TextField
+                    label="HTML beat — nhập / sửa code thủ công"
+                    value={draftHtml}
+                    onChange={(event) => setDraftHtml(event.target.value)}
+                    multiline
+                    fullWidth
+                    minRows={12}
+                    maxRows={24}
+                    size="small"
+                    disabled={busy}
+                    placeholder="<!doctype html>…</html>"
+                    helperText="Dán toàn bộ tài liệu HTML của beat, sau đó bấm Lưu HTML beat để cập nhật."
+                    inputProps={{ spellCheck: false }}
+                    InputProps={{
+                        sx: {
+                            alignItems: 'flex-start',
+                            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                            fontSize: 12,
+                            lineHeight: 1.45,
+                        },
+                    }}
+                />
+
+                {open && sceneAssetsVideoId > 0 && <SceneAssetBeatSummary shortVideoId={sceneAssetsVideoId} beatId={beatId}/>}
 
                 <TextField
                     label="Visual description"
@@ -267,38 +323,7 @@ export default function ShortVideoAgentBeatHtmlEditDrawer({
                     )}
                 </Stack>
 
-                <TextField
-                    label="HTML beat"
-                    value={draftHtml}
-                    onChange={(event) => setDraftHtml(event.target.value)}
-                    multiline
-                    fullWidth
-                    minRows={16}
-                    maxRows={26}
-                    size="small"
-                    disabled={busy}
-                    placeholder="<div class=&quot;clip&quot; data-start=&quot;0&quot; data-duration=&quot;…&quot;>…</div>"
-                    InputProps={{
-                        sx: {
-                            alignItems: 'flex-start',
-                            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-                            fontSize: 12,
-                            lineHeight: 1.45,
-                        },
-                    }}
-                    sx={{
-                        flex: 1,
-                        minHeight: 0,
-                        '& .MuiInputBase-root': {
-                            height: '100%',
-                            alignItems: 'stretch',
-                        },
-                        '& textarea': {
-                            height: '100% !important',
-                            overflow: 'auto !important',
-                        },
-                    }}
-                />
+
             </Stack>
         </DrawerCustom>
     );

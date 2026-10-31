@@ -1226,6 +1226,10 @@ export default function ShortVideoAgentVideoWorkspace({
                 refining={state.refiningBeatHtmlBeatId === editBeatHtmlId}
                 onSave={handleSaveEditBeatHtml}
                 onAiRefine={handleAiRefineEditBeatHtml}
+                onCopyPrompt={() => state.handleCopyBeatHtmlPrompt(editBeatHtmlId)}
+                onCopySkillPrompt={state.workflowActive === 'video-html'
+                    ? () => state.handleCopyBeatHtmlPrompt(editBeatHtmlId, 'prepare') : undefined}
+                copyingPrompt={state.copyingBeatHtmlPromptBeatId === editBeatHtmlId}
             />
             <ShortVideoAgentBeatImageEditDrawer
                 sceneAssetsVideoId={state.workflowActive === 'video-html' ? shortVideoId : 0}

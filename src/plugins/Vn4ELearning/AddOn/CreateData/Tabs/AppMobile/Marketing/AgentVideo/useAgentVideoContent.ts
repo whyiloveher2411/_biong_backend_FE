@@ -305,6 +305,7 @@ import { formatDurationSec } from './agentVideoHfPromptDuration';
 import { beatImageAspectSuffix, beatImageStyleSuffix, imageTextLangSuffixRule, resolveBeatVoiceContent } from './agentVideoBeatDivisionWhiteboard';
 import {
     buildBeatHtmlPrompt,
+    beatHtmlPromptCopyPart,
     parseImportHtmlContextMessage,
     type ImportHtmlContextPayload,
 } from './agentVideoImportHtmlPrompt';
@@ -5633,7 +5634,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }
     };
 
-    const handleCopyBeatHtmlPrompt = async (beatId: string) => {
+    const handleCopyBeatHtmlPrompt = async (beatId: string, part: 'task' | 'prepare' = 'task') => {
         // Video 2s: beat nằm ở manual_beat_marks, `beat_map` trong DB rỗng/không "ready"
         // toàn cục — KHÔNG gate theo beatMapReady/beatMap nữa (trước đây báo sai
         // "Cần beat-map hợp lệ trước" dù beat đã đủ prompt). Luôn resolve beat từ beat_map
@@ -5694,8 +5695,13 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 );
             }
 
-            await copyTextToClipboard(beatPrompt.trim());
-            showMessage(`Đã copy prompt HTML ${beatId} + prompt ảnh beat`, 'success');
+            const copyPart = beatHtmlPromptCopyPart(beatPrompt.trim(), part);
+            if (!copyPart) {
+                showMessage('Workflow này không có prompt nạp Three.js skill riêng', 'info');
+                return;
+            }
+            await copyTextToClipboard(copyPart);
+            showMessage(part === 'prepare' ? `Đã copy prompt nạp skill cho ${beatId}` : `Đã copy prompt sinh HTML ${beatId}`, 'success');
         } catch (e) {
             showMessage(e instanceof Error ? e.message : String(e), 'error');
         } finally {
