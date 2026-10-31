@@ -5661,3 +5661,15 @@ export async function saydiVoiceCastRequest(shortVideoId: number, config?: Saydi
 export async function saveSaydiVoiceManifest(shortVideoId: number, manifest: string): Promise<JsonResponse & { config?: SaydiVoiceCast; manifest_ready?: boolean }> {
     return postJson('plugin/vn4-e-learning/app-mobile/marketing/short-video/saydi-voice-cast', shortVideoBody(shortVideoId, { operation: 'save_manifest', manifest }));
 }
+
+/** Exactly one server-built generation prompt; DeepThink enabled, result validated and saved. */
+export async function generateBeatHtmlViaDeepseekApi(shortVideoId: number, beatId: string): Promise<JsonResponse & {html?: string; updated_at?: string}> {
+    return postJson('plugin/vn4-e-learning/app-mobile/marketing/short-video/import-html-workflow/generate-beat-html-via-deepseek-api',
+        shortVideoBody(shortVideoId, {beat_id: beatId}));
+}
+
+/** Open visible Claude and automatically save beat HTML, then sound suggestions. */
+export async function openClaudeHtmlBeatSession(shortVideoId: number, beatId: string): Promise<DeepseekHtmlBeatSessionResponse> {
+    return postJson('plugin/vn4-e-learning/app-mobile/marketing/short-video/claude-html-beat-open',
+        shortVideoBody(shortVideoId, { beat_id: beatId })) as Promise<DeepseekHtmlBeatSessionResponse>;
+}

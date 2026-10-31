@@ -39,6 +39,7 @@ type Props = {
         visualDescription: string;
         background: string;
     }) => Promise<boolean>;
+    onGenerateDeepseekApi?: () => Promise<string | null>;
     onCopyPrompt?: () => Promise<void> | void;
     onCopySkillPrompt?: () => Promise<void> | void;
     copyingPrompt?: boolean;
@@ -60,6 +61,7 @@ export default function ShortVideoAgentBeatHtmlEditDrawer({
     refining = false,
     onSave,
     onAiRefine,
+    onGenerateDeepseekApi,
     onCopyPrompt,
     onCopySkillPrompt,
     copyingPrompt = false,
@@ -114,6 +116,19 @@ export default function ShortVideoAgentBeatHtmlEditDrawer({
         });
         if (saved) {
             onClose();
+        }
+    };
+
+    const handleGenerateDeepseekApi = async () => {
+        if (!onGenerateDeepseekApi || busy) return;
+        setAiLoading(true);
+        try {
+            const html = await onGenerateDeepseekApi();
+            if (html !== null) setDraftHtml(html);
+        } catch (error) {
+            showMessage(error instanceof Error ? error.message : String(error), 'error');
+        } finally {
+            setAiLoading(false);
         }
     };
 
@@ -206,6 +221,19 @@ export default function ShortVideoAgentBeatHtmlEditDrawer({
                             {onCopySkillPrompt
                                 ? 'Gửi prompt nạp skill trước, chờ AI xác nhận rồi gửi prompt sinh HTML trong cùng chat. Dán HTML trả về vào ô bên dưới để lưu.'
                                 : 'Dán prompt vào AI, sau đó dán HTML trả về vào ô bên dưới để lưu.'}
+                        </Typography>
+                    </Box>
+                )}
+
+                {onGenerateDeepseekApi && (
+                    <Box>
+                        <LoadingButton size="small" variant="contained" loading={aiLoading}
+                            disabled={busy || copyingPrompt} startIcon={<AutoAwesomeIcon />}
+                            onClick={() => { void handleGenerateDeepseekApi(); }}>
+                            Sinh và lưu HTML · DeepSeek API (DeepThink)
+                        </LoadingButton>
+                        <Typography variant="caption" color="text.secondary" sx={{display: 'block', mt: 0.75}}>
+                            Gửi 1 prompt sinh HTML của beat đã lưu trên CMS. Tự cập nhật HTML sau khi kiểm tra thành công.
                         </Typography>
                     </Box>
                 )}

@@ -87,8 +87,8 @@ export default function WhiteboardBeatHtmlChatControl({ state, beatId, inline = 
                     <Tooltip
                         placement="top"
                         title={chatUrl
-                            ? 'Mở lại chat DeepSeek đã tạo HTML motion của beat bằng headless browser + cookie đã lưu'
-                            : 'Chưa lưu chat DeepSeek — nút DS trên preview sẽ kiểm tra thư viện, tự tạo clip còn thiếu rồi sinh HTML beat'}
+                            ? 'Mở lại chatbot đã tạo HTML motion của beat bằng đúng cookie đã lưu'
+                            : 'Chưa lưu chat — dùng nút DS hoặc Claude trên preview để tạo HTML beat'}
                     >
                         <span>
                             <Button
@@ -110,7 +110,7 @@ export default function WhiteboardBeatHtmlChatControl({ state, beatId, inline = 
                                     state.handleOpenBeatDeepSeekSavedChat(beatId);
                                 }}
                             >
-                                Mở chat DeepSeek
+                                Mở chatbot
                             </Button>
                         </span>
                     </Tooltip>

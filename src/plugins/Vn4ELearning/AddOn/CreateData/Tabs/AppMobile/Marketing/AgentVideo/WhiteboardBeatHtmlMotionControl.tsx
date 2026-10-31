@@ -22,6 +22,8 @@ type Props = {
     /** Queue DeepSeek HTML beat with automatic library-clip preflight. */
     onOpenDeepSeek?: () => Promise<void> | void;
     openingDeepSeek?: boolean;
+    onOpenClaude?: () => Promise<void> | void;
+    openingClaude?: boolean;
     /** Hide the per-beat toggle when HTML is the workflow-wide render source. */
     hideSelection?: boolean;
 };
@@ -40,6 +42,8 @@ export default function WhiteboardBeatHtmlMotionControl({
     onSelectChange,
     onOpenDeepSeek,
     openingDeepSeek = false,
+    onOpenClaude,
+    openingClaude = false,
     hideSelection = false,
 }: Props) {
     const busy = Boolean(saving);
@@ -159,7 +163,7 @@ export default function WhiteboardBeatHtmlMotionControl({
                         sx={{
                             position: 'absolute',
                             bottom: -8,
-                            left: '50%',
+                            left: onOpenClaude ? '23%' : '50%',
                             transform: 'translateX(-50%)',
                             zIndex: 2,
                             width: 26,
@@ -191,6 +195,20 @@ export default function WhiteboardBeatHtmlMotionControl({
                                 DS
                             </Typography>
                         )}
+                    </Box>
+                </Tooltip>
+            ) : null}
+
+            {onOpenClaude ? (
+                <Tooltip title="Claude Sonnet 5.5 Medium: tự tạo HTML và gợi ý âm thanh">
+                    <Box component="button" type="button" aria-label="Tạo HTML beat bằng Claude"
+                        disabled={busy || disabled || openingClaude}
+                        onClick={(event: React.MouseEvent<HTMLButtonElement>) => { event.stopPropagation(); void onOpenClaude(); }}
+                        sx={{ position: 'absolute', bottom: -8, right: -6, zIndex: 2,
+                            height: 17, px: 0.5, borderRadius: 1, border: '1px solid rgba(255,255,255,0.35)',
+                            bgcolor: '#a45438', color: 'white', fontSize: 8, cursor: 'pointer',
+                            '&:disabled': { opacity: 0.5, cursor: 'wait' } }}>
+                        {openingClaude ? <CircularProgress size={10} color="inherit" /> : 'Claude'}
                     </Box>
                 </Tooltip>
             ) : null}

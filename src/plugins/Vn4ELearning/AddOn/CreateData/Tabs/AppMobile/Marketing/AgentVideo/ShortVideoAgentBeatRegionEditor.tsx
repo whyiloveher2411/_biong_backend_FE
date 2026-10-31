@@ -1438,7 +1438,7 @@ export default function ShortVideoAgentBeatRegionEditor({
             beatStartSec: start,
             beatDurationSec: durationSec,
         };
-    }, [activeSegmentIndex, beatId, state.isVideo2sMode, state.manualBeatMarks, beatMapForUi?.sections]);
+    }, [activeSegmentIndex, beatId, beatAudioItem, state.isVideo2sMode, state.manualBeatMarks, beatMapForUi?.sections]);
 
     /**
      * Audio từng beat — beat đã có MP3 riêng (ready) → thanh audio play CHÍNH MP3
@@ -4604,6 +4604,8 @@ export default function ShortVideoAgentBeatRegionEditor({
                                         saving={state.savingImportHtml}
                                         onOpenEditor={() => onEditHtml(beatId)}
                                         onSelectChange={() => true}
+                                        onOpenClaude={() => state.handleOpenBeatClaudeChat(beatId)}
+                                        openingClaude={state.openingBeatClaudeIds.includes(beatId)}
                                         onOpenDeepSeek={() => state.handleGenerateBeatHtmlWithClipPreflight(beatId)}
                                         openingDeepSeek={state.openingBeatDeepSeekChatBeatIds.includes(beatId)}
                                     />
@@ -4816,6 +4818,8 @@ export default function ShortVideoAgentBeatRegionEditor({
                                 onSelectChange={(next) => {
                                     void state.handleSetBeatMediaSource(beatId, next ? 'html' : 'image');
                                 }}
+                                onOpenClaude={() => state.handleOpenBeatClaudeChat(beatId)}
+                                openingClaude={state.openingBeatClaudeIds.includes(beatId)}
                                 onOpenDeepSeek={() => state.handleGenerateBeatHtmlWithClipPreflight(beatId)}
                                 openingDeepSeek={state.openingBeatDeepSeekChatBeatIds.includes(beatId)}
                             />

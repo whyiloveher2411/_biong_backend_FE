@@ -444,8 +444,8 @@ export default function WhiteboardRegionTimeline({
         if (!audio || audio.paused) return;
         const t = Math.max(beatStartSec, Math.min(beatStartSec + duration, audio.currentTime));
         const local = t - beatStartSec;
-        setPlayhead(local);
-        emitPlayhead(local, true, 'user');
+        // Never publish the exclusive end of this beat: the global timeline
+        // would select the next beat before the stopped/inset update arrives.
         if (t >= beatStartSec + duration - 0.02) {
             const stoppedAt = stoppedPlayheadSec(t, { beatStartSec, duration });
             audio.pause();
@@ -454,6 +454,8 @@ export default function WhiteboardRegionTimeline({
             emitPlayhead(stoppedAt, false, 'user');
             return;
         }
+        setPlayhead(local);
+        emitPlayhead(local, true, 'user');
         rafRef.current = requestAnimationFrame(updatePlayhead);
     };
 
@@ -470,14 +472,13 @@ export default function WhiteboardRegionTimeline({
             return;
         }
         const cur = audio.currentTime;
-        if (cur < beatStartSec - 0.05 || cur > beatStartSec + duration + 0.05) {
+        if (cur < beatStartSec || cur >= beatStartSec + duration - 0.02) {
             audio.currentTime = beatStartSec;
         }
         void audio.play().then(() => {
             setPlaying(true);
-            emitPlayhead(Math.max(0, audio.currentTime - beatStartSec), true, 'user');
             if (rafRef.current) cancelAnimationFrame(rafRef.current);
-            rafRef.current = requestAnimationFrame(updatePlayhead);
+            updatePlayhead();
         }).catch(() => setPlaying(false));
     };
 

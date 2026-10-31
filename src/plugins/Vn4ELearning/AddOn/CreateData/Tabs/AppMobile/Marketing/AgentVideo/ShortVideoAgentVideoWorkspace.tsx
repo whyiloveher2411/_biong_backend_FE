@@ -1226,6 +1226,8 @@ export default function ShortVideoAgentVideoWorkspace({
                 refining={state.refiningBeatHtmlBeatId === editBeatHtmlId}
                 onSave={handleSaveEditBeatHtml}
                 onAiRefine={handleAiRefineEditBeatHtml}
+                onGenerateDeepseekApi={state.workflowActive === 'video-html'
+                    ? () => state.handleGenerateBeatHtmlViaDeepseekApi(editBeatHtmlId) : undefined}
                 onCopyPrompt={() => state.handleCopyBeatHtmlPrompt(editBeatHtmlId)}
                 onCopySkillPrompt={state.workflowActive === 'video-html'
                     ? () => state.handleCopyBeatHtmlPrompt(editBeatHtmlId, 'prepare') : undefined}

@@ -55,6 +55,7 @@ import {
     splitWorkflowBeatBlocks,
     splitWorkflowBeats,
     splitWorkflowStepTitle,
+    workflowSessionStepId,
     WORKFLOW_AUDIO_SCRIPT_BEATS_KEY,
     WORKFLOW_AUDIO_SCRIPT_KEY,
     WORKFLOW_INPUT_PROMPT_KEY,
@@ -613,10 +614,10 @@ export default function MarketingWorkflowDrawer({
             });
         });
         // Audio gốc đã lưu (chưa chia beat) → thay [PASTE ORIGINAL AUDIO HERE] trong prompt.
-        // Ưu tiên bucket của workflow hiện tại; fallback tìm ở mọi workflow (audio có thể
-        // được lưu từ phiên trước khi workflow_key được truyền).
+        // Video 3D chỉ dùng audio gốc của chính workflow. Các workflow cũ vẫn
+        // fallback mọi bucket cho audio lưu trước khi có workflow_key.
         let originalAudio = String(currentBucket['deepseek_original_audio'] || '').trim();
-        if (!originalAudio) {
+        if (!originalAudio && workflow?.key !== 'video-html') {
             Object.values(allOutputs).forEach((bucket) => {
                 if (originalAudio) {
                     return;
@@ -955,10 +956,10 @@ export default function MarketingWorkflowDrawer({
             .flatMap((step, index) => {
                 const keys: string[] = [];
                 if (step.prompts.some((p) => Boolean(p.deepseekSession))) {
-                    keys.push(`${workflow.key}#${workflow.key === 'video-html-2d' ? 'handoff-v2-' : (workflow.key === 'video-html' && effectiveChoiceValues['asset-mode'] === 'free' ? 'free-' : '')}${index}`);
+                    keys.push(`${workflow.key}#${workflow.key === 'video-html-2d' ? 'handoff-v2-' : (workflow.key === 'video-html' && effectiveChoiceValues['asset-mode'] === 'free' ? 'free-' : '')}${workflowSessionStepId(workflow.key, index)}`);
                 }
                 if (ENABLE_CHATGPT_SESSION && step.prompts.some((p) => Boolean(p.chatgptSession))) {
-                    keys.push(`${workflow.key}#${workflow.key === 'video-html-2d' ? 'handoff-v2-' : (workflow.key === 'video-html' && effectiveChoiceValues['asset-mode'] === 'free' ? 'free-' : '')}${index}::chatgpt`);
+                    keys.push(`${workflow.key}#${workflow.key === 'video-html-2d' ? 'handoff-v2-' : (workflow.key === 'video-html' && effectiveChoiceValues['asset-mode'] === 'free' ? 'free-' : '')}${workflowSessionStepId(workflow.key, index)}::chatgpt`);
                 }
                 return keys;
             });
@@ -1099,8 +1100,8 @@ export default function MarketingWorkflowDrawer({
             api.showMessage('Thiếu short video — không mở được ' + providerLabel, 'warning');
             return;
         }
-        if (!resume && !prompts.generate) {
-            api.showMessage('Thiếu file prompt generate (gắn deepseekSession/chatgptSession: true cho prompt mở phiên)', 'error');
+        if (!resume && !prompts.generate && !prompts.beat) {
+            api.showMessage('Thiếu prompt mở phiên (generate hoặc chia beat)', 'error');
             return;
         }
 
@@ -1118,6 +1119,10 @@ export default function MarketingWorkflowDrawer({
                 if (prompts.generate === 'update-whatif-story.md' && !String(freshContext[WORKFLOW_AUDIO_SCRIPT_KEY] || '').trim()) {
                     throw new Error('Chưa lưu kịch bản. Hoàn thành và lưu JSON ở Bước 2 trước.');
                 }
+            }
+            if (!resume && workflow.key === 'video-html' && prompts.beat && !prompts.generate
+                && !String(freshContext['PASTE ORIGINAL AUDIO HERE'] || '').trim()) {
+                throw new Error('Chưa lưu audio gốc. Lưu kịch bản đã duyệt ở Bước 1 trước khi chia beat; không cần sinh lại kịch bản.');
             }
             [prompts.generate, prompts.beat, prompts.translate].forEach((file) => { if (file) assertWorkflowSfxPromptContext(file, freshContext); });
             const load = (file?: string) => (
@@ -1137,7 +1142,8 @@ export default function MarketingWorkflowDrawer({
             }
             const res = await openDeepseekVideoImageSession({
                 shortVideoId: sid,
-                promptGenerate: g.text,
+                // A beat-only step starts with its own division prompt, retaining the retry/save beat controls.
+                promptGenerate: prompts.generate ? g.text : b.text,
                 promptBeat: b.text,
                 promptTranslate: t.text,
                 resume,
@@ -1529,7 +1535,7 @@ export default function MarketingWorkflowDrawer({
 
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
                         {workflow.steps.map((step, index) => {
-                            if (workflow.key === 'video-html' && effectiveChoiceValues['asset-mode'] === 'free' && index === 1) return null;
+                            if (workflow.key === 'video-html' && effectiveChoiceValues['asset-mode'] === 'free' && index === 2) return null;
                             const { number, label } = splitWorkflowStepTitle(step.title, index + 1);
                             const stepKey = String(index);
                             const isCopying = copyingStep === stepKey;
@@ -1584,14 +1590,14 @@ export default function MarketingWorkflowDrawer({
 
                                     <Box sx={{ flex: 1, minWidth: 0 }}>
                                         <Typography sx={{ fontWeight: 600, fontSize: 14 }}>
-                                            {workflow.key === 'video-html' && effectiveChoiceValues['asset-mode'] === 'free' && index === 3 ? 'Thiết kế hình ảnh và hành động từng beat tự do' : (label || step.title)}
+                                            {workflow.key === 'video-html' && effectiveChoiceValues['asset-mode'] === 'free' && index === 4 ? 'Thiết kế hình ảnh và hành động từng beat tự do' : (label || step.title)}
                                         </Typography>
                                         {workflow.key === 'video-html' && index === 0 && Number(shortVideoId) > 0 && <ShortVideoAgentSaydiCastSettings shortVideoId={Number(shortVideoId)} revision={String(audioScript || '')} />}
-                                        {workflow.key === 'video-html' && index === 1 && Number(shortVideoId) > 0 && <SceneAssetsPanel shortVideoId={Number(shortVideoId)}/>}
+                                        {workflow.key === 'video-html' && index === 2 && Number(shortVideoId) > 0 && <SceneAssetsPanel shortVideoId={Number(shortVideoId)}/>}
 
                                         {step.description.length > 0 && (
                                             <Box component="ul" sx={{ m: 0, mt: 0.75, p: 0, listStyle: 'none' }}>
-                                                {(workflow.key === 'video-html' && effectiveChoiceValues['asset-mode'] === 'free' && index === 3
+                                                {(workflow.key === 'video-html' && effectiveChoiceValues['asset-mode'] === 'free' && index === 4
                                                     ? ['Tự do thiết kế bối cảnh, nhân vật, đạo cụ, camera và hành động theo lời kể; không cần gán hồ sơ asset. Giữ vật liệu có chi tiết, sắc tố đậm, màu bão hòa và tương phản rõ.']
                                                     : step.description).map((item, itemIndex) => (
                                                     <Box
@@ -1960,9 +1966,8 @@ export default function MarketingWorkflowDrawer({
 
 
                                         {chatSessionProviders.map(({ provider, label, keySuffix, prompts: providerPrompts }) => {
-                                            // Khớp ĐÚNG vai trò — không fallback sang prompt khác
-                                            // (tránh gửi nhầm prompt beat/translate thành generate).
-                                            const sessionKey = `${workflow.key}#${workflow.key === 'video-html-2d' ? 'handoff-v2-' : (workflow.key === 'video-html' && effectiveChoiceValues['asset-mode'] === 'free' ? 'free-' : '')}${index}${keySuffix}`;
+                                            // Resolve each role separately; a beat-only step starts with its division prompt.
+                                            const sessionKey = `${workflow.key}#${workflow.key === 'video-html-2d' ? 'handoff-v2-' : (workflow.key === 'video-html' && effectiveChoiceValues['asset-mode'] === 'free' ? 'free-' : '')}${workflowSessionStepId(workflow.key, index)}${keySuffix}`;
                                             const dsState = deepseekStates[sessionKey] || EMPTY_DEEPSEEK_STATE;
                                             const findPrompt = (role: '' | 'generate' | 'beat' | 'translate') => (
                                                 providerPrompts.find((p) => (
@@ -1983,7 +1988,7 @@ export default function MarketingWorkflowDrawer({
                                             const translateInfo = translatePrompt
                                                 ? resolveWorkflowPromptChoiceFile(translatePrompt, effectiveChoiceValues)
                                                 : null;
-                                            const generateExists = Boolean(generateInfo?.exists);
+                                            const generateExists = Boolean(generateInfo?.exists || (!generatePrompt && beatInfo?.exists));
                                             const cb = {
                                                 generate: generateInfo?.file,
                                                 beat: beatInfo?.file,

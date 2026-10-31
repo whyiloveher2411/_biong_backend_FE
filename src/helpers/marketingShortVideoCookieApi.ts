@@ -690,3 +690,20 @@ export function shortVideoCookieApiUrl(suffix: string): string {
         `plugin/vn4-e-learning/app-mobile/marketing/short-video/cookie/${suffix}`,
     );
 }
+
+
+export type ClaudeSignupResult = {
+    success?: boolean; error?: string; error_code?: string; stage?: string;
+    message?: string | { content?: string }; cookie_id?: number; cookie_count?: number;
+    needs_user?: boolean;
+};
+
+export function signupClaudeCookie(email: string, displayName: string, acceptAgeTerms = false): Promise<ClaudeSignupResult> {
+    return ajax({ url: `${COOKIE_BASE_PATH}/signup-claude`, method: 'POST', loading: false,
+        data: { email, display_name: displayName, accept_age_terms: acceptAgeTerms } }) as Promise<ClaudeSignupResult>;
+}
+
+export function readZohoMail(targetEmail: string): Promise<ClaudeSignupResult & { scanned?: number; emails?: Array<{ uid: number; subject: string }> }> {
+    return ajax({ url: `${COOKIE_BASE_PATH}/zoho-read-mail`, method: 'POST', loading: false,
+        data: { target_email: targetEmail, limit: 10, include_body: false } }) as Promise<ClaudeSignupResult & { scanned?: number; emails?: Array<{ uid: number; subject: string }> }>;
+}

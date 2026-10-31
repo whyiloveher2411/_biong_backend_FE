@@ -44,3 +44,22 @@ test('visible prompt buttons call the matching copy action without saving or inv
     expect(p.onSave).not.toHaveBeenCalled();
     expect(p.onAiRefine).not.toHaveBeenCalled();
 });
+
+test('DeepSeek API action calls generation once and displays saved HTML without skill/refine/manual save', async () => {
+    const p = props(), generate = jest.fn().mockResolvedValue(html), skill = jest.fn();
+    render(<ShortVideoAgentBeatHtmlEditDrawer {...p} onGenerateDeepseekApi={generate} onCopySkillPrompt={skill}/>);
+    fireEvent.click(screen.getByRole('button', {name: /Sinh và lưu HTML · DeepSeek API/}));
+    await waitFor(() => expect((screen.getByLabelText('HTML beat — nhập / sửa code thủ công') as HTMLTextAreaElement).value).toBe(html));
+    expect(generate).toHaveBeenCalledTimes(1);
+    expect(skill).not.toHaveBeenCalled();
+    expect(p.onAiRefine).not.toHaveBeenCalled();
+    expect(p.onSave).not.toHaveBeenCalled();
+});
+
+test('failed DeepSeek generation keeps the current draft', async () => {
+    const p = props(), generate = jest.fn().mockResolvedValue(null);
+    render(<ShortVideoAgentBeatHtmlEditDrawer {...p} initialHtml="Existing HTML" onGenerateDeepseekApi={generate}/>);
+    fireEvent.click(screen.getByRole('button', {name: /Sinh và lưu HTML · DeepSeek API/}));
+    await waitFor(() => expect(generate).toHaveBeenCalledTimes(1));
+    expect((screen.getByLabelText('HTML beat — nhập / sửa code thủ công') as HTMLTextAreaElement).value).toBe('Existing HTML');
+});

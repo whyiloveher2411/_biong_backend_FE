@@ -1075,6 +1075,12 @@ export function joinWorkflowBreakdownParts(parts: string[]): string {
     return renumberWorkflowBeatHeaders(joined);
 }
 
+/** Keep existing browser chats attached to their steps after inserting the 3D beat-division step. */
+export function workflowSessionStepId(workflowKey: string, stepIndex: number): string {
+    if (workflowKey !== 'video-html' || stepIndex === 0) return String(stepIndex);
+    return stepIndex === 1 ? 'beat-division-v1' : String(stepIndex - 1);
+}
+
 const STEP_TITLE_PREFIX_RE = /^(?:bước|step)\s*(\d+)\s*[:.\-–)]?\s*/i;
 
 /** Tách "Bước 3: ..." thành số bước + tên bước. */

@@ -1,3 +1,5 @@
+import { openClaudeHtmlBeatSession } from './agentVideoApi';
+import { generateBeatHtmlViaDeepseekApi } from './agentVideoApi';
 import {storyV2Request} from './agentVideoApi';
 import React from 'react';
 import useAjax from 'hook/useApi';
@@ -5474,6 +5476,27 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         return true;
     }, [beatMap, persistImportHtml, shortVideoId, showMessage]);
 
+    const handleGenerateBeatHtmlViaDeepseekApi = React.useCallback(async (beatId: string): Promise<string | null> => {
+        setRefiningBeatHtmlBeatId(beatId);
+        try {
+            const res = await generateBeatHtmlViaDeepseekApi(shortVideoId, beatId);
+            if (!res?.success || !res.html) {
+                showMessage(parseApiMessage(res?.message) || 'DeepSeek API không sinh được HTML beat', 'error');
+                return null;
+            }
+            setBeatHtml((prev) => ({...prev, [beatId]: {...prev[beatId], html: res.html!, updated_at: res.updated_at}}));
+            setBeatImage((prev) => ({...prev, [beatId]: {...prev[beatId],
+                image_url: prev[beatId]?.image_url || '', image_prompt: prev[beatId]?.image_prompt || '', media_source: 'html'}}));
+            showMessage('Đã sinh và lưu HTML beat qua DeepSeek API (DeepThink)', 'success');
+            return res.html;
+        } catch (error) {
+            showMessage(error instanceof Error ? error.message : String(error), 'error');
+            return null;
+        } finally {
+            setRefiningBeatHtmlBeatId('');
+        }
+    }, [shortVideoId, showMessage]);
+
     const handleRefineBeatHtmlViaGemini = React.useCallback(async (
         beatId: string,
         input: { prompt: string; html: string },
@@ -6065,6 +6088,25 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }
         deepseekWatchStartedAtRef.current[id] = Date.now();
         setDeepseekWatchBeatIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+    };
+
+    const [openingBeatClaudeIds, setOpeningBeatClaudeIds] = React.useState<string[]>([]);
+    const handleOpenBeatClaudeChat = async (beatId: string) => {
+        if (!beatId || openingBeatClaudeIds.includes(beatId)) return;
+        setOpeningBeatClaudeIds(prev => [...prev, beatId]);
+        try {
+            const res = await openClaudeHtmlBeatSession(shortVideoId, beatId);
+            if (!res?.success) {
+                showMessage(parseApiMessage(res?.message) || 'Không mở được Claude; hãy thêm cookie trong Cài đặt chung → Claude Cookie', 'error');
+                return;
+            }
+            startDeepseekWatch(beatId);
+            showMessage('Đã mở Claude Sonnet 5.5 Medium — tự tạo và lưu HTML, sau đó tạo và lưu gợi ý âm thanh.', 'success');
+        } catch (error) {
+            showMessage(error instanceof Error ? error.message : String(error), 'error');
+        } finally {
+            setOpeningBeatClaudeIds(prev => prev.filter(id => id !== beatId));
+        }
     };
 
     const handleOpenBeatDeepSeekChat = (
@@ -10348,6 +10390,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         workflowHasBeatHtmlPrompt,
         // Workflow khai báo HTML beat hoặc đang ở chế độ Motion HTML → không dùng ảnh beat.
         isHtmlBeatWorkflow: workflowHasBeatHtmlPrompt || agentVisualMode === 'hyperframes',
+        openingBeatClaudeIds,
+        handleOpenBeatClaudeChat,
         openingBeatDeepSeekChatBeatIds,
         planningBeatAudioPlanBeatIds,
         handleEnqueueBeatAudioPlan,
@@ -10771,6 +10815,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         /** @deprecated Alias tương thích cũ */
         handleRegenerateBeatImageZImage: handleOpenBeatImageDuckAiManual,
         handleRefineBeatHtmlViaGemini,
+        handleGenerateBeatHtmlViaDeepseekApi,
         handleOpenBeatDivisionGemini,
         handleEnqueueBeatDivisionGeminiHeadless,
         handleCopyBeatHtmlPrompt,

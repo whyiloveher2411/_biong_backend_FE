@@ -430,7 +430,7 @@ function LegacyShortVideoAgentScriptPanel({ state }: Props) {
         if (!state.selectedPlatforms.includes('saydi')) {
             return;
         }
-        if (state.saydiSamples.length > 0 || state.saydiLoading) {
+        if (state.saydiSamples.length > 0 || state.saydiLoading || state.saydiError) {
             return;
         }
         void state.loadSaydiVoiceSamples();
@@ -439,6 +439,7 @@ function LegacyShortVideoAgentScriptPanel({ state }: Props) {
         state.selectedPlatforms,
         state.saydiSamples.length,
         state.saydiLoading,
+        state.saydiError,
         state.loadSaydiVoiceSamples,
     ]);
 

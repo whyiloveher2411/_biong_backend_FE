@@ -1,3 +1,4 @@
+import ClaudeSignupControl from './ClaudeSignupControl';
 import React from 'react';
 import {
     Alert,
@@ -236,7 +237,7 @@ export function ShortVideoCookieManageContent({
         website.includes('canva.com') ||
         website.includes('leonardo.ai') ||
         website.includes('deepseek.com') ||
-        website.includes('chatgpt.com');
+        website.includes('chatgpt.com') || website.includes('claude.ai');
     // Recorder chỉ có cho Canva (học flow image → video thủ công).
     const canRecordCanva = website.includes('canva.com');
     // Recorder Leonardo (DEV) — học flow image → video trên app.leonardo.ai.
@@ -248,7 +249,7 @@ export function ShortVideoCookieManageContent({
     // Probe đăng nhập headless (dò trạng thái + localStorage) — dùng cho mọi site cookie.
     const canProbeLogin = canTestLogin;
     // Field localStorage chỉ hiện với DeepSeek (token login nằm ở localStorage) và ChatGPT.
-    const showLocalStorage = canRecordDeepseek || isChatgpt;
+    const showLocalStorage = canRecordDeepseek || isChatgpt || website.includes('claude.ai');
 
     const emptyForm = React.useMemo<CookieFormState>(() => ({
         ...EMPTY_FORM,
@@ -628,7 +629,9 @@ export function ShortVideoCookieManageContent({
                         Thêm cookie
                     </Button>
                 )}
-                {canRecordCanva && mode === 'list' ? (
+                {website.includes('claude.ai') && mode === 'list' ? <ClaudeSignupControl onSaved={() => { void reloadList(); }} /> : null}
+
+            {canRecordCanva && mode === 'list' ? (
                     <Button
                         size="small"
                         variant="outlined"
@@ -773,6 +776,8 @@ export function ShortVideoCookieManageContent({
                                     ? 'Cookie pool app.leonardo.ai dùng convert ảnh beat → video (xoay vòng, cookie bị giới hạn sẽ tạm nghỉ).'
                                     : website.includes('deepseek.com')
                                         ? 'Cookie pool chat.deepseek.com dùng mở phiên viết nội dung + sinh tiêu đề / nội dung thumbnail YouTube qua browser (xoay vòng).'
+                                        : website.includes('claude.ai')
+                                            ? 'Cookie pool claude.ai dùng mở phiên tạo HTML beat bằng Claude.'
                                         : website.includes('chatgpt.com')
                                             ? 'Cookie pool chatgpt.com dùng mở phiên viết nội dung ChatGPT + sinh tiêu đề / nội dung thumbnail qua browser (xoay vòng).'
                                             : 'Cookie pool meta.ai dùng render ảnh beat (xoay vòng) và extension tự set cookie để mở Meta.ai.'}
