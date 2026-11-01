@@ -1,3 +1,4 @@
+import {useVoiceMedia,voicePreviewUrl} from 'helpers/timelineVoice';
 import React from 'react';
 import { Box, Typography } from '@mui/material';
 import {
@@ -51,6 +52,7 @@ export default function ShortVideoAgentBeatVisualPreview({
     const containerRef = React.useRef<HTMLDivElement | null>(null);
     const iframeRef = React.useRef<HTMLIFrameElement | null>(null);
     const audioRef = React.useRef<HTMLAudioElement | null>(null);
+    useVoiceMedia(audioRef,shortVideoId);
     const frameRef = React.useRef<number | null>(null);
     const elapsedBeforePlayRef = React.useRef(0);
     const lastSeekAtRef = React.useRef(0);
@@ -329,7 +331,7 @@ export default function ShortVideoAgentBeatVisualPreview({
 
             <audio
                 ref={audioRef}
-                src={audioUrl || undefined}
+                crossOrigin="anonymous" src={voicePreviewUrl(audioUrl || '',shortVideoId) || undefined}
                 controls
                 controlsList="nodownload noplaybackrate"
                 preload="metadata"

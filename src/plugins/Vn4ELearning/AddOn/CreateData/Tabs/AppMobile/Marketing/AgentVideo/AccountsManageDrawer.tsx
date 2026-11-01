@@ -43,6 +43,14 @@ const ACCOUNT_TABS: AccountTab[] = [
         render: ({ active }) => <BeatVideoPlatformsContent active={active} />,
     },
     {
+        key: 'claude',
+        label: 'Claude',
+        icon: <CookieOutlinedIcon fontSize="small" />,
+        render: ({ active, shortVideoId }) => (
+            <ShortVideoCookieManageContent active={active} website="claude.ai" shortVideoId={shortVideoId} />
+        ),
+    },
+    {
         key: 'metaai',
         label: 'Meta.ai',
         icon: <CookieOutlinedIcon fontSize="small" />,
@@ -78,14 +86,7 @@ const ACCOUNT_TABS: AccountTab[] = [
             <ShortVideoCookieManageContent active={active} website="chat.deepseek.com" shortVideoId={shortVideoId} />
         ),
     },
-    {
-        key: 'claude',
-        label: 'Claude',
-        icon: <CookieOutlinedIcon fontSize="small" />,
-        render: ({ active, shortVideoId }) => (
-            <ShortVideoCookieManageContent active={active} website="claude.ai" shortVideoId={shortVideoId} />
-        ),
-    },
+   
     ...(SHOW_CHATGPT_COOKIE_TAB ? [{
         key: 'chatgpt',
         label: 'ChatGPT',

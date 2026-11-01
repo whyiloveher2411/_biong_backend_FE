@@ -343,7 +343,7 @@ export default function MarketingWorkflowBreakdown({
                     }));
                 }
                 showMessageRef.current(
-                    `DeepSeek bước 2: ${st.done || 0} phần xong${Number(st.error || 0) > 0 ? `, ${st.error} phần lỗi` : ''}`,
+                    `Thiết kế visual: ${st.done || 0} phần xong${Number(st.error || 0) > 0 ? `, ${st.error} phần lỗi` : ''}`,
                     Number(st.error || 0) > 0 ? 'warning' : 'success',
                 );
             }
@@ -360,7 +360,7 @@ export default function MarketingWorkflowBreakdown({
         };
     }, [deepseekAllRunning, shortVideoId, plan.chunks.length, applyDeepseekStatus]);
 
-    const enqueueChunk = React.useCallback(async (index: number): Promise<boolean> => {
+    const enqueueChunk = React.useCallback(async (index: number, provider: 'deepseek' | 'claude' = 'deepseek'): Promise<boolean> => {
         const chunk = plan.chunks[index];
         const sid = Number(shortVideoId || 0);
         if (!chunk || !sid || !item.file) {
@@ -380,6 +380,7 @@ export default function MarketingWorkflowBreakdown({
             startOrder: chunk.beatStart,
             beatCount: chunk.beatCount,
             prompt: prompt.text,
+            provider,
         });
         if (!res?.success) {
             showMessage(readApiMessage(res, 'Không đưa được phần này vào hàng đợi DeepSeek'), 'error');
@@ -388,15 +389,15 @@ export default function MarketingWorkflowBreakdown({
         return true;
     }, [plan, shortVideoId, item.file, workflowKey, showMessage, getFreshContext]);
 
-    const runChunkDeepseek = React.useCallback(async (index: number) => {
+    const runChunkDeepseek = React.useCallback(async (index: number, provider: 'deepseek' | 'claude' = 'deepseek') => {
         if (deepseekStarting >= 0 || deepseekAllRunning) {
             return;
         }
         setDeepseekStarting(index);
         try {
-            const ok = await enqueueChunk(index);
+            const ok = await enqueueChunk(index, provider);
             if (ok) {
-                showMessage(`Đã chạy DeepSeek cho phần ${index + 1} — chờ trong giây lát…`, 'success');
+                showMessage(`Đã chạy ${provider === 'claude' ? 'Claude' : 'DeepSeek'} cho phần ${index + 1} — chờ trong giây lát…`, 'success');
                 // Bật cờ để effect poll tự chạy; effect tự tắt khi phần này xong.
                 runExpectedRef.current = 1;
                 setDeepseekAllRunning(true);
@@ -503,7 +504,7 @@ export default function MarketingWorkflowBreakdown({
                     size="small"
                     variant="contained"
                     color="primary"
-                    disabled={busy || deepseekAllRunning || !item.exists}
+                    disabled={busy || deepseekStarting >= 0 || deepseekAllRunning || !item.exists}
                     startIcon={
                         deepseekAllRunning
                             ? <CircularProgress size={12} color="inherit" />
@@ -587,7 +588,7 @@ export default function MarketingWorkflowBreakdown({
                                                         : ds.status === 'processing' ? 'info'
                                                             : 'default'
                                             }
-                                            label={`DeepSeek: ${ds.status || '...'}`}
+                                            label={`${ds.chat_url?.startsWith('https://claude.ai/') ? 'Claude' : 'AI'}: ${ds.status || '...'}`}
                                             sx={{ height: 20, fontSize: 11 }}
                                         />
                                     </Tooltip>
@@ -668,7 +669,7 @@ export default function MarketingWorkflowBreakdown({
                                     size="small"
                                     variant="outlined"
                                     color="primary"
-                                    disabled={busy || deepseekAllRunning || dsActive || !item.exists}
+                                    disabled={busy || deepseekStarting >= 0 || deepseekAllRunning || dsActive || !item.exists}
                                     startIcon={
                                         deepseekStarting === chunk.index
                                             ? <CircularProgress size={12} color="inherit" />
@@ -678,6 +679,16 @@ export default function MarketingWorkflowBreakdown({
                                     sx={{ textTransform: 'none' }}
                                 >
                                     Mở DeepSeek
+                                </Button>
+                                <Button
+                                    size="small"
+                                    variant="outlined"
+                                    disabled={busy || deepseekStarting >= 0 || deepseekAllRunning || dsActive || !item.exists}
+                                    startIcon={<SmartToyOutlinedIcon fontSize="small" />}
+                                    onClick={() => { void runChunkDeepseek(chunk.index, 'claude'); }}
+                                    sx={{ textTransform: 'none' }}
+                                >
+                                    Mở Claude
                                 </Button>
                                 <Button
                                     size="small"

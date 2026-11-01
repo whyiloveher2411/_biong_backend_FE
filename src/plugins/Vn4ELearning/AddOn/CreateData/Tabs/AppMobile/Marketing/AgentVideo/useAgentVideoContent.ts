@@ -1110,6 +1110,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         nonce: number;
     } | null>(null);
     const [whisperStatus, setWhisperStatus] = React.useState('none');
+    const [beatHtmlMediaReadiness,setBeatHtmlMediaReadiness]=React.useState<NonNullable<ImportHtmlSummary['beat_html_media_readiness']>>({});
     const [whisperStale, setWhisperStale] = React.useState(false);
     const [importHtmlReady, setImportHtmlReady] = React.useState(false);
     const [bgmSegments, setBgmSegments] = React.useState<ImportHtmlBgmSegment[]>([]);
@@ -1815,6 +1816,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 : {}
         );
         setBeatMapReady(Boolean(importSummary?.beat_map_ready));
+        setBeatHtmlMediaReadiness(importSummary?.beat_html_media_readiness || {});
         setBeatsHtmlTotal(Number(importSummary?.beats_html_total || 0));
         setBeatsHtmlCompleted(Number(importSummary?.beats_html_completed || 0));
         setBeatsImageTotal(Number(importSummary?.beats_image_total || 0));
@@ -2851,6 +2853,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     };
 
     const applyImportHtmlSummary = React.useCallback((summary: ImportHtmlSummary) => {
+        if(summary.beat_html_media_readiness)setBeatHtmlMediaReadiness(summary.beat_html_media_readiness);
         if (summary.whisper_status) {
             setWhisperStatus(summary.whisper_status);
         }
@@ -5696,6 +5699,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                     beatPrompt = String(serverRes?.prompt || '').trim();
                 } else {
                     serverMessage = parseApiMessage(serverRes?.message);
+                    showMessage(serverMessage || 'Không thể tạo prompt HTML beat.', 'warning');
+                    return;
                 }
             } catch {
                 // im lặng — fallback build local bên dưới.
@@ -6090,9 +6095,17 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         setDeepseekWatchBeatIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
     };
 
+    const requireBeatHtmlMedia = (beatId:string) => {
+        const readiness=beatHtmlMediaReadiness[beatId];
+        if(readiness?.ready)return true;
+        showMessage(readiness?.message || 'Cần có audio và Whisper hợp lệ trước khi tạo HTML beat.', 'warning');
+        return false;
+    };
+
     const [openingBeatClaudeIds, setOpeningBeatClaudeIds] = React.useState<string[]>([]);
     const handleOpenBeatClaudeChat = async (beatId: string) => {
         if (!beatId || openingBeatClaudeIds.includes(beatId)) return;
+        if (!requireBeatHtmlMedia(beatId)) return;
         setOpeningBeatClaudeIds(prev => [...prev, beatId]);
         try {
             const res = await openClaudeHtmlBeatSession(shortVideoId, beatId);
@@ -6101,7 +6114,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 return;
             }
             startDeepseekWatch(beatId);
-            showMessage('Đã mở Claude Sonnet 5.5 Medium — tự tạo và lưu HTML, sau đó tạo và lưu gợi ý âm thanh.', 'success');
+            showMessage('Đã mở Claude Sonnet 5.5 Medium — tạo HTML kèm sự kiện âm thanh; backend tự đồng bộ timeline.', 'success');
         } catch (error) {
             showMessage(error instanceof Error ? error.message : String(error), 'error');
         } finally {
@@ -6117,6 +6130,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         if (!id || openingBeatDeepSeekChatBeatIds.includes(id)) {
             return;
         }
+        if (mode === 'new' && !requireBeatHtmlMedia(id)) return;
         setOpeningBeatDeepSeekChatBeatIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
         void (async () => {
             try {
@@ -6150,6 +6164,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const handleGenerateBeatHtmlWithClipPreflight = (beatId: string) => {
         const id = String(beatId || '').trim();
         if (!id || openingBeatDeepSeekChatBeatIds.includes(id)) return;
+        if (!requireBeatHtmlMedia(id)) return;
         setOpeningBeatDeepSeekChatBeatIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
         void (async () => {
             try {
@@ -10392,6 +10407,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         isHtmlBeatWorkflow: workflowHasBeatHtmlPrompt || agentVisualMode === 'hyperframes',
         openingBeatClaudeIds,
         handleOpenBeatClaudeChat,
+        beatHtmlMediaReadiness,
         openingBeatDeepSeekChatBeatIds,
         planningBeatAudioPlanBeatIds,
         handleEnqueueBeatAudioPlan,

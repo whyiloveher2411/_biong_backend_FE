@@ -4598,6 +4598,7 @@ export default function ShortVideoAgentBeatRegionEditor({
                             onEditHtml ? (
                                 <Box sx={{ position: 'absolute', top: 8, left: 8, zIndex: 5 }}>
                                     <WhiteboardBeatHtmlMotionControl
+                                        generationDisabledReason={state.beatHtmlMediaReadiness?.[beatId]?.ready ? '' : state.beatHtmlMediaReadiness?.[beatId]?.message || 'Cần có audio và Whisper hợp lệ trước khi tạo HTML beat.'}
                                         hasHtml={beatHasHtmlMotion}
                                         selected
                                         hideSelection
@@ -4811,6 +4812,7 @@ export default function ShortVideoAgentBeatRegionEditor({
                         />
                         {onEditHtml ? (
                             <WhiteboardBeatHtmlMotionControl
+                                        generationDisabledReason={state.beatHtmlMediaReadiness?.[beatId]?.ready ? '' : state.beatHtmlMediaReadiness?.[beatId]?.message || 'Cần có audio và Whisper hợp lệ trước khi tạo HTML beat.'}
                                 hasHtml={beatHasHtmlMotion}
                                 selected={beatReplacementMediaSource === 'html'}
                                 saving={state.savingImportHtml}

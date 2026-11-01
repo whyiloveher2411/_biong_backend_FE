@@ -1446,6 +1446,7 @@ export type ImportHtmlThumbnailBlock = {
 };
 
 export type ImportHtmlSummary = {
+    beat_html_media_readiness?: Record<string, {ready:boolean;audio:boolean;whisper:boolean;message:string}>;
     html_length?: number;
     html_updated_at?: string;
     has_html?: boolean;

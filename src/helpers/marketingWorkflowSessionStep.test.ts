@@ -2,9 +2,9 @@ import { workflowSessionStepId, replaceWorkflowPromptKeys } from './marketingWor
 
 jest.mock('hook/useApi', () => ({ ajax: jest.fn() }));
 
-test('new 3D beat division gets a separate chat while existing steps keep their chat keys', () => {
-    expect([0, 1, 2, 3, 4].map((index) => workflowSessionStepId('video-html', index)))
-        .toEqual(['0', 'beat-division-v1', '1', '2', '3']);
+test('3D steps keep their chat keys after removing the SFX step', () => {
+    expect([0, 1, 2, 3].map((index) => workflowSessionStepId('video-html', index)))
+        .toEqual(['0', 'beat-division-v1', '1', '3']);
     for (const workflow of ['video-html-2d', 'video-image']) {
         expect([0, 1, 2].map((index) => workflowSessionStepId(workflow, index))).toEqual(['0', '1', '2']);
     }

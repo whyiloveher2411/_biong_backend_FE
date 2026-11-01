@@ -1,3 +1,4 @@
+import {useVoiceMedia,voicePreviewUrl} from 'helpers/timelineVoice';
 import {videoTimeToBeat} from './timelinePlaybackSync';
 import React from 'react';
 import {
@@ -333,6 +334,7 @@ export default function WhiteboardRegionTimeline({
 
     // ---- Audio playback ----
     const audioRef = React.useRef<HTMLAudioElement | null>(null);
+    useVoiceMedia(audioRef,shortVideoId);
     const [playing, setPlaying] = React.useState(false);
     const [playhead, setPlayhead] = React.useState(0);
     const [copied, setCopied] = React.useState(false);
@@ -1072,7 +1074,7 @@ export default function WhiteboardRegionTimeline({
     return (
         <>
         <Box sx={{ width: '100%', display: 'flex', justifyContent: 'center', pb: 0.5, userSelect: 'none', flexShrink: 0 }}>
-            <audio ref={audioRef} src={audioUrl || undefined} preload="auto" style={{ display: 'none' }} />
+            <audio ref={audioRef} crossOrigin="anonymous" src={voicePreviewUrl(audioUrl || '',shortVideoId) || undefined} preload="auto" style={{ display: 'none' }} />
             <Box sx={{ width: '100%', maxWidth: maxWidth || '100%', userSelect: 'none' }}>
                 {/* Từ như đoạn văn xuống dòng */}
                 <Box

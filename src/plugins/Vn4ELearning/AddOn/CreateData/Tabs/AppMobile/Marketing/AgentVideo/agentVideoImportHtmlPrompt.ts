@@ -86,6 +86,7 @@ function buildModelCatalogLine(model: ShortVideoModel3d): string {
 }
 
 export type ImportHtmlContextPayload = {
+    beat_html_media_readiness?: Record<string, {ready:boolean;audio:boolean;whisper:boolean;message:string}>;
     success?: boolean;
     short_video_id?: number;
     title?: string;
@@ -651,10 +652,14 @@ export async function buildBeatHtmlPrompt(
     beat: BeatMapSection,
     imagePromptBlock = '',
 ): Promise<string> {
+    const readiness=context.beat_html_media_readiness?.[beat.id];
+    if(!readiness?.ready)throw new Error(readiness?.message || 'Cần có audio và Whisper hợp lệ trước khi tạo HTML beat.');
     const durationSec = Number(beat.durationSec || 0);
     if (!Number.isFinite(durationSec) || durationSec <= 0) {
         throw new Error(`Beat ${beat.id}: thiếu durationSec hợp lệ`);
     }
+
+    const audioContract = await loadImportHtmlBeatHtmlTemplate('video-html', 'beat-audio-events.md');
 
     const promptType = DEFAULT_HF_PROMPT_TYPE;
     const rawTemplate = await loadHfPromptTemplate(promptType);
@@ -803,7 +808,7 @@ export async function buildBeatHtmlPrompt(
             ASSET_CATALOG_BLOCK: assetCatalogBlock,
         });
         if (filled) {
-            return filled;
+            return filled.includes('id="beat-audio-events"') ? filled : `${filled}\n\n${audioContract}`;
         }
     } catch (error) {
         // Free mode requires the complete video-bound style; never silently degrade it.
@@ -893,7 +898,7 @@ export async function buildBeatHtmlPrompt(
                 String(cleanImagePromptBlock).trim(),
             ].join('\n')
             : '',
-    ].filter((line, index, arr) => !(line === '' && arr[index - 1] === '')).join('\n');
+    ].filter((line, index, arr) => !(line === '' && arr[index - 1] === '')).join('\n') + '\n\n' + audioContract;
 }
 
 export { parseMessage as parseImportHtmlContextMessage };

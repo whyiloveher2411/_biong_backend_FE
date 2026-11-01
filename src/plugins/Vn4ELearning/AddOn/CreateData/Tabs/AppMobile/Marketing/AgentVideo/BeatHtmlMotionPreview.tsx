@@ -17,6 +17,7 @@ type Props = {
     /** Thời điểm playhead (giây, beat-local) — iframe seek theo giá trị này. */
     timeSec: number;
     playing?: boolean;
+    onReady?: () => void;
     /** Window audio của beat (giây). */
     durationSec: number;
     /** ID beat — dùng để đổi `key` của iframe khi chuyển beat (tránh tái dùng
@@ -78,10 +79,13 @@ export function detectAuthoredSize(html: string): { w: number; h: number } | nul
  * (`timeSec`). Đặt TRONG khung geometry của editor nên zoom/pan + kéo timeline
  * (playhead) đều áp dụng lên preview.
  */
-export default function BeatHtmlMotionPreview({ html, timeSec, durationSec, beatId, shortVideoId = 0, playing=false }: Props) {
+export default function BeatHtmlMotionPreview({ html, timeSec, durationSec, beatId, shortVideoId = 0, playing=false, onReady }: Props) {
     const containerRef = React.useRef<HTMLDivElement | null>(null);
     const iframeRef = React.useRef<HTMLIFrameElement | null>(null);
     const latestTimeRef = React.useRef(0);
+    const playingRef = React.useRef(playing); playingRef.current=playing;
+    const readyObserverRef = React.useRef<MutationObserver|null>(null);
+    React.useEffect(()=>()=>readyObserverRef.current?.disconnect(),[]);
     const [size, setSize] = React.useState({ w: 0, h: 0 });
 
     const duration = Math.max(0.2, Number(durationSec) || 0.2);
@@ -167,7 +171,22 @@ export default function BeatHtmlMotionPreview({ html, timeSec, durationSec, beat
                 title="HTML motion beat"
                 srcDoc={srcDoc}
                 scrolling="no"
-                onLoad={() => { setModelAudioPlayback(iframeRef.current,playing); seek(latestTimeRef.current); }}
+                onLoad={() => {
+                    setModelAudioPlayback(iframeRef.current,playing); seek(latestTimeRef.current);
+                    const iframe=iframeRef.current, doc=iframe?.contentDocument;
+                    if(!doc)return;
+                    // iframe load includes scripts; Assets.start completes asynchronously after GLB loading.
+                    const models=/\bAssets\.start\s*\(/.test(srcDoc) ? new Promise<void>(resolve=>{
+                        if(doc.documentElement.getAttribute('data-hf-ready')==='1'){resolve();return;}
+                        readyObserverRef.current?.disconnect();
+                        const observer=new MutationObserver(()=>{if(doc.documentElement.getAttribute('data-hf-ready')==='1'){observer.disconnect();resolve();}});
+                        readyObserverRef.current=observer;
+                        observer.observe(doc.documentElement,{attributes:true,attributeFilter:['data-hf-ready']});
+                        iframe?.addEventListener('load',()=>observer.disconnect(),{once:true});
+                    }):Promise.resolve();
+                    const images=Array.from(doc.images).map(image=>image.complete?Promise.resolve():new Promise<void>(resolve=>{image.addEventListener('load',()=>resolve(),{once:true});}));
+                    void Promise.all([models,doc.fonts?.ready,...images]).then(()=>{if(iframeRef.current===iframe){setModelAudioPlayback(iframe,playingRef.current);seek(latestTimeRef.current);onReady?.();}});
+                }}
                 sx={{
                     position: 'absolute',
                     top: '50%',

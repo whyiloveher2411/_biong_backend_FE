@@ -1,3 +1,4 @@
+import {useVoiceMedia,voicePreviewUrl} from 'helpers/timelineVoice';
 import React from 'react';
 import { Box, Typography } from '@mui/material';
 import { resolveActiveBeatSection, type BeatMap } from './agentVideoBeatMap';
@@ -56,6 +57,7 @@ export default function ShortVideoAgentCustomHtmlPreview({
     const containerRef = React.useRef<HTMLDivElement | null>(null);
     const iframeRef = React.useRef<HTMLIFrameElement | null>(null);
     const audioRef = React.useRef<HTMLAudioElement | null>(null);
+    useVoiceMedia(audioRef,shortVideoId);
     const beatMapRef = React.useRef(beatMap);
     const audioDurationSecRef = React.useRef(audioDurationSec);
     const [localTimeSec, setLocalTimeSec] = React.useState(0);
@@ -273,7 +275,7 @@ export default function ShortVideoAgentCustomHtmlPreview({
             <Box
                 component="audio"
                 ref={audioRef}
-                src={audioUrl}
+                crossOrigin="anonymous" src={voicePreviewUrl(audioUrl,shortVideoId)}
                 preload="auto"
                 sx={{ display: 'none' }}
             />

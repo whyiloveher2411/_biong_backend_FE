@@ -957,6 +957,7 @@ export default function MarketingWorkflowDrawer({
                 const keys: string[] = [];
                 if (step.prompts.some((p) => Boolean(p.deepseekSession))) {
                     keys.push(`${workflow.key}#${workflow.key === 'video-html-2d' ? 'handoff-v2-' : (workflow.key === 'video-html' && effectiveChoiceValues['asset-mode'] === 'free' ? 'free-' : '')}${workflowSessionStepId(workflow.key, index)}`);
+                    keys.push(`${keys[keys.length - 1]}::claude`);
                 }
                 if (ENABLE_CHATGPT_SESSION && step.prompts.some((p) => Boolean(p.chatgptSession))) {
                     keys.push(`${workflow.key}#${workflow.key === 'video-html-2d' ? 'handoff-v2-' : (workflow.key === 'video-html' && effectiveChoiceValues['asset-mode'] === 'free' ? 'free-' : '')}${workflowSessionStepId(workflow.key, index)}::chatgpt`);
@@ -1074,10 +1075,10 @@ export default function MarketingWorkflowDrawer({
         },
         sessionKey: string,
         resume = false,
-        provider: 'deepseek' | 'chatgpt' = 'deepseek',
+        provider: 'deepseek' | 'chatgpt' | 'claude' = 'deepseek',
         updateBox: string[] = [],
     ) => {
-        const providerLabel = provider === 'chatgpt' ? 'ChatGPT' : 'DeepSeek';
+        const providerLabel = provider === 'claude' ? 'Claude' : provider === 'chatgpt' ? 'ChatGPT' : 'DeepSeek';
         if (!workflow || deepseekAction) {
             return;
         }
@@ -1541,12 +1542,19 @@ export default function MarketingWorkflowDrawer({
                             const isCopying = copyingStep === stepKey;
                             const isCopied = copiedStep === stepKey;
                             // Bước có deepseekSession/chatgptSession trong index.md → hiện nút mở
-                            // browser tương ứng (DeepSeek và/hoặc ChatGPT), mỗi provider 1 phiên riêng.
+                            // browser tương ứng; Claude dùng prompt DeepSeek, mỗi provider một phiên riêng.
                             const chatSessionProviders = ([
                                 {
                                     provider: 'deepseek' as const,
                                     label: 'DeepSeek',
                                     keySuffix: '',
+                                    prompts: step.prompts.filter((p) => Boolean(p.deepseekSession)),
+                                },
+                                {
+                                    provider: 'claude' as const,
+                                    label: 'Claude',
+                                    keySuffix: '::claude',
+                                    // Claude uses the same prompt roles and choices as DeepSeek.
                                     prompts: step.prompts.filter((p) => Boolean(p.deepseekSession)),
                                 },
                                 ...(ENABLE_CHATGPT_SESSION ? [{
@@ -1590,14 +1598,14 @@ export default function MarketingWorkflowDrawer({
 
                                     <Box sx={{ flex: 1, minWidth: 0 }}>
                                         <Typography sx={{ fontWeight: 600, fontSize: 14 }}>
-                                            {workflow.key === 'video-html' && effectiveChoiceValues['asset-mode'] === 'free' && index === 4 ? 'Thiết kế hình ảnh và hành động từng beat tự do' : (label || step.title)}
+                                            {workflow.key === 'video-html' && effectiveChoiceValues['asset-mode'] === 'free' && step.prompts.some((p) => p.file === 'create-beat-visual.md') ? 'Thiết kế hình ảnh và hành động từng beat tự do' : (label || step.title)}
                                         </Typography>
                                         {workflow.key === 'video-html' && index === 0 && Number(shortVideoId) > 0 && <ShortVideoAgentSaydiCastSettings shortVideoId={Number(shortVideoId)} revision={String(audioScript || '')} />}
                                         {workflow.key === 'video-html' && index === 2 && Number(shortVideoId) > 0 && <SceneAssetsPanel shortVideoId={Number(shortVideoId)}/>}
 
                                         {step.description.length > 0 && (
                                             <Box component="ul" sx={{ m: 0, mt: 0.75, p: 0, listStyle: 'none' }}>
-                                                {(workflow.key === 'video-html' && effectiveChoiceValues['asset-mode'] === 'free' && index === 4
+                                                {(workflow.key === 'video-html' && effectiveChoiceValues['asset-mode'] === 'free' && step.prompts.some((p) => p.file === 'create-beat-visual.md')
                                                     ? ['Tự do thiết kế bối cảnh, nhân vật, đạo cụ, camera và hành động theo lời kể; không cần gán hồ sơ asset. Giữ vật liệu có chi tiết, sắc tố đậm, màu bão hòa và tương phản rõ.']
                                                     : step.description).map((item, itemIndex) => (
                                                     <Box

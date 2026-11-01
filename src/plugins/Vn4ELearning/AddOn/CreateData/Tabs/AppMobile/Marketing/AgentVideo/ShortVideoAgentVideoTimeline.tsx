@@ -1,7 +1,14 @@
+import TimelineAudioEditableClip from './TimelineAudioEditableClip';
+import {timelineAudioBeatBounds} from 'helpers/timelineAudio';
+import VolumeOffIcon from '@mui/icons-material/VolumeOff';
+import VolumeUpIcon from '@mui/icons-material/VolumeUp';
+import TimelineVoiceClipView from './TimelineVoiceClipView';
+import {useVoiceMix} from 'helpers/timelineVoice';
 import {beatPlaybackUpdate} from './timelinePlaybackSync';
 import TimelineAudioClipView from './TimelineAudioClipView';
 import useTimelineAudio from './useTimelineAudio';
 import React from 'react';
+import {unstable_batchedUpdates} from 'react-dom';
 import { Timeline, type TimelineState } from '@xzdarcy/react-timeline-editor';
 import '@xzdarcy/react-timeline-editor/dist/react-timeline-editor.css';
 import PauseIcon from '@mui/icons-material/Pause';
@@ -879,7 +886,8 @@ export default function ShortVideoAgentVideoTimeline({
         [contentDurationSec],
     );
 
-    const timelineAudio=useTimelineAudio(shortVideoId,currentTimeSec,isPlaying && (customHtmlPreview || (beatDrivenRef.current && beatSoundPlayingRef.current)),contentDurationSec);
+    const voiceMix=useVoiceMix(shortVideoId);
+    const timelineAudio=useTimelineAudio(shortVideoId,currentTimeSec,isPlaying && (beatDrivenRef.current ? beatSoundPlayingRef.current : customHtmlPreview),contentDurationSec,beatMap?.sections);
     const htmlBeatWorkflow = Boolean(agentState?.isHtmlBeatWorkflow);
     const audioSuggestionMarkers = React.useMemo(
         () => Object.entries(timelineAudio.suggestions).flatMap(([beatId, plan]) => (plan.status === 'completed' ? (plan.suggestions || []) : []).map((suggestion) => {
@@ -903,7 +911,7 @@ export default function ShortVideoAgentVideoTimeline({
     const editorData = React.useMemo(
         () => {
             const videoRows = buildAgentVideoTimelineRows(contentDurationSec);
-            return [...videoRows, ...audioSuggestionRows, ...timelineAudio.rows];
+            return [...videoRows, {id:'voice_row',actions:[{id:'main_voice',start:0,end:contentDurationSec,effectId:'voice',movable:false,flexible:false}]}, ...audioSuggestionRows, ...timelineAudio.rows];
         },
         [audioSuggestionRows,contentDurationSec,timelineAudio.rows],
     );
@@ -913,7 +921,7 @@ export default function ShortVideoAgentVideoTimeline({
         () => timeSecToTimelineLeftPx(minScaleCount, timelineLayout),
         [minScaleCount, timelineLayout],
     );
-    const tracksViewportHeight = TIMELINE_EDIT_AREA_TOP_GAP + AGENT_VIDEO_TRACK_ROW_HEIGHT * (1+audioSuggestionRows.length+Math.min(3,timelineAudio.rows.length));
+    const tracksViewportHeight = TIMELINE_EDIT_AREA_TOP_GAP + AGENT_VIDEO_TRACK_ROW_HEIGHT * (2+audioSuggestionRows.length+Math.min(3,timelineAudio.rows.length));
     const timelineContentHeight = TIMELINE_RULER_HEIGHT + tracksViewportHeight;
     const timelineTotalHeight = timelineContentHeight + HORIZONTAL_SCROLLBAR_HEIGHT + CURSOR_HEAD_OVERFLOW;
 
@@ -931,7 +939,11 @@ export default function ShortVideoAgentVideoTimeline({
             beatDrivenRef.current=true;beatSoundPlayingRef.current=!!(event as CustomEvent).detail.soundPlaying;
             const video=videoRef.current;if(video&&!video.paused)video.pause();
             const sec=d.time;
-            isPlayingRef.current=!!d.playing;setIsPlaying(!!d.playing);setCurrentTimeSec(sec);syncTimelineCursor(sec);
+            // Native CustomEvents are not automatically batched by our legacy React root.
+            // Publish time + play state together so audio never sees the previous beat clock.
+            unstable_batchedUpdates(()=>{
+                isPlayingRef.current=!!d.playing;setIsPlaying(!!d.playing);setCurrentTimeSec(sec);syncTimelineCursor(sec);
+            });
         };
         document.addEventListener('timeline-audio-playhead',receive);return()=>document.removeEventListener('timeline-audio-playhead',receive);
     },[shortVideoId,contentDurationSec,videoRef,syncTimelineCursor]);
@@ -1246,6 +1258,7 @@ export default function ShortVideoAgentVideoTimeline({
     }, [hasVideo, updateTimeFromClientX]);
 
     const handleTogglePlayback = React.useCallback(() => {
+        if(isWhiteboardMode || customHtmlPreview){document.dispatchEvent(new CustomEvent('timeline-whole-command',{detail:{videoId:shortVideoId,action:isPlayingRef.current?'pause':'play',time:currentTimeSec}}));return;}
         const video=videoRef.current;
         if(!video){document.dispatchEvent(new CustomEvent('timeline-beat-command',{detail:{videoId:shortVideoId,action:isPlayingRef.current?'pause':'play',time:currentTimeSec}}));return;}
         const shouldPlay=!isPlayingRef.current;
@@ -1254,7 +1267,7 @@ export default function ShortVideoAgentVideoTimeline({
         video.currentTime=currentTimeSec;
         if(shouldPlay)void video.play().catch(()=>{isPlayingRef.current=false;setIsPlaying(false);});
         else {video.pause();isPlayingRef.current=false;setIsPlaying(false);}
-    }, [videoRef,shortVideoId,currentTimeSec]);
+    }, [videoRef,shortVideoId,currentTimeSec,isWhiteboardMode,customHtmlPreview]);
 
     const handleCursorDrag = React.useCallback((time: number) => {
         if (syncingFromVideoRef.current) {
@@ -1887,6 +1900,7 @@ export default function ShortVideoAgentVideoTimeline({
                                 </IconButton>
                             </Tooltip> : null}
                         </Box>
+                        <Box sx={{height:AGENT_VIDEO_TRACK_ROW_HEIGHT,flexShrink:0,display:'flex',alignItems:'center',px:.5,color:'#cdb1eb',fontSize:12,fontWeight:600,gap:.5}}><IconButton size="small" aria-label={voiceMix.muted?'Bật Voice':'Tắt Voice'} aria-pressed={voiceMix.muted} title={voiceMix.muted?'Bật lời đọc':'Tắt lời đọc để nghe hiệu ứng'} onClick={voiceMix.toggle} sx={{p:.25,flexShrink:0,color:voiceMix.muted?'#a8a8a8':'#cdb1eb'}}>{voiceMix.muted?<VolumeOffIcon sx={{fontSize:16}}/>:<VolumeUpIcon sx={{fontSize:16}}/>}</IconButton>Voice<Box component="output" aria-label="Âm lượng Voice hiện tại" sx={{fontVariantNumeric:'tabular-nums',fontWeight:700,color:'#fff',bgcolor:'rgba(128,88,165,.4)',px:.25,borderRadius:.5}}>{Math.round(voiceMix.volume*100)}%</Box></Box>
                         {audioSuggestionRows.length>0&&<Box sx={{height:AGENT_VIDEO_TRACK_ROW_HEIGHT*audioSuggestionRows.length,flexShrink:0,display:'flex',alignItems:'center',px:1,color:'#73d7e5',fontSize:11,fontWeight:600}}>Gợi ý âm thanh</Box>}
                         {timelineAudio.rows.length>0&&<Box sx={{px:1,pt:2,color:'#73d7e5',fontSize:12}}>Âm thanh</Box>}
                     </Box>
@@ -1957,7 +1971,7 @@ export default function ShortVideoAgentVideoTimeline({
                             key={timelineAudio.uiEpoch}
                             ref={timelineRef}
                             editorData={editorData}
-                            effects={{...AGENT_VIDEO_TIMELINE_EFFECTS,audio:{id:'audio',name:'Âm thanh'}}}
+                            effects={{...AGENT_VIDEO_TIMELINE_EFFECTS,audio:{id:'audio',name:'Âm thanh'},voice:{id:'voice',name:'Voice'}}}
                             scale={TIMELINE_SCALE}
                             scaleWidth={timelineScaleWidth}
                             scaleSplitCount={TIMELINE_SCALE_SPLIT_COUNT}
@@ -1981,16 +1995,19 @@ export default function ShortVideoAgentVideoTimeline({
                             onActionResizeStart={()=>{audioDragRef.current.id='';}}
                             onClickActionOnly={(_,p)=>{if(p.action.effectId==='audio')timelineAudio.select(p.action.id);else if(p.action.effectId==='audio_suggestion')timelineAudio.openSuggestion(p.action.id);}}
                             onContextMenuAction={(e,p)=>{if(p.action.effectId==='audio'){e.preventDefault();timelineAudio.contextMenu(p.action.id,e.clientX,e.clientY);}}}
-                            onActionResizing={p=>p.action.effectId==='audio_suggestion'?false:timelineAudio.canResize(p.action.id,p.start,p.end)}
+                            onActionResizing={p=>['audio_suggestion','voice'].includes(p.action.effectId)?false:timelineAudio.canResize(p.action.id,p.start,p.end)}
                             onCursorDrag={handleCursorDrag}
                             onClickTimeArea={handleClickTimeArea}
                             getActionRender={(action) => {
                                 const commonHoverSx = { width: '100%', height: '100%', position: 'relative' as const, opacity: hoveredAudioGroup ? 0.16 : 1, transition: 'opacity 140ms ease' };
+                                if(action.effectId==='voice')return <TimelineVoiceClipView mix={voiceMix} duration={contentDurationSec} onVolume={voiceMix.setVolume} onToggle={voiceMix.toggle}/>;
                                 if (action.effectId === 'audio') {
                                     const clip = timelineAudio.clips.find(item => item.id === action.id);
                                     const group = clip?.suggestion_key || `audio:${action.id}`;
                                     return <Box onMouseEnter={() => enterAudioGroup(group)} onMouseLeave={() => setHoveredAudioGroup(null)} sx={{...commonHoverSx,opacity:!hoveredAudioGroup||hoveredAudioGroup===group?1:0.16}}>
-                                        <TimelineAudioClipView clip={clip} selected={timelineAudio.selected===action.id} onSelect={()=>timelineAudio.select(action.id)} onVolume={volume=>timelineAudio.patch(action.id,{volume})} color={clip?.suggestion_key?audioSuggestionColor(clip.suggestion_key):undefined}/>
+                                        {clip&&<TimelineAudioEditableClip clip={clip} pixelsPerSecond={timelineLayout.scaleWidth/timelineLayout.timelineScale} bounds={{start:timelineAudioBeatBounds(clip,beatMap?.sections??[])?.startSec??0,end:timelineAudioBeatBounds(clip,beatMap?.sections??[])?.endSec??contentDurationSec}} getScrollLeft={()=>timelineHostRef.current?getTimelineHorizontalScrollLeft(timelineHostRef.current):0} scrollTo={left=>timelineRef.current?.setScrollLeft(left)} getViewport={()=>timelineHostRef.current?.querySelector('.timeline-editor-edit-area')?.getBoundingClientRect()} onEditing={active=>{timelineAudio.setEditing(active);audioDragRef.current.id=active?clip.id:'';if(!active)setAudioDropLane(null);}} onCommit={(start,end,y)=>{const row=Array.from(timelineHostRef.current?.querySelectorAll('.timeline-editor-edit-row')??[]).find(el=>{const rect=el.getBoundingClientRect();return y>=rect.top&&y<rect.bottom;});const lane=row?.className.match(/audio-lane-(\d+)/);timelineAudio.commitEdit(clip.id,start,end,lane?Number(lane[1]):undefined);timelineAudio.select(clip.id);}}>
+                                        <TimelineAudioClipView clip={clip} selected={timelineAudio.selected===action.id} onSelect={()=>timelineAudio.select(action.id)} onVolume={volume=>timelineAudio.patch(action.id,{volume})} color={clip.suggestion_key?audioSuggestionColor(clip.suggestion_key):undefined}/>
+                                        </TimelineAudioEditableClip>}
                                     </Box>;
                                 }
                                 if (action.effectId === 'audio_suggestion') {

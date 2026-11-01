@@ -100,6 +100,7 @@ export function startDeepseekStep2Chunk(payload: {
     prompt: string;
     /** Số beat kỳ vọng của phần — BE validate output chatbot trả đúng số beat. */
     beatCount?: number;
+    provider?: 'deepseek' | 'claude';
     cookieId?: number;
     deepThink?: boolean;
     search?: boolean;
@@ -115,6 +116,7 @@ export function startDeepseekStep2Chunk(payload: {
             start_order: payload.startOrder,
             beat_count: payload.beatCount ?? 0,
             prompt: payload.prompt,
+            provider: payload.provider || 'deepseek',
             cookie_id: payload.cookieId ?? 0,
             deep_think: payload.deepThink ?? true,
             search: payload.search ?? true,
@@ -222,8 +224,8 @@ export function openDeepseekVideoImageSession(payload: {
     resume?: boolean;
     /** Key workflow (video-image | stickman) — mỗi bước lưu phiên chat riêng. */
     workflowKey: string;
-    /** Provider phiên chat: deepseek (mặc định) | chatgpt. */
-    provider?: 'deepseek' | 'chatgpt';
+    /** Provider phiên chat: deepseek (mặc định) | chatgpt | claude. */
+    provider?: 'deepseek' | 'chatgpt' | 'claude';
     /**
      * Field update hiển thị trong overlay browser "Update short video Headless" (từ dòng
      * updateBox trong index.md): title | audio | idea-thumbnail | character | sfx.

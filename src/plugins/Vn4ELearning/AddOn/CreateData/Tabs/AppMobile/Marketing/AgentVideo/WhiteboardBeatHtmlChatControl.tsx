@@ -8,7 +8,6 @@ import {
 } from '@mui/material';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import SettingsIcon from '@mui/icons-material/Settings';
-import GraphicEqIcon from '@mui/icons-material/GraphicEq';
 import type { useAgentVideoContent } from './useAgentVideoContent';
 import ShortVideoAgentVideoSettingsDialog from './ShortVideoAgentVideoSettingsDialog';
 
@@ -38,15 +37,15 @@ const compactButtonSx = {
  * DeepSeek đã tạo HTML motion (URL + cookie lưu trong beat_html[beatId]).
  */
 export default function WhiteboardBeatHtmlChatControl({ state, beatId, inline = false }: Props) {
+    const generationReady=!!state.beatHtmlMediaReadiness?.[beatId]?.ready;
+    const generationReason=state.beatHtmlMediaReadiness?.[beatId]?.message || 'Cần có audio và Whisper hợp lệ trước khi tạo HTML beat.';
     const chatUrl = String(state.beatHtml[beatId]?.chat_url || '').trim();
     const opening = (state.openingBeatDeepSeekChatBeatIds || []).includes(beatId);
-    const planningAudio = (state.planningBeatAudioPlanBeatIds || []).includes(beatId);
     const [settingsOpen, setSettingsOpen] = React.useState(false);
 
     if (inline) return <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
-        <Button variant="contained" size="small" startIcon={opening ? <CircularProgress size={14} color="inherit" /> : <OpenInNewIcon />} disabled={opening} onClick={() => state.handleGenerateBeatHtmlWithClipPreflight(beatId)}>{opening ? 'Đang chuẩn bị beat…' : 'Tạo HTML + tự tạo clip thiếu'}</Button>
+        <Button variant="contained" size="small" startIcon={opening ? <CircularProgress size={14} color="inherit" /> : <OpenInNewIcon />} title={generationReady ? '' : generationReason} disabled={opening || !generationReady} onClick={() => state.handleGenerateBeatHtmlWithClipPreflight(beatId)}>{opening ? 'Đang chuẩn bị beat…' : 'Tạo HTML + tự tạo clip thiếu'}</Button>
         {chatUrl ? <Button variant="outlined" size="small" disabled={opening} onClick={() => state.handleOpenBeatDeepSeekSavedChat(beatId)}>Mở lại chat HTML đã lưu</Button> : null}
-        <Button variant="outlined" size="small" startIcon={planningAudio ? <CircularProgress size={14} /> : <GraphicEqIcon />} disabled={opening || planningAudio || !String(state.beatHtml[beatId]?.html || '').trim()} onClick={() => state.handleEnqueueBeatAudioPlan(beatId, true)}>{planningAudio ? 'Đang tạo gợi ý âm thanh…' : 'Tạo lại gợi ý âm thanh'}</Button>
     </Stack>;
 
     return (
@@ -114,24 +113,7 @@ export default function WhiteboardBeatHtmlChatControl({ state, beatId, inline = 
                             </Button>
                         </span>
                     </Tooltip>
-                <Tooltip placement="top" title="Gửi prompt tiếp theo trong chat DeepSeek beat, tự tiếp tục/sửa JSON rồi đưa gợi ý lên timeline">
-                    <span>
-                        <Button
-                            size="small"
-                            variant="outlined"
-                            sx={compactButtonSx}
-                            startIcon={planningAudio ? <CircularProgress size={13} color="inherit" /> : <GraphicEqIcon sx={{ fontSize: 14 }} />}
-                            disabled={!String(state.beatHtml[beatId]?.html || '').trim() || opening || planningAudio}
-                            onClick={(event) => {
-                                event.stopPropagation();
-                                event.preventDefault();
-                                state.handleEnqueueBeatAudioPlan(beatId, true);
-                            }}
-                        >
-                            {planningAudio ? 'Đang tạo gợi ý' : 'Tạo lại gợi ý âm thanh'}
-                        </Button>
-                    </span>
-                </Tooltip>
+
                 </Stack>
             </Stack>
             {settingsOpen ? (

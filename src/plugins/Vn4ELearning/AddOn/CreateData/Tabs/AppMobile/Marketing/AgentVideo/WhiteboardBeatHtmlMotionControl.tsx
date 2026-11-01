@@ -15,6 +15,7 @@ type Props = {
     selected?: boolean;
     saving?: boolean;
     disabled?: boolean;
+    generationDisabledReason?: string;
     /** Click box → mở popup nhập/sửa HTML. */
     onOpenEditor: () => Promise<void> | void;
     /** Tick/bỏ tick checkbox chọn nguồn render HTML motion. */
@@ -38,6 +39,7 @@ export default function WhiteboardBeatHtmlMotionControl({
     selected = false,
     saving = false,
     disabled = false,
+    generationDisabledReason = '',
     onOpenEditor,
     onSelectChange,
     onOpenDeepSeek,
@@ -140,23 +142,24 @@ export default function WhiteboardBeatHtmlMotionControl({
             {onOpenDeepSeek ? (
                 <Tooltip
                     placement="bottom"
-                    title="DeepSeek kiểm tra clip; tự tạo clip còn thiếu rồi sinh HTML beat"
+                    title={generationDisabledReason || "DeepSeek kiểm tra clip; tự tạo clip còn thiếu rồi sinh HTML beat"}
                 >
                     <Box
                         role="button"
-                        tabIndex={0}
+                        tabIndex={generationDisabledReason ? -1 : 0}
+                        aria-disabled={!!generationDisabledReason || busy || disabled || openingDeepSeek}
                         onMouseDown={(event) => event.stopPropagation()}
                         onClick={(event) => {
                             event.stopPropagation();
                             event.preventDefault();
-                            if (busy || disabled || openingDeepSeek) return;
+                            if (busy || disabled || !!generationDisabledReason || openingDeepSeek) return;
                             void onOpenDeepSeek();
                         }}
                         onKeyDown={(event) => {
                             if (event.key === 'Enter' || event.key === ' ') {
                                 event.preventDefault();
                                 event.stopPropagation();
-                                if (busy || disabled || openingDeepSeek) return;
+                                if (busy || disabled || !!generationDisabledReason || openingDeepSeek) return;
                                 void onOpenDeepSeek();
                             }
                         }}
@@ -169,12 +172,13 @@ export default function WhiteboardBeatHtmlMotionControl({
                             width: 26,
                             height: 17,
                             borderRadius: 1,
-                            bgcolor: 'rgba(25,118,210,0.95)',
+                            bgcolor: generationDisabledReason ? '#62666b' : 'rgba(25,118,210,0.95)',
+                            opacity: generationDisabledReason ? .55 : 1,
                             border: '1px solid rgba(255,255,255,0.35)',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            cursor: busy || disabled || openingDeepSeek ? 'wait' : 'pointer',
+                            cursor: generationDisabledReason ? 'not-allowed' : busy || disabled || openingDeepSeek ? 'wait' : 'pointer',
                             boxShadow: '0 2px 6px rgba(0,0,0,0.45)',
                             '&:hover': { bgcolor: 'rgba(25,118,210,1)' },
                         }}
@@ -200,13 +204,13 @@ export default function WhiteboardBeatHtmlMotionControl({
             ) : null}
 
             {onOpenClaude ? (
-                <Tooltip title="Claude Sonnet 5.5 Medium: tự tạo HTML và gợi ý âm thanh">
+                <Tooltip title={generationDisabledReason || "Claude Sonnet 5.5 Medium: tạo HTML kèm sự kiện âm thanh"}>
                     <Box component="button" type="button" aria-label="Tạo HTML beat bằng Claude"
-                        disabled={busy || disabled || openingClaude}
+                        disabled={busy || disabled || !!generationDisabledReason || openingClaude}
                         onClick={(event: React.MouseEvent<HTMLButtonElement>) => { event.stopPropagation(); void onOpenClaude(); }}
                         sx={{ position: 'absolute', bottom: -8, right: -6, zIndex: 2,
                             height: 17, px: 0.5, borderRadius: 1, border: '1px solid rgba(255,255,255,0.35)',
-                            bgcolor: '#a45438', color: 'white', fontSize: 8, cursor: 'pointer',
+                            bgcolor: generationDisabledReason ? '#62666b' : '#a45438', color: 'white', fontSize: 8, cursor: 'pointer',
                             '&:disabled': { opacity: 0.5, cursor: 'wait' } }}>
                         {openingClaude ? <CircularProgress size={10} color="inherit" /> : 'Claude'}
                     </Box>

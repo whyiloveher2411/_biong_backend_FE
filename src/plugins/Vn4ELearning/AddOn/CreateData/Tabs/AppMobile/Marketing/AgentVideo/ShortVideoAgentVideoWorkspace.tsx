@@ -1,3 +1,4 @@
+import ShortVideoAgentWholePreview from './ShortVideoAgentWholePreview';
 import SoundLibraryDrawer from '../SoundLibraryDrawer';
 import React from 'react';
 import { Box, Typography } from '@mui/material';
@@ -816,7 +817,9 @@ export default function ShortVideoAgentVideoWorkspace({
                             flexDirection: 'column',
                             overflow: 'hidden',
                         }}
+                        style={{position:'relative'}}
                     >
+                        {(state.isWhiteboardMode || useCustomHtmlPreview) && <ShortVideoAgentWholePreview videoId={shortVideoId} beatMap={beatMapReadyForUi ? beatMapForUi : null} beatHtml={state.beatHtml} beatImage={state.beatImage} audioUrl={state.audioPreviewUrl || ''} beatAudio={state.beatAudio} />}
                         {canEditRegion ? (
                             <ShortVideoAgentBeatRegionEditor
                                 key={`beat-editor:${currentBeatId}`}

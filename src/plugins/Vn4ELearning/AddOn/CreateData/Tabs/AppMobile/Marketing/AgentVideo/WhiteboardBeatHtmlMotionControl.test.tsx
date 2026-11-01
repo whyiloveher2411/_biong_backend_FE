@@ -21,3 +21,13 @@ test('Claude cannot be opened twice while session is opening', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Tạo HTML beat bằng Claude' }));
     expect(claude).not.toHaveBeenCalled();
 });
+
+test('missing audio/Whisper blocks both generation providers',()=>{
+ const claude=jest.fn(),deepseek=jest.fn(),editor=jest.fn();
+ render(<WhiteboardBeatHtmlMotionControl onOpenEditor={editor} onSelectChange={()=>true}
+  onOpenDeepSeek={deepseek} onOpenClaude={claude} generationDisabledReason="Cần có audio và Whisper"/>);
+ const button=screen.getByRole('button',{name:'Tạo HTML beat bằng Claude'});
+ expect((button as HTMLButtonElement).disabled).toBe(true);fireEvent.click(button);
+ fireEvent.click(screen.getByText('DS'));fireEvent.keyDown(screen.getByText('DS').closest('[role="button"]')!,{key:'Enter'});
+ expect(claude).not.toHaveBeenCalled();expect(deepseek).not.toHaveBeenCalled();
+});

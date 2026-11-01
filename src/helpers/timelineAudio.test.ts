@@ -1,4 +1,4 @@
-import {timelineAudioSample,TimelineAudioClip,timelineAudioMaxDuration,normalizeTimelineAudio,packTimelineAudio,timelineAudioOverlap} from './timelineAudio';
+import {timelineAudioSample,TimelineAudioClip,timelineAudioMaxDuration,normalizeTimelineAudio,packTimelineAudio,timelineAudioOverlap,resolveTimelineAudioDrag,constrainTimelineAudio} from './timelineAudio';
 const clip:TimelineAudioClip={id:'rain',sound_id:'rain',sound:{id:'rain',file:'rain.ogg',title:'Rain',duration_sec:12,category:'ambience',license:'CC0',source:''},start_sec:2,duration_sec:8,offset_sec:1,volume:.4,loop:true,fade_in:2,fade_out:2};
 test('global playback remains continuous across beat boundaries and respects fades',()=>{
  expect(timelineAudioSample(clip,1)).toBeNull();
@@ -30,4 +30,26 @@ test('explicit lane assignments survive packing and touching endpoints do not co
  expect(rows.map(c=>c.lane)).toEqual([0,1]);
  expect(timelineAudioOverlap(rows[0],rows[1])).toBe(false);
  expect(packTimelineAudio(rows.map(c=>({...c,lane:0}))).map(c=>c.lane)).toEqual([0,0]);
+});
+
+test('mute suppresses preview and unmute retains volume and timing',()=>{
+ const muted=normalizeTimelineAudio({...clip,muted:true});
+ expect(muted.volume).toBe(.4);expect(muted.duration_sec).toBe(8);
+ expect(timelineAudioSample(muted,6)).toBeNull();
+ expect(timelineAudioSample({...muted,muted:false},6)).toEqual({offset:5,volume:.4});
+});
+
+test('missing volume defaults to 100 percent without overriding intentional zero',()=>{
+ expect(normalizeTimelineAudio({...clip,volume:undefined as unknown as number}).volume).toBe(1);
+ expect(normalizeTimelineAudio({...clip,volume:0}).volume).toBe(0);
+});
+
+test('beat-owned sounds cannot move or resize beyond their original beat',()=>{
+ const c={...clip,event_beat_id:'beat_2',start_sec:5,duration_sec:2,offset_sec:0},bounds={start:4,end:8};
+ expect(resolveTimelineAudioDrag(c,100,'move',bounds)).toEqual({start:6,end:8});
+ expect(resolveTimelineAudioDrag(c,-100,'move',bounds)).toEqual({start:4,end:6});
+ expect(resolveTimelineAudioDrag(c,100,'right',bounds)).toEqual({start:5,end:8});
+ expect(resolveTimelineAudioDrag(c,-100,'left',bounds)).toEqual({start:4,end:7});
+ const constrained=constrainTimelineAudio({...c,start_sec:20},[{id:'beat_1',startSec:0,endSec:4},{id:'beat_2',startSec:4,endSec:8}]);
+ expect(constrained.start_sec).toBe(6);expect(constrained.event_beat_id).toBe('beat_2');
 });
