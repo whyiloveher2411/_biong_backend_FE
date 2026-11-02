@@ -6,7 +6,6 @@ import ContentPasteIcon from '@mui/icons-material/ContentPaste';
 import CloseIcon from '@mui/icons-material/Close';
 import CloudUploadOutlinedIcon from '@mui/icons-material/CloudUploadOutlined';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
-import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 import {
     copyWorkflowPromptToClipboard,
     fetchWorkflowPromptText,
@@ -93,6 +92,7 @@ export default function MarketingWorkflowBreakdown({
     const [deepseekStatus, setDeepseekStatus] = React.useState<Record<number, DeepseekStep2ChunkStatus>>({});
     const [deepseekStarting, setDeepseekStarting] = React.useState(-1);
     const [deepseekAllRunning, setDeepseekAllRunning] = React.useState(false);
+    const [runningProvider, setRunningProvider] = React.useState<'deepseek'|'claude'>('deepseek');
     const [openingChatIndex, setOpeningChatIndex] = React.useState(-1);
     // Giữ showMessage trong ref để effect poll không phụ thuộc hàm (tránh restart liên tục).
     const showMessageRef = React.useRef(showMessage);
@@ -383,7 +383,7 @@ export default function MarketingWorkflowBreakdown({
             provider,
         });
         if (!res?.success) {
-            showMessage(readApiMessage(res, 'Không đưa được phần này vào hàng đợi DeepSeek'), 'error');
+            showMessage(readApiMessage(res, `Không đưa được phần này vào hàng đợi ${provider === 'claude' ? 'Claude' : 'DeepSeek'}`), 'error');
             return false;
         }
         return true;
@@ -393,6 +393,7 @@ export default function MarketingWorkflowBreakdown({
         if (deepseekStarting >= 0 || deepseekAllRunning) {
             return;
         }
+        setRunningProvider(provider);
         setDeepseekStarting(index);
         try {
             const ok = await enqueueChunk(index, provider);
@@ -403,7 +404,7 @@ export default function MarketingWorkflowBreakdown({
                 setDeepseekAllRunning(true);
             }
         } catch (err) {
-            showMessage(err instanceof Error ? err.message : 'Không chạy được DeepSeek', 'error');
+            showMessage(err instanceof Error ? err.message : `Không chạy được ${provider === 'claude' ? 'Claude' : 'DeepSeek'}`, 'error');
         } finally {
             setDeepseekStarting(-1);
         }
@@ -444,7 +445,7 @@ export default function MarketingWorkflowBreakdown({
         }
     }, [deepseekStatus, shortVideoId, showMessage]);
 
-    const runAllDeepseek = React.useCallback(async () => {
+    const runAllDeepseek = React.useCallback(async (provider: 'deepseek'|'claude' = 'deepseek') => {
         if (deepseekAllRunning || deepseekStarting >= 0) {
             return;
         }
@@ -453,21 +454,22 @@ export default function MarketingWorkflowBreakdown({
             return;
         }
         runExpectedRef.current = plan.chunks.length;
+        setRunningProvider(provider);
         setDeepseekAllRunning(true);
         let queued = 0;
         try {
             for (const chunk of plan.chunks) {
                 // eslint-disable-next-line no-await-in-loop
-                const ok = await enqueueChunk(chunk.index);
+                const ok = await enqueueChunk(chunk.index, provider);
                 if (ok) {
                     queued += 1;
                 }
             }
         } catch (err) {
-            showMessage(err instanceof Error ? err.message : 'Không chạy được DeepSeek', 'error');
+            showMessage(err instanceof Error ? err.message : `Không chạy được ${provider === 'claude' ? 'Claude' : 'DeepSeek'}`, 'error');
         }
         if (queued > 0) {
-            showMessage(`Đã đưa ${queued}/${plan.chunks.length} phần vào hàng đợi DeepSeek (mỗi phần 1 luồng chat)`, 'success');
+            showMessage(`Đã đưa ${queued}/${plan.chunks.length} phần vào hàng đợi ${provider === 'claude' ? 'Claude' : 'DeepSeek'} (mỗi phần 1 luồng chat)`, 'success');
             // Enqueue thiếu phần (một số phần lỗi) → tắt cờ "đang chạy" để poll chỉ theo
             // trạng thái backend còn lại, tránh poll mãi vì không bao giờ đủ số phần kỳ vọng.
             if (queued < plan.chunks.length) {
@@ -484,6 +486,8 @@ export default function MarketingWorkflowBreakdown({
         <Box
             sx={{
                 width: '100%',
+                boxSizing: 'border-box',
+                minWidth: 0,
                 border: '1px dashed',
                 borderColor: 'divider',
                 borderRadius: 2,
@@ -500,21 +504,16 @@ export default function MarketingWorkflowBreakdown({
             </Typography>
 
             <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mt: 0.75 }}>
-                <Button
-                    size="small"
-                    variant="contained"
-                    color="primary"
-                    disabled={busy || deepseekStarting >= 0 || deepseekAllRunning || !item.exists}
-                    startIcon={
-                        deepseekAllRunning
-                            ? <CircularProgress size={12} color="inherit" />
-                            : <SmartToyOutlinedIcon fontSize="small" />
-                    }
-                    onClick={() => { void runAllDeepseek(); }}
-                    sx={{ textTransform: 'none' }}
-                >
-                    {deepseekAllRunning ? 'DeepSeek đang chạy…' : 'Chạy DeepSeek tất cả phần'}
-                </Button>
+                {(['deepseek', 'claude'] as const).map(provider => {
+                    const label = provider === 'claude' ? 'Claude' : 'DeepSeek';
+                    const running = deepseekAllRunning && runningProvider === provider;
+                    return <Button key={provider} size="small" variant="outlined"
+                        disabled={busy || deepseekStarting >= 0 || deepseekAllRunning || !item.exists}
+                        startIcon={running ? <CircularProgress size={12} color="inherit" /> : <ProviderLogo provider={provider} />}
+                        onClick={() => { void runAllDeepseek(provider); }} sx={{textTransform:'none'}}>
+                        {running ? `${label} đang chạy…` : `Chạy ${label} tất cả phần`}
+                    </Button>;
+                })}
                 <Typography variant="caption" color="text.secondary">
                     Mỗi phần 1 luồng chat riêng; lỗi sẽ tự gửi lại chatbot để sửa.
                 </Typography>
@@ -560,7 +559,7 @@ export default function MarketingWorkflowBreakdown({
                         >
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap' }}>
                                 <Typography variant="caption" sx={{ fontWeight: 600, flex: 1, minWidth: 150 }}>
-                                    Phần {chunk.index + 1}/{chunk.total} · beat {chunk.beatStart}–{chunk.beatEnd} ({chunk.beatCount} beat)
+                                    Phần {chunk.index + 1}/{chunk.total} · Beat {chunk.beatStart}–{chunk.beatEnd}
                                 </Typography>
                                 <Chip
                                     size="small"
@@ -594,20 +593,6 @@ export default function MarketingWorkflowBreakdown({
                                     </Tooltip>
                                 )}
                                 {ds?.chat_url ? (
-                                    <Tooltip title="Mở URL trên browser hiện tại — cần đúng account cookie">
-                                        <Button
-                                            size="small"
-                                            color="inherit"
-                                            href={ds.chat_url}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            sx={{ textTransform: 'none', minWidth: 0, px: 0.5, fontSize: 11 }}
-                                        >
-                                            Chat
-                                        </Button>
-                                    </Tooltip>
-                                ) : null}
-                                {ds?.chat_url ? (
                                     <Tooltip
                                         title={
                                             ds.cookie_id
@@ -629,11 +614,13 @@ export default function MarketingWorkflowBreakdown({
                                                 onClick={() => { void openChunkChat(chunk.index); }}
                                                 sx={{ textTransform: 'none' }}
                                             >
-                                                Mở URL
+                                                Mở chat
                                             </Button>
                                         </span>
                                     </Tooltip>
                                 ) : null}
+                            </Box>
+                            <Box sx={{display:'grid',gridTemplateColumns:{xs:'repeat(2,max-content)',sm:'repeat(4,max-content)'},alignItems:'center',justifyContent:'start',gap:.75,mt:.75,'& .MuiButton-root':{height:30,minHeight:30,fontSize:12,px:1,textTransform:'none'},'& .MuiButton-startIcon':{mr:.5,'& svg':{fontSize:16}}}}>
                                 {(() => {
                                     const copyButton = (
                                         <Button
@@ -665,31 +652,15 @@ export default function MarketingWorkflowBreakdown({
                                         </Tooltip>
                                     );
                                 })()}
-                                <Button
-                                    size="small"
-                                    variant="outlined"
-                                    color="primary"
+                                {(['deepseek', 'claude'] as const).map(provider => <Button
+                                    key={provider} size="small" variant="outlined"
                                     disabled={busy || deepseekStarting >= 0 || deepseekAllRunning || dsActive || !item.exists}
-                                    startIcon={
-                                        deepseekStarting === chunk.index
-                                            ? <CircularProgress size={12} color="inherit" />
-                                            : <SmartToyOutlinedIcon fontSize="small" />
-                                    }
-                                    onClick={() => { void runChunkDeepseek(chunk.index); }}
-                                    sx={{ textTransform: 'none' }}
-                                >
-                                    Mở DeepSeek
-                                </Button>
-                                <Button
-                                    size="small"
-                                    variant="outlined"
-                                    disabled={busy || deepseekStarting >= 0 || deepseekAllRunning || dsActive || !item.exists}
-                                    startIcon={<SmartToyOutlinedIcon fontSize="small" />}
-                                    onClick={() => { void runChunkDeepseek(chunk.index, 'claude'); }}
-                                    sx={{ textTransform: 'none' }}
-                                >
-                                    Mở Claude
-                                </Button>
+                                    startIcon={deepseekStarting === chunk.index && runningProvider === provider
+                                        ? <CircularProgress size={12} color="inherit" /> : <ProviderLogo provider={provider} />}
+                                    onClick={() => { void runChunkDeepseek(chunk.index, provider); }}
+                                    sx={{textTransform:'none'}}>
+                                    {provider === 'claude' ? 'Claude' : 'DeepSeek'}
+                                </Button>)}
                                 <Button
                                     size="small"
                                     variant={hasContent ? 'outlined' : 'contained'}
@@ -785,4 +756,8 @@ export default function MarketingWorkflowBreakdown({
             </Typography>
         </Box>
     );
+}
+
+function ProviderLogo({provider}:{provider:'deepseek'|'claude'}) {
+    return <img src={`${process.env.PUBLIC_URL||''}/images/workflow/${provider}.svg`} width={20} height={20} alt="" />;
 }

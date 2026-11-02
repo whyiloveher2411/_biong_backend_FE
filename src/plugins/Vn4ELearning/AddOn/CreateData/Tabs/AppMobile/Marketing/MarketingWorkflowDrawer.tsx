@@ -1,3 +1,4 @@
+import WorkflowChatSessionBox from './WorkflowChatSessionBox';
 import SceneAssetsPanel from './AgentVideo/SceneAssetsPanel';
 import ShortVideoAgentSaydiCastSettings from './AgentVideo/ShortVideoAgentSaydiCastSettings';
 import React from 'react';
@@ -28,7 +29,6 @@ import TipsAndUpdatesOutlinedIcon from '@mui/icons-material/TipsAndUpdatesOutlin
 import CloudUploadOutlinedIcon from '@mui/icons-material/CloudUploadOutlined';
 import OpenInNewOutlinedIcon from '@mui/icons-material/OpenInNewOutlined';
 import SaveOutlinedIcon from '@mui/icons-material/SaveOutlined';
-import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 import PersonAddAltOutlinedIcon from '@mui/icons-material/PersonAddAltOutlined';
 import LandscapeOutlinedIcon from '@mui/icons-material/LandscapeOutlined';
 import ImageOutlinedIcon from '@mui/icons-material/ImageOutlined';
@@ -55,7 +55,7 @@ import {
     splitWorkflowBeatBlocks,
     splitWorkflowBeats,
     splitWorkflowStepTitle,
-    workflowSessionStepId,
+    workflowChatSessionKey,
     WORKFLOW_AUDIO_SCRIPT_BEATS_KEY,
     WORKFLOW_AUDIO_SCRIPT_KEY,
     WORKFLOW_INPUT_PROMPT_KEY,
@@ -956,11 +956,11 @@ export default function MarketingWorkflowDrawer({
             .flatMap((step, index) => {
                 const keys: string[] = [];
                 if (step.prompts.some((p) => Boolean(p.deepseekSession))) {
-                    keys.push(`${workflow.key}#${workflow.key === 'video-html-2d' ? 'handoff-v2-' : (workflow.key === 'video-html' && effectiveChoiceValues['asset-mode'] === 'free' ? 'free-' : '')}${workflowSessionStepId(workflow.key, index)}`);
-                    keys.push(`${keys[keys.length - 1]}::claude`);
+                    keys.push(workflowChatSessionKey(workflow.key, index, effectiveChoiceValues['asset-mode']));
+
                 }
-                if (ENABLE_CHATGPT_SESSION && step.prompts.some((p) => Boolean(p.chatgptSession))) {
-                    keys.push(`${workflow.key}#${workflow.key === 'video-html-2d' ? 'handoff-v2-' : (workflow.key === 'video-html' && effectiveChoiceValues['asset-mode'] === 'free' ? 'free-' : '')}${workflowSessionStepId(workflow.key, index)}::chatgpt`);
+                if (keys.length === 0 && ENABLE_CHATGPT_SESSION && step.prompts.some((p) => Boolean(p.chatgptSession))) {
+                    keys.push(workflowChatSessionKey(workflow.key, index, effectiveChoiceValues['asset-mode']));
                 }
                 return keys;
             });
@@ -1542,25 +1542,22 @@ export default function MarketingWorkflowDrawer({
                             const isCopying = copyingStep === stepKey;
                             const isCopied = copiedStep === stepKey;
                             // Bước có deepseekSession/chatgptSession trong index.md → hiện nút mở
-                            // browser tương ứng; Claude dùng prompt DeepSeek, mỗi provider một phiên riêng.
+                            // browser tương ứng; cả hai provider dùng chung trạng thái và URL cuối cùng.
                             const chatSessionProviders = ([
                                 {
                                     provider: 'deepseek' as const,
                                     label: 'DeepSeek',
-                                    keySuffix: '',
                                     prompts: step.prompts.filter((p) => Boolean(p.deepseekSession)),
                                 },
                                 {
                                     provider: 'claude' as const,
                                     label: 'Claude',
-                                    keySuffix: '::claude',
                                     // Claude uses the same prompt roles and choices as DeepSeek.
                                     prompts: step.prompts.filter((p) => Boolean(p.deepseekSession)),
                                 },
                                 ...(ENABLE_CHATGPT_SESSION ? [{
                                     provider: 'chatgpt' as const,
                                     label: 'ChatGPT',
-                                    keySuffix: '::chatgpt',
                                     prompts: step.prompts.filter((p) => Boolean(p.chatgptSession)),
                                 }] : []),
                             ]).filter((entry) => entry.prompts.length > 0);
@@ -1973,144 +1970,42 @@ export default function MarketingWorkflowDrawer({
                                         )}
 
 
-                                        {chatSessionProviders.map(({ provider, label, keySuffix, prompts: providerPrompts }) => {
-                                            // Resolve each role separately; a beat-only step starts with its division prompt.
-                                            const sessionKey = `${workflow.key}#${workflow.key === 'video-html-2d' ? 'handoff-v2-' : (workflow.key === 'video-html' && effectiveChoiceValues['asset-mode'] === 'free' ? 'free-' : '')}${workflowSessionStepId(workflow.key, index)}${keySuffix}`;
+                                        {chatSessionProviders.length > 0 && (() => {
+                                            const sessionKey = workflowChatSessionKey(workflow.key, index, effectiveChoiceValues['asset-mode']);
                                             const dsState = deepseekStates[sessionKey] || EMPTY_DEEPSEEK_STATE;
-                                            const findPrompt = (role: '' | 'generate' | 'beat' | 'translate') => (
-                                                providerPrompts.find((p) => (
-                                                    (provider === 'chatgpt' ? p.chatgptSession : p.deepseekSession) === role
-                                                ))
-                                            );
-                                            const generatePrompt = findPrompt('generate');
-                                            const beatPrompt = findPrompt('beat');
-                                            const translatePrompt = findPrompt('translate');
-                                            const busy = Boolean(deepseekAction);
-                                            // Item generate có thể có nhóm lựa chọn (choice) → dùng file của option đang chọn.
-                                            const generateInfo = generatePrompt
-                                                ? resolveWorkflowPromptChoiceFile(generatePrompt, effectiveChoiceValues)
-                                                : null;
-                                            const beatInfo = beatPrompt
-                                                ? resolveWorkflowPromptChoiceFile(beatPrompt, effectiveChoiceValues)
-                                                : null;
-                                            const translateInfo = translatePrompt
-                                                ? resolveWorkflowPromptChoiceFile(translatePrompt, effectiveChoiceValues)
-                                                : null;
-                                            const generateExists = Boolean(generateInfo?.exists || (!generatePrompt && beatInfo?.exists));
-                                            const cb = {
-                                                generate: generateInfo?.file,
-                                                beat: beatInfo?.file,
-                                                translate: translateInfo?.file,
-                                            };
+                                            const options = chatSessionProviders.map(({provider, label, prompts: providerPrompts}) => {
+                                                const findPrompt = (role: '' | 'generate' | 'beat' | 'translate') => (
+                                                    providerPrompts.find((p) => (
+                                                        (provider === 'chatgpt' ? p.chatgptSession : p.deepseekSession) === role
+                                                    ))
+                                                );
+                                                const generatePrompt = findPrompt('generate');
+                                                const beatPrompt = findPrompt('beat');
+                                                const translatePrompt = findPrompt('translate');
+                                                const busy = Boolean(deepseekAction);
+                                                // Item generate có thể có nhóm lựa chọn (choice) → dùng file của option đang chọn.
+                                                const generateInfo = generatePrompt
+                                                    ? resolveWorkflowPromptChoiceFile(generatePrompt, effectiveChoiceValues)
+                                                    : null;
+                                                const beatInfo = beatPrompt
+                                                    ? resolveWorkflowPromptChoiceFile(beatPrompt, effectiveChoiceValues)
+                                                    : null;
+                                                const translateInfo = translatePrompt
+                                                    ? resolveWorkflowPromptChoiceFile(translatePrompt, effectiveChoiceValues)
+                                                    : null;
+                                                const generateExists = Boolean(generateInfo?.exists || (!generatePrompt && beatInfo?.exists));
+                                                const cb = {
+                                                    generate: generateInfo?.file,
+                                                    beat: beatInfo?.file,
+                                                    translate: translateInfo?.file,
+                                                };
 
-                                            return (
-                                                <Box
-                                                    key={provider}
-                                                    sx={{
-                                                        mt: 1.25,
-                                                        p: 1.25,
-                                                        border: '1px solid',
-                                                        borderColor: dsState.sessionAlive ? 'success.light' : 'divider',
-                                                        borderRadius: 2,
-                                                        bgcolor: 'action.hover',
-                                                    }}
-                                                >
-                                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap' }}>
-                                                        <SmartToyOutlinedIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
-                                                        <Typography variant="caption" sx={{ fontWeight: 700 }}>
-                                                            {label} (browser)
-                                                        </Typography>
-                                                        <Chip
-                                                            size="small"
-                                                            color={dsState.sessionAlive ? 'success' : 'default'}
-                                                            variant={dsState.sessionAlive ? 'filled' : 'outlined'}
-                                                            label={dsState.sessionAlive ? 'Browser đang mở' : 'Chưa mở browser'}
-                                                            sx={{ height: 20, fontSize: 11 }}
-                                                        />
-                                                        {dsState.beatCount > 0 ? (
-                                                            <Chip
-                                                                size="small"
-                                                                variant="outlined"
-                                                                color="info"
-                                                                label={`${dsState.beatCount} beat`}
-                                                                sx={{ height: 20, fontSize: 11 }}
-                                                            />
-                                                        ) : null}
-                                                        {dsState.translationCount > 0 ? (
-                                                            <Chip
-                                                                size="small"
-                                                                variant="outlined"
-                                                                color="info"
-                                                                label={`Dịch ${dsState.translationCount}`}
-                                                                sx={{ height: 20, fontSize: 11 }}
-                                                            />
-                                                        ) : null}
-                                                        {dsState.hasOriginalAudio ? (
-                                                            <Chip
-                                                                size="small"
-                                                                variant="outlined"
-                                                                color="warning"
-                                                                label="Có audio gốc"
-                                                                sx={{ height: 20, fontSize: 11 }}
-                                                            />
-                                                        ) : null}
-                                                    </Box>
-
-                                                    <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mt: 1 }}>
-                                                        <Button
-                                                            size="small"
-                                                            variant="contained"
-                                                            color={provider === 'chatgpt' ? 'success' : 'primary'}
-                                                            disabled={busy || !generateExists || configBlocked}
-                                                            startIcon={
-                                                                deepseekAction === sessionKey
-                                                                    ? <CircularProgress size={12} color="inherit" />
-                                                                    : <SmartToyOutlinedIcon fontSize="small" />
-                                                            }
-                                                            onClick={() => { void runOpenDeepseekSession(cb, sessionKey, false, provider, step.updateBox); }}
-                                                            sx={{ textTransform: 'none' }}
-                                                        >
-                                                            {deepseekAction === sessionKey ? 'Đang mở browser…' : `Mở ${label}`}
-                                                        </Button>
-                                                        {dsState.chatUrl ? (
-                                                            <Tooltip title={dsState.chatUrl} placement="top">
-                                                                <span>
-                                                                    <Button
-                                                                        size="small"
-                                                                        variant="outlined"
-                                                                        color={provider === 'chatgpt' ? 'success' : 'secondary'}
-                                                                        disabled={busy || configBlocked}
-                                                                        startIcon={<OpenInNewOutlinedIcon fontSize="small" />}
-                                                                        onClick={() => { void runOpenDeepseekSession(cb, sessionKey, true, provider, step.updateBox); }}
-                                                                        sx={{ textTransform: 'none' }}
-                                                                    >
-                                                                        Mở lại luồng chat cũ
-                                                                    </Button>
-                                                                </span>
-                                                            </Tooltip>
-                                                        ) : null}
-                                                        {dsState.message ? (
-                                                            <Typography variant="caption" color="text.secondary">
-                                                                {dsState.message}
-                                                            </Typography>
-                                                        ) : null}
-                                                    </Stack>
-
-                                                    {dsState.chatUrl ? (
-                                                        <Typography
-                                                            variant="caption"
-                                                            sx={{ display: 'block', mt: 0.5, wordBreak: 'break-all' }}
-                                                            color="text.secondary"
-                                                        >
-                                                            Luồng chat đã lưu:{' '}
-                                                            <a href={dsState.chatUrl} target="_blank" rel="noopener noreferrer">
-                                                                {dsState.chatUrl}
-                                                            </a>
-                                                        </Typography>
-                                                    ) : null}
-                                                </Box>
-                                            );
-                                        })}
+                                                return {provider, label, disabled: busy || !generateExists || configBlocked, open: (resume = false) => runOpenDeepseekSession(cb, sessionKey, resume, provider, step.updateBox)};
+                                            });
+                                            const lastProvider = dsState.chatUrl.includes('claude.ai') ? 'claude' : dsState.chatUrl.includes('chatgpt.com') || dsState.chatUrl.includes('chat.openai.com') ? 'chatgpt' : 'deepseek';
+                                            const resumeOption = options.find(option => option.provider === lastProvider);
+                                            return <WorkflowChatSessionBox options={options} state={dsState} busy={Boolean(deepseekAction)} onResume={resumeOption && !configBlocked ? () => resumeOption.open(true) : undefined} />;
+                                        })()}
 
 {step.note && (
                                             <Box

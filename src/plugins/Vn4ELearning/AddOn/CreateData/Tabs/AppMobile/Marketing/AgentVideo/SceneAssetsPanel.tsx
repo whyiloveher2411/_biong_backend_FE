@@ -1,3 +1,5 @@
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import {writePromptTextToClipboard} from 'helpers/marketingShortVideoAgentPrompt';
 import React from 'react';
 import CharacterWardrobeEditor from '../CharacterWardrobeEditor';
 import Model3dPreview from '../Model3dPreview';
@@ -8,16 +10,19 @@ import SceneAssetPreviewDialog from './SceneAssetPreviewDialog';
 import PersonOutlineIcon from '@mui/icons-material/PersonOutline';
 import CottageOutlinedIcon from '@mui/icons-material/CottageOutlined';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
-import ChatOutlinedIcon from '@mui/icons-material/ChatOutlined';
-import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
-import CodeIcon from '@mui/icons-material/Code';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import ReplayIcon from '@mui/icons-material/Replay';
 
-import { Alert, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, FormControl, InputLabel, LinearProgress, MenuItem, Select, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, FormControl, IconButton, Tooltip, InputLabel, LinearProgress, MenuItem, Select, Stack, TextField, Typography } from '@mui/material';
 import { SceneAsset, SceneAssetRegistry, sceneAssetMessage, sceneAssetsManifest, sceneAssetsRequest } from 'helpers/shortVideoSceneAssets';
 
 type Props = { shortVideoId: number };
+type AssetProvider = 'deepseek' | 'claude';
+const providerStorageKey = (videoId: number) => `scene-assets-provider:${videoId}`;
+function readAssetProvider(videoId: number): AssetProvider {
+    try { return localStorage.getItem(providerStorageKey(videoId)) === 'claude' ? 'claude' : 'deepseek'; }
+    catch { return 'deepseek'; }
+}
 
 /** Nút hành động gọn, cùng chiều cao để toolbar không bị so le khi wrap. */
 const compactButtonSx = {
@@ -31,15 +36,6 @@ const compactButtonSx = {
     whiteSpace: 'nowrap',
     '& .MuiButton-startIcon': {mr: 0.5, '& svg': {fontSize: 16}},
 };
-const compactUtilitySx = {
-    ...compactButtonSx,
-    px: 0.75,
-    fontWeight: 500,
-    '&.MuiButton-root': {color: 'text.secondary'},
-    '&.MuiButton-root:hover': {color: 'text.primary', bgcolor: 'background.paper'},
-    '& .MuiButton-startIcon': {mr: 0.5, '& svg': {fontSize: 14}},
-};
-
 /** Một video-html có thể có hơn 100 beat. Chỉ mount dần phần gán hồ sơ để lần mở đầu không chặn UI. */
 const BEAT_RENDER_BATCH = 20;
 const REGISTRY_POLL_MS = 5000;
@@ -71,13 +67,18 @@ export default function SceneAssetsPanel({shortVideoId}: Props) {
     const [loading, setLoading] = React.useState(true);
     const [error, setError] = React.useState('');
     const [regenerate, setRegenerate] = React.useState(false);
+    const [provider,setProvider]=React.useState<AssetProvider>(()=>readAssetProvider(shortVideoId));
+    React.useEffect(()=>{setProvider(readAssetProvider(shortVideoId));},[shortVideoId]);
+    const selectProvider = (value: AssetProvider) => {
+        setProvider(value);
+        try { localStorage.setItem(providerStorageKey(shortVideoId),value); } catch { /* Keep selection usable when browser storage is unavailable. */ }
+    };
+    const providerLabel=provider==='claude'?'Claude':'DeepSeek';
     const [notice, setNotice] = React.useState('');
     const [busy, setBusy] = React.useState('');
     const [importText, setImportText] = React.useState('');
     const [importOpen, setImportOpen] = React.useState(false);
     const [preview, setPreview] = React.useState<SceneAsset | null>(null);
-    const [edit, setEdit] = React.useState<SceneAsset | null>(null);
-    const [html, setHtml] = React.useState('');
     const [profile, setProfile] = React.useState<SceneAsset | null>(null);
     const profileBase = React.useRef<SceneAssetRegistry>({});
     const [draft, setDraft] = React.useState<SceneAssetRegistry | null>(null);
@@ -149,7 +150,7 @@ export default function SceneAssetsPanel({shortVideoId}: Props) {
                 pending = false;
             }
         };
-        setRegistry({}); setLoading(true); setError(''); setDraft(null); setEdit(null); setProfile(null); setPreview(null); setImportOpen(false);
+        setRegistry({}); setLoading(true); setError(''); setDraft(null); setProfile(null); setPreview(null); setImportOpen(false);
         setBusy(''); setNotice(''); setMappingOpen(false); setMappingCount(BEAT_RENDER_BATCH);
         void load();
         const timer = setInterval(load, REGISTRY_POLL_MS);
@@ -179,21 +180,25 @@ export default function SceneAssetsPanel({shortVideoId}: Props) {
             // Character source changes alter the asset-config consumed by every
             // saved beat that still references its prior library GLB.
             if (operation === 'unbind_model') dispatchBeatAssetChanged(shortVideoId, '');
-            setNotice(operation === 'open' ? 'Đã mở DeepSeek. Gửi prompt, copy HTML rồi lưu ngay trong overlay.' : operation === 'enqueue' || operation === 'html' || operation === 'repair' ? sceneAssetMessage(res) : 'Đã lưu.');
+            setNotice(operation === 'open' ? `Đã mở ${data.provider === 'claude' ? 'Claude' : 'DeepSeek'}. Lưu HTML trong overlay sau khi tạo xong.` : operation === 'enqueue' || operation === 'html' || operation === 'repair' ? sceneAssetMessage(res) : 'Đã lưu.');
             return true;
         } catch (e) { if (mounted.current) setError('Không kết nối được CMS.'); return false; }
         finally { if (mounted.current && currentVideo.current === shortVideoId) setBusy(''); }
     };
-    const loadAsset = async (asset: SceneAsset) => {
+    const copyAssetPrompt = async (asset: SceneAsset) => {
         if (busy || loading) return;
-        setBusy('load:' + asset.id); setError('');
+        setBusy('copy:'+asset.id); setError(''); setNotice('');
         try {
-            const res = await sceneAssetsRequest(shortVideoId, 'preview', {asset_id: asset.id});
+            const res = await sceneAssetsRequest(shortVideoId, 'prompt', {asset_id:asset.id,provider});
             if (!mounted.current || currentVideo.current !== shortVideoId) return;
-            if (!res.success || !res.asset) { setError(sceneAssetMessage(res)); return; }
-            setEdit(res.asset); setHtml(res.asset.html || '');
-        } catch (e) { if (mounted.current) setError('Không tải được HTML hồ sơ.'); }
-        finally { if (mounted.current && currentVideo.current === shortVideoId) setBusy(''); }
+            if (!res.success || !res.prompt?.trim()) throw new Error(sceneAssetMessage(res));
+            if (!await writePromptTextToClipboard(res.prompt)) throw new Error('Không copy được prompt vào clipboard.');
+            if (mounted.current && currentVideo.current === shortVideoId) setNotice('Đã copy prompt · '+asset.name);
+        } catch(e) {
+            if (mounted.current && currentVideo.current === shortVideoId) setError(e instanceof Error ? e.message : 'Không copy được prompt.');
+        } finally {
+            if (mounted.current && currentVideo.current === shortVideoId) setBusy('');
+        }
     };
     const assets = Object.values(registry.assets || {});
     const environments = assets.filter(a => a.kind === 'environment');
@@ -209,10 +214,12 @@ export default function SceneAssetsPanel({shortVideoId}: Props) {
     return <Stack spacing={1.25} sx={{mt: 1.5}} aria-busy={loading}>
         <ShortVideoModel3dManageDrawer open={libraryOpen} onClose={()=>setLibraryOpen(false)}/>
         <Model3dLibraryPickerDrawer open={!!pickAsset || addingModel} onClose={()=>{setPickAsset(null);setAddingModel(false);}} models={models} loading={modelsLoading} kind="person" title="Chọn nhân vật cartoon đã lưu" onPick={modelId=>{if(pickAsset) void run('bind:'+pickAsset.id,'bind_model',{asset_id:pickAsset.id,model_id:modelId}); else if(addingModel) void run('add-model','add_model',{model_id:modelId});}}/>
-        <Button variant="contained" disabled={locked} onClick={()=>void pickCharacter(null)} sx={{alignSelf:'flex-start'}}>Thêm nhân vật từ thư viện</Button>
-        <Button variant="outlined" onClick={()=>setLibraryOpen(true)} sx={{alignSelf:'flex-start'}}>Thư viện nhân vật & tủ đồ · Tạo Xbot / thêm asset</Button>
-        <Alert severity="info">Bấm “Thêm nhân vật từ thư viện” để dùng Aster hoặc Xbot ngay. Nếu đã có hồ sơ, dùng “Chọn nhân vật thư viện” ở dòng tương ứng để thay thế. Lựa chọn được chốt riêng cho video; chỉnh tủ đồ về sau không đổi video cũ.</Alert>
-        <Alert severity="info">Lập danh sách → tạo HTML từng hồ sơ → kiểm tra gán beat → tạo visual/HTML beat. Các beat cùng cảnh dùng chung bối cảnh, đồ vật và mã nhân vật.</Alert>
+        <Stack direction="row" gap={1} flexWrap="wrap">
+            <Button size="small" sx={compactButtonSx} variant="outlined" disabled={locked} onClick={()=>void pickCharacter(null)}>Thêm nhân vật thư viện</Button>
+            <Button size="small" sx={compactButtonSx} onClick={()=>setLibraryOpen(true)}>Thư viện & trang phục</Button>
+            <Button size="small" sx={compactButtonSx} disabled={locked} onClick={() => {setImportText(assets.length ? sceneAssetsManifest(registry) : ''); importRevision.current = registry.revision || ''; setImportOpen(true);}}>Nhập / sửa danh sách JSON</Button>
+        </Stack>
+        <Typography variant="caption" color="text.secondary">Bấm hình đại diện để xem preview; bấm biểu tượng bút để sửa hồ sơ. Chọn DeepSeek hoặc Claude bên dưới để tạo HTML qua queue.</Typography>
         {loading && <Box role="status" aria-live="polite" sx={{display: 'flex', alignItems: 'center', gap: 1.25, p: 1.5, border: '1px dashed', borderColor: 'divider', borderRadius: 2}}>
             <CircularProgress size={18}/>
             <Box>
@@ -223,11 +230,11 @@ export default function SceneAssetsPanel({shortVideoId}: Props) {
         {!loading && busy && <LinearProgress sx={{borderRadius: 1}}/>}
         {error && <Alert severity="error" onClose={() => setError('')}>{error}</Alert>}
         {notice && <Alert severity="success" onClose={() => setNotice('')}>{notice}</Alert>}
-        <Box><Button size="small" sx={compactButtonSx} disabled={locked} onClick={() => {setImportText(assets.length ? sceneAssetsManifest(registry) : ''); importRevision.current = registry.revision || ''; setImportOpen(true);}}>Nhập / sửa danh sách JSON</Button></Box>
-        {!loading && !assets.length && <Typography variant="body2" color="text.secondary">Mở DeepSeek của bước này để lập danh sách. Lưu JSON trong headless hoặc nhập tại đây; mỗi nhân vật/bối cảnh sẽ hiện thành một dòng.</Typography>}
-        {!loading && assets.length > 0 && <Stack direction="row" flexWrap="wrap" gap={1}>
-            <Button size="small" sx={compactButtonSx} variant="contained" color="primary" startIcon={<PlayArrowIcon/>} disabled={locked} onClick={() => void run('queue-all', 'enqueue', {kind: 'all'})}>Tạo HTML còn thiếu · tất cả</Button>
-            <Button size="small" sx={compactButtonSx} variant="outlined" color="warning" startIcon={<ReplayIcon/>} disabled={locked || assets.some(a => ['queued', 'processing'].includes(a.generation?.status || ''))} onClick={() => setRegenerate(true)}>Tạo lại tất cả HTML</Button>
+        {!loading && !assets.length && <Typography variant="body2" color="text.secondary">Mở DeepSeek hoặc Claude của bước này để lập danh sách. Lưu JSON trong headless hoặc nhập tại đây; mỗi nhân vật/bối cảnh sẽ hiện thành một dòng.</Typography>}
+        {!loading && assets.length > 0 && <Stack direction="row" alignItems="center" flexWrap="wrap" gap={1}>
+            <FormControl size="small" sx={{minWidth:155}}><InputLabel>Tạo HTML bằng</InputLabel><Select inputProps={{'aria-label':'Tạo HTML bằng'}} label="Tạo HTML bằng" value={provider} disabled={locked} onChange={e=>selectProvider(e.target.value as AssetProvider)}><MenuItem value="deepseek">DeepSeek</MenuItem><MenuItem value="claude">Claude</MenuItem></Select></FormControl>
+            <Button size="small" sx={compactButtonSx} variant="contained" color="primary" startIcon={<PlayArrowIcon/>} disabled={locked} onClick={() => void run('queue-all', 'enqueue', {kind: 'all',provider})}>Tạo HTML còn thiếu</Button>
+            <Button size="small" sx={compactButtonSx} variant="outlined" color="warning" startIcon={<ReplayIcon/>} disabled={locked || assets.some(a => ['queued', 'processing'].includes(a.generation?.status || ''))} onClick={() => setRegenerate(true)}>Tạo lại tất cả</Button>
         </Stack>}
         {!loading && (['character', 'environment'] as const).map(kind => {
             const isCharacter = kind === 'character';
@@ -236,10 +243,10 @@ export default function SceneAssetsPanel({shortVideoId}: Props) {
             const active = rows.filter(a => ['queued', 'processing'].includes(a.generation?.status || '')).length;
             const done = rows.filter(a => a.ready).length;
             return <Box component="section" aria-label={isCharacter ? 'Hồ sơ nhân vật' : 'Hồ sơ bối cảnh'} key={kind} sx={{border: '1px solid', borderColor: isCharacter ? 'primary.light' : 'secondary.light', borderRadius: 2, overflow: 'hidden'}}>
-                <Stack direction="row" alignItems="center" flexWrap="wrap" gap={1} sx={{p: 1.5, bgcolor: isCharacter ? 'rgba(25,118,210,.07)' : 'rgba(156,39,176,.07)'}}>
+                <Stack direction="row" alignItems="center" flexWrap="wrap" gap={1} sx={{p: 1, bgcolor: isCharacter ? 'rgba(25,118,210,.07)' : 'rgba(156,39,176,.07)'}}>
                     {isCharacter ? <PersonOutlineIcon color="primary"/> : <CottageOutlinedIcon color="secondary"/>}
                     <Box sx={{flex: 1, minWidth: 160}}><Typography variant="subtitle1" fontWeight={700}>{isCharacter ? 'Nhân vật' : 'Bối cảnh'}</Typography><Typography variant="caption" color="text.secondary">{isCharacter ? 'Ngoại hình, rig và biểu cảm dùng chung' : 'Không gian, đồ vật cố định và vị trí staging'} · {done}/{rows.length} có HTML{active ? ` · ${active} đang chờ/chạy` : ''}</Typography></Box>
-                    <Button size="small" sx={compactButtonSx} variant="contained" color={color} startIcon={<PlayArrowIcon/>} disabled={locked || !rows.some(a => !a.ready && !['queued', 'processing'].includes(a.generation?.status || ''))} onClick={() => void run('queue:' + kind, 'enqueue', {kind})}>{isCharacter ? 'Tạo nhân vật còn thiếu' : 'Tạo bối cảnh còn thiếu'}</Button>
+                    <Button size="small" sx={compactButtonSx} variant="contained" color={color} startIcon={<PlayArrowIcon/>} disabled={locked || !rows.some(a => !a.ready && !['queued', 'processing'].includes(a.generation?.status || ''))} onClick={() => void run('queue:' + kind, 'enqueue', {kind,provider})}>{isCharacter ? 'Tạo nhân vật còn thiếu' : 'Tạo bối cảnh còn thiếu'}</Button>
                 </Stack>
                 <Stack spacing={1} sx={{p: 1.25}}>
                     {!rows.length && <Typography variant="body2" color="text.secondary">Chưa có {isCharacter ? 'nhân vật' : 'bối cảnh'}.</Typography>}
@@ -247,37 +254,36 @@ export default function SceneAssetsPanel({shortVideoId}: Props) {
                         const generation = asset.generation;
                         const running = ['queued', 'processing'].includes(generation?.status || '');
                         const label = generation?.status === 'queued' ? 'Đang chờ queue' : generation?.status === 'processing' ? generation.phase === 'repairing' ? `Đang tự sửa (${generation.repair_attempt || 0}/3)` : 'Đang tạo / chạy kiểm tra…' : generation?.status === 'failed' ? 'Tạo HTML lỗi' : generation?.status === 'cancelled' ? 'Job queue đã dừng' : asset.model_snapshot ? 'Nhân vật thư viện' : asset.ready ? 'Đã có HTML' : asset.has_html ? 'Cần cập nhật' : 'Chưa có HTML';
-                        return <Box key={asset.id} data-testid={'scene-asset-' + asset.id} sx={{p: 1.5, border: '1px solid', borderColor: 'divider', borderLeft: '4px solid', borderLeftColor: isCharacter ? 'primary.main' : 'secondary.main', borderRadius: isCharacter ? 3 : 1, bgcolor: 'background.paper', contentVisibility: 'auto', containIntrinsicSize: 'auto 180px'}}>
-                            <Stack direction="row" alignItems="center" flexWrap="wrap" gap={1}>
-                                <Box sx={{width: 36, height: 36, borderRadius: isCharacter ? '50%' : 1, display: 'grid', placeItems: 'center', bgcolor: isCharacter ? 'rgba(25,118,210,.1)' : 'rgba(156,39,176,.1)'}}>{isCharacter ? <PersonOutlineIcon color="primary"/> : <CottageOutlinedIcon color="secondary"/>}</Box>
-                                <Box sx={{flex: 1, minWidth: 130}}><Typography variant="body2" fontWeight={700}>{asset.name}</Typography><Typography variant="caption" color="text.secondary">{asset.id}{generation?.job_id ? ` · Job #${generation.job_id}` : ''}</Typography></Box>
-                                <Chip size="small" color={running ? 'info' : generation?.status === 'failed' ? 'error' : asset.ready ? 'success' : 'warning'} label={label}/>
+                        return <Box key={asset.id} data-testid={'scene-asset-' + asset.id} sx={{p: 1, border: '1px solid', borderColor: 'divider', borderLeft: '4px solid', borderLeftColor: isCharacter ? 'primary.main' : 'secondary.main', borderRadius: 1.5, bgcolor: 'background.paper', contentVisibility: 'auto', containIntrinsicSize: 'auto 130px'}}>
+                            <Stack gap={1} sx={{display:'grid',gridTemplateColumns:{xs:'68px minmax(0,1fr)',sm:'68px minmax(0,1fr) auto'},alignItems:'start'}}>
+                                <Stack alignItems="center" spacing={.75} sx={{width:68,gridColumn:1,gridRow:{xs:'1 / span 2',sm:1}}}>
+                                    <Box sx={{position:'relative',width:48,height:48}}>
+                                        <Tooltip title="Xem preview"><IconButton aria-label={`Xem preview ${asset.name}`} onClick={()=>setPreview(asset)} sx={{width:48,height:48,bgcolor:'action.hover',borderRadius:isCharacter?'50%':1.5}}>
+                                            {asset.model_snapshot?.thumbnail_url?<Box component="img" src={asset.model_snapshot.thumbnail_url} alt="" sx={{width:'100%',height:'100%',objectFit:'cover',borderRadius:'inherit'}}/>:isCharacter?<PersonOutlineIcon color="primary"/>:<CottageOutlinedIcon color="secondary"/>}
+                                        </IconButton></Tooltip>
+                                        <Tooltip title="Sửa hồ sơ"><IconButton size="small" aria-label={`Sửa hồ sơ ${asset.name}`} disabled={locked||running} onClick={()=>{profileBase.current=registry;setProfile({...asset});}} sx={{position:'absolute',right:-4,bottom:-4,width:22,height:22,bgcolor:'background.paper',border:'1px solid',borderColor:'divider','&:hover':{bgcolor:'action.selected'}}}><EditOutlinedIcon sx={{fontSize:14}}/></IconButton></Tooltip>
+                                    </Box>
+                                    {asset.model_snapshot&&<Button size="small" sx={{...compactButtonSx,px:.5,fontSize:11}} variant="outlined" disabled={locked} onClick={()=>{setError('');setWardrobeAsset(asset);setWardrobeConfig(JSON.parse(JSON.stringify(asset.model_snapshot?.character||{})));}}>Trang phục</Button>}
+                                </Stack>
+                                <Box sx={{minWidth:0,gridColumn:2,gridRow:1}}>
+                                    <Stack direction="row" alignItems="center" gap={.75} flexWrap="wrap">
+                                        {asset.chat_url?<Button size="small" variant="text" disabled={locked||running} onClick={()=>void run('chat:'+asset.id,'open',{asset_id:asset.id,mode:'reopen',provider:asset.chat_url?.includes('claude.ai')?'claude':'deepseek'})} sx={{minWidth:0,p:0,color:'primary.main',fontSize:14,fontWeight:700,textAlign:'left',textTransform:'none',overflowWrap:'anywhere'}}>{asset.name}</Button>:<Typography variant="body2" fontWeight={700} sx={{overflowWrap:'anywhere'}}>{asset.name}</Typography>}
+                                        {isCharacter&&<Button size="small" sx={compactButtonSx} variant="contained" disabled={locked||running} onClick={()=>void pickCharacter(asset)}>Thư viện</Button>}
+                                    </Stack>
+                                    <Typography variant="caption" color="text.secondary">{asset.id}{generation?.job_id ? ` · Job #${generation.job_id}` : ''}</Typography>
+                                    {!asset.model_snapshot&&<Stack direction="row" gap={.75} flexWrap="wrap" alignItems="center" sx={{mt:1}}>
+                                        {(['deepseek','claude'] as const).map(target=><Button key={target} size="small" sx={compactButtonSx} variant="outlined" startIcon={<img src={`${process.env.PUBLIC_URL||''}/images/workflow/${target}.svg`} width={18} height={18} alt=""/>} disabled={locked||running} onClick={()=>void run(asset.id,'open',{asset_id:asset.id,provider:target})}>{target==='claude'?'Claude':'DeepSeek'}</Button>)}
+                                    </Stack>}
+                                </Box>
+                                <Stack alignItems="flex-end" spacing={.75} sx={{minWidth:0,gridColumn:{xs:2,sm:3},gridRow:{xs:2,sm:1},alignItems:{xs:'flex-start',sm:'flex-end'}}}>
+                                    <Chip size="small" sx={{maxWidth:'100%'}} color={running?'info':generation?.status==='failed'?'error':asset.ready?'success':'warning'} label={generation?.provider&&!asset.model_snapshot?`${generation.provider==='claude'?'Claude':'DeepSeek'} · ${label}`:label}/>
+                                    {asset.model_snapshot&&<Button size="small" sx={compactButtonSx} variant="outlined" disabled={locked} onClick={()=>setSwitchHtml(asset)}>Dùng HTML</Button>}
+                                    {!asset.model_snapshot&&<Button size="small" sx={compactButtonSx} variant="outlined" startIcon={<PlayArrowIcon/>} disabled={locked||running} onClick={()=>void run('queue:'+asset.id,'enqueue',{asset_id:asset.id,force:true,provider})}>Tạo</Button>}
+                                    {!asset.model_snapshot&&<Button size="small" sx={compactButtonSx} startIcon={busy==='copy:'+asset.id?<CircularProgress size={12}/>:<ContentCopyIcon/>} disabled={locked} onClick={()=>void copyAssetPrompt(asset)}>Copy prompt</Button>}
+                                </Stack>
                             </Stack>
                             {generation?.error && ['failed', 'superseded', 'cancelled'].includes(generation.status) && <Alert severity={generation.status === 'failed' ? 'error' : 'info'} sx={{mt: 1}}>{generation.error}</Alert>}
                             {generation?.status === 'completed' && <Typography variant="caption" color="text.secondary">{generation.preview_checked ? 'Đã chạy preview và lưu HTML' : 'HTML cũ chưa kiểm tra preview đầy đủ'}{generation.repair_attempt ? ` · ${generation.repair_attempt} lần tự sửa` : ''}{generation.continue_clicks ? ` · ${generation.continue_clicks} lần Continue` : ''}</Typography>}
-                            <Box sx={{mt: 1.25, pt: 1.25, borderTop: '1px solid', borderColor: 'divider', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 0.75}}>
-                                {isCharacter && <Button size="small" sx={compactButtonSx} variant="contained" disabled={locked || running} onClick={()=>void pickCharacter(asset)}>Thư viện</Button>}
-                                {asset.model_snapshot ? <>
-                                    <Button size="small" sx={compactButtonSx} variant="outlined" onClick={()=>setPreview(asset)}>Xem nhân vật đã chọn</Button>
-                                    <Button size="small" sx={compactButtonSx} variant="contained" disabled={locked} onClick={()=>{setError('');setWardrobeAsset(asset);setWardrobeConfig(JSON.parse(JSON.stringify(asset.model_snapshot?.character || {})));}}>Trang phục</Button>
-                                    <Button size="small" sx={compactButtonSx} variant="outlined" disabled={locked} onClick={()=>setSwitchHtml(asset)}>Dùng HTML</Button>
-                                </> : <>
-                                {asset.has_html ? <>
-                                    <Button size="small" sx={compactButtonSx} variant="contained" color="success" startIcon={<VisibilityOutlinedIcon/>} disabled={locked || !asset.has_html} onClick={() => setPreview(asset)}>Xem HTML</Button>
-                                    <Button size="small" sx={compactButtonSx} variant="outlined" color="primary" startIcon={<PlayArrowIcon/>} disabled={locked || running} onClick={() => void run('queue:' + asset.id, 'enqueue', {asset_id: asset.id, force: true})}>{generation?.status === 'failed' || generation?.status === 'cancelled' ? 'Chạy lại queue' : 'Tạo bằng queue'}</Button>
-                                </> : <>
-                                    <Button size="small" sx={compactButtonSx} variant="contained" color="primary" startIcon={<PlayArrowIcon/>} disabled={locked || running} onClick={() => void run('queue:' + asset.id, 'enqueue', {asset_id: asset.id, force: true})}>{generation?.status === 'failed' || generation?.status === 'cancelled' ? 'Chạy lại queue' : 'Tạo bằng queue'}</Button>
-                                    <Button size="small" sx={compactButtonSx} variant="outlined" color="success" startIcon={<VisibilityOutlinedIcon/>} disabled={locked} onClick={() => setPreview(asset)}>Xem HTML</Button>
-                                </>}
-                                <Button size="small" sx={compactButtonSx} variant="outlined" color="primary" startIcon={<ChatOutlinedIcon/>} disabled={locked || running} onClick={() => void run(asset.id, 'open', {asset_id: asset.id})}>{busy === asset.id ? 'Đang mở…' : 'Mở DeepSeek'}</Button>
-                                {asset.chat_url && <Button size="small" sx={compactButtonSx} variant="text" color="primary" disabled={locked || running} onClick={() => void run(`chat:${asset.id}`, 'open', {asset_id: asset.id, mode: 'reopen'})}>Chat đã tạo</Button>}
-                                <Box sx={{display: 'flex', alignItems: 'center', gap: 0.25, ml: 'auto', p: 0.25, borderRadius: 1.5, bgcolor: 'action.hover'}}>
-                                    <Button size="small" sx={compactUtilitySx} variant="text" color="inherit" startIcon={<ReplayIcon/>} disabled={locked || running || !asset.has_html} onClick={() => void run('repair:' + asset.id, 'repair', {asset_id: asset.id})}>Kiểm tra / tự sửa</Button>
-                                    <Button size="small" sx={compactUtilitySx} variant="text" color="inherit" startIcon={<CodeIcon/>} disabled={locked} onClick={() => void loadAsset(asset)}>Cập nhật HTML</Button>
-                                    <Button size="small" sx={compactUtilitySx} variant="text" color="inherit" startIcon={<EditOutlinedIcon/>} disabled={locked} onClick={() => {profileBase.current = registry; setProfile({...asset});}}>Sửa hồ sơ</Button>
-                                </Box>
-                                </>}
-                            </Box>
                             <Box component="details" sx={{fontSize: 12, color: 'text.secondary', mt: 1}}><summary>Đặc tả cố định</summary><Box sx={{whiteSpace: 'pre-wrap', mt: 0.5}}>{asset.spec}</Box></Box>
                         </Box>;
                     })}
@@ -319,15 +325,14 @@ export default function SceneAssetsPanel({shortVideoId}: Props) {
             {switchHtml?.has_html_backup && switchHtml.html_backup_ready===false && <Alert severity="warning" sx={{mt:1}}>Bản HTML cũ cần kiểm tra hoặc cập nhật theo đặc tả hiện tại trước khi dựng beat.</Alert>}
             <Typography variant="body2" sx={{mt:1}}>Các beat dùng hồ sơ này sẽ cần dựng lại để nhận thay đổi.</Typography>{error && <Alert severity="error">{error}</Alert>}
         </DialogContent><DialogActions><Button disabled={!!busy} onClick={()=>setSwitchHtml(null)}>Hủy</Button><Button variant="contained" disabled={!!busy} onClick={async()=>{if(switchHtml && await run('html-mode:'+switchHtml.id,'unbind_model',{asset_id:switchHtml.id,expected_module_hash:switchHtml.module_hash}))setSwitchHtml(null);}}>Chuyển sang HTML</Button></DialogActions></Dialog>
-        <Dialog open={regenerate} onClose={() => !busy && setRegenerate(false)}><DialogTitle>Tạo lại toàn bộ HTML hồ sơ?</DialogTitle><DialogContent>DeepSeek sẽ tạo lại các nhân vật và bối cảnh qua queue. Bản HTML hiện tại chỉ được thay khi bản mới đã hoàn chỉnh, kiểm tra chạy được và lưu đúng vào DB. Các beat dùng phiên bản cũ sẽ được báo cần dựng lại.</DialogContent><DialogActions><Button onClick={() => setRegenerate(false)}>Hủy</Button><Button variant="contained" color="warning" disabled={Boolean(busy)} onClick={async () => {if (await run('queue-all', 'enqueue', {kind: 'all', force: true})) setRegenerate(false);}}>Tạo lại tất cả</Button></DialogActions></Dialog>
+        <Dialog open={regenerate} onClose={() => !busy && setRegenerate(false)}><DialogTitle>Tạo lại toàn bộ HTML hồ sơ?</DialogTitle><DialogContent>{providerLabel} sẽ tạo lại các nhân vật và bối cảnh qua queue. Bản HTML hiện tại chỉ được thay khi bản mới đã hoàn chỉnh, kiểm tra chạy được và lưu đúng vào DB. Các beat dùng phiên bản cũ sẽ được báo cần dựng lại.</DialogContent><DialogActions><Button onClick={() => setRegenerate(false)}>Hủy</Button><Button variant="contained" color="warning" disabled={Boolean(busy)} onClick={async () => {if (await run('queue-all', 'enqueue', {kind: 'all', force: true, provider})) setRegenerate(false);}}>Tạo lại tất cả</Button></DialogActions></Dialog>
         <Dialog open={importOpen} onClose={() => !busy && setImportOpen(false)} fullWidth maxWidth="md"><DialogTitle>Danh sách nhân vật và bối cảnh</DialogTitle><DialogContent><Typography variant="body2" sx={{mb: 1}}>Dán JSON chatbot trả về. Giữ nguyên ID để bảo toàn HTML đã tạo. Thay đổi đặc tả sẽ yêu cầu tạo lại HTML tương ứng.</Typography><TextField fullWidth multiline minRows={12} value={importText} onChange={e => setImportText(e.target.value)} inputProps={{'aria-label': 'JSON hồ sơ'}}/></DialogContent><DialogActions><Button disabled={Boolean(busy)} onClick={() => setImportOpen(false)}>Đóng</Button><Button disabled={Boolean(busy) || !importText.trim()} onClick={async () => {if (await run('manifest', 'manifest', {text: importText, expected_revision: importRevision.current})) {setImportOpen(false); setDraft(null);}}}>Lưu danh sách</Button></DialogActions></Dialog>
-        <Dialog open={Boolean(edit)} onClose={() => !busy && setEdit(null)} fullWidth maxWidth="md"><DialogTitle>Cập nhật HTML · {edit?.name}</DialogTitle><DialogContent><Alert severity="info" sx={{mb: 1}}>HTML được chạy kiểm tra preview trước khi lưu. Nếu có lỗi, queue sẽ gửi chẩn đoán về DeepSeek và tự kiểm tra lại bản sửa; bản hiện tại được giữ trong lúc xử lý.</Alert><TextField fullWidth multiline minRows={14} value={html} onChange={e => setHtml(e.target.value)} inputProps={{'aria-label': 'HTML hồ sơ'}}/></DialogContent><DialogActions><Button disabled={Boolean(busy)} onClick={() => setEdit(null)}>Đóng</Button><Button disabled={Boolean(busy) || !html.trim()} onClick={async () => {if (edit && await run('html', 'html', {asset_id: edit.id, spec_hash: edit.spec_hash, text: html})) setEdit(null);}}>Lưu HTML</Button></DialogActions></Dialog>
         <Dialog open={Boolean(profile)} onClose={() => !busy && setProfile(null)} fullWidth maxWidth="md"><DialogTitle>Sửa hồ sơ · {profile?.id}</DialogTitle><DialogContent><Alert severity="info" sx={{mb: 2}}>Đổi đặc tả sẽ yêu cầu tạo lại HTML hồ sơ. Những beat đã dùng hồ sơ này sẽ được báo cần dựng lại.</Alert><TextField fullWidth label="Tên hiển thị" value={profile?.name || ''} onChange={e => setProfile(p => p ? {...p, name: e.target.value} : p)} sx={{mb: 2}}/><TextField fullWidth multiline minRows={8} label="Đặc tả cố định" value={profile?.spec || ''} onChange={e => setProfile(p => p ? {...p, spec: e.target.value} : p)}/></DialogContent><DialogActions><Button disabled={Boolean(busy)} onClick={() => setProfile(null)}>Đóng</Button><Button disabled={Boolean(busy) || !profile?.name.trim() || !profile?.spec.trim()} onClick={async () => {
             if (!profile) return;
             const base = profileBase.current;
             const next = {...base, assets: {...base.assets, [profile.id]: profile}};
             if (await run('profile', 'manifest', {text: sceneAssetsManifest(next), expected_revision: base.revision || ''})) setProfile(null);
         }}>Lưu hồ sơ</Button></DialogActions></Dialog>
-        <SceneAssetPreviewDialog shortVideoId={shortVideoId} asset={preview} onClose={() => setPreview(null)} onRegistryChange={applyRegistry} previewTitle={`Preview ${preview?.name || ''}`}/>
+        <SceneAssetPreviewDialog shortVideoId={shortVideoId} asset={preview} defaultProvider={provider} onClose={() => setPreview(null)} onRegistryChange={applyRegistry} previewTitle={`Preview ${preview?.name || ''}`}/>
     </Stack>;
 }

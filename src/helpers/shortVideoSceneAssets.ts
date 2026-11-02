@@ -3,11 +3,11 @@ import { ajax } from 'hook/useApi';
 
 export type SceneAsset = {
     id: string; kind: 'character' | 'environment'; name: string; spec: string;
-    spec_hash: string; has_html?: boolean; html?: string; ready?: boolean; module_hash?: string;
+    spec_hash: string; html_sha256?: string; updated_at?: string; has_html?: boolean; html?: string; ready?: boolean; module_hash?: string;
     model_snapshot?: ShortVideoModel3d;
     has_html_backup?: boolean; html_backup_ready?: boolean;
     chat_url?: string;
-    generation?: {status: 'queued' | 'processing' | 'completed' | 'failed' | 'superseded' | 'cancelled'; job_id?: number; error?: string; continue_clicks?: number; phase?: string; repair_attempt?: number; preview_checked?: boolean};
+    generation?: {provider?: 'deepseek'|'claude'; status: 'queued' | 'processing' | 'completed' | 'failed' | 'superseded' | 'cancelled'; job_id?: number; error?: string; continue_clicks?: number; phase?: string; repair_attempt?: number; preview_checked?: boolean};
 };
 export type SceneAssetBeat = {
     id: string; environment_id: string; additional_environment_ids?: string[]; character_ids: string[]; continuity: string;
@@ -19,7 +19,7 @@ export type SceneAssetRegistry = {
     schema_version?: string; storyboard_version?: 'causal_3d_v1'; revision?: string; assets?: Record<string, SceneAsset>; beats?: Record<string, SceneAssetBeat>;
 };
 export type SceneAssetResponse = {
-    success?: boolean; queued?: number; asset?: SceneAsset; registry?: SceneAssetRegistry; message?: string | {content?: string};
+    success?: boolean; prompt?: string; queued?: number; asset?: SceneAsset; registry?: SceneAssetRegistry; message?: string | {content?: string};
 };
 export function sceneAssetsRequest(shortVideoId: number, operation: string, data: Record<string, unknown> = {}): Promise<SceneAssetResponse> {
     return ajax({url: 'plugin/vn4-e-learning/app-mobile/marketing/short-video/scene-assets', method: 'POST', loading: false,

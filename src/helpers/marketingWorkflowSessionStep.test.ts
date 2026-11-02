@@ -1,4 +1,4 @@
-import { workflowSessionStepId, replaceWorkflowPromptKeys } from './marketingWorkflowPrompts';
+import { workflowSessionStepId, workflowChatSessionKey, replaceWorkflowPromptKeys } from './marketingWorkflowPrompts';
 
 jest.mock('hook/useApi', () => ({ ajax: jest.fn() }));
 
@@ -17,4 +17,20 @@ test('independent division receives saved title and original narration instead o
         'AUDIO-SCRIPT': '1. Old beat.\n2. Old boundary.',
     });
     expect(result.content).toBe('<TITLE>Saved title</TITLE>\n<AUDIO-ORIGINAL><voice id="hero">Approved original.</voice></AUDIO-ORIGINAL>');
+});
+
+test('asset mode shares topic and beat division sessions for every chat provider', () => {
+    for (const suffix of ['', '::claude', '::chatgpt']) {
+        for (const index of [0, 1]) {
+            expect(workflowChatSessionKey('video-html', index, 'free', suffix))
+                .toBe(workflowChatSessionKey('video-html', index, 'shared', suffix));
+        }
+        expect(workflowChatSessionKey('video-html', 3, 'free', suffix)).toBe('video-html#free-3');
+    }
+    expect(workflowChatSessionKey('video-html-2d', 0, 'free')).toBe('video-html-2d#handoff-v2-0');
+});
+
+test('provider buttons address one conversation per step', () => {
+    expect(workflowChatSessionKey('video-html', 0, 'shared', '::claude')).toBe('video-html#0');
+    expect(workflowChatSessionKey('video-image', 1, 'shared', '::chatgpt')).toBe('video-image#1');
 });

@@ -860,6 +860,11 @@ export function normalizeWorkflowScriptKey(text: string): string {
     return String(text || '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
 }
 
+/** Voice wrappers are speaker metadata, not words in a visual SCRIPT SENTENCE. */
+export function normalizeWorkflowSentenceKey(text: string): string {
+    return normalizeWorkflowScriptKey(String(text || '').replace(/<\/?voice\b[^>]*>/gi, ' '));
+}
+
 /** Bỏ prefix số thứ tự/gạch đầu dòng của 1 dòng beat ("1. ", "2) ", "1:", "-", "•"). */
 export function stripWorkflowBeatPrefix(line: string): string {
     return String(line || '')
@@ -999,7 +1004,7 @@ export function validateWorkflowBreakdownPart(
     partText: string,
     expectedBeats: string[],
 ): WorkflowBreakdownPartValidation {
-    const expected = expectedBeats.map((beat) => normalizeWorkflowScriptKey(stripWorkflowBeatPrefix(beat)));
+    const expected = expectedBeats.map((beat) => normalizeWorkflowSentenceKey(stripWorkflowBeatPrefix(beat)));
     const text = String(partText || '').trim();
     const base: WorkflowBreakdownPartValidation = {
         ok: false,
@@ -1038,7 +1043,7 @@ export function validateWorkflowBreakdownPart(
 
         if (!script) {
             errors.push(`Beat ${index + 1}: thiếu SCRIPT SENTENCE`);
-        } else if (normalizeWorkflowScriptKey(stripWorkflowBeatPrefix(script)) !== expected[index]) {
+        } else if (normalizeWorkflowSentenceKey(stripWorkflowBeatPrefix(script)) !== expected[index]) {
             errors.push(`Beat ${index + 1}: SCRIPT SENTENCE không khớp audio`);
         }
         if (!imagePrompt) {
@@ -1073,6 +1078,13 @@ export function joinWorkflowBreakdownParts(parts: string[]): string {
         .filter((part) => part.length > 0)
         .join('\n\n');
     return renumberWorkflowBeatHeaders(joined);
+}
+
+/** Topic/script and beat division are independent of the asset strategy. */
+export function workflowChatSessionKey(workflowKey: string, stepIndex: number, assetMode = 'shared', _legacyProviderSuffix = ''): string {
+    const prefix = workflowKey === 'video-html-2d' ? 'handoff-v2-'
+        : workflowKey === 'video-html' && assetMode === 'free' && stepIndex > 1 ? 'free-' : '';
+    return `${workflowKey}#${prefix}${workflowSessionStepId(workflowKey, stepIndex)}`;
 }
 
 /** Keep existing 3D chat keys after adding beat division and removing the SFX step. */

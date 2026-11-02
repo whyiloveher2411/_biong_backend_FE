@@ -2,6 +2,8 @@ import React from 'react';
 import {act, fireEvent, render, screen, waitFor, within} from '@testing-library/react';
 import {ajax} from 'hook/useApi';
 import SceneAssetsPanel from './SceneAssetsPanel';
+import {writePromptTextToClipboard} from 'helpers/marketingShortVideoAgentPrompt';
+jest.mock('helpers/marketingShortVideoAgentPrompt',()=>({writePromptTextToClipboard:jest.fn()}));
 
 jest.mock('../Model3dPreview',()=>()=>null);
 jest.mock('../ShortVideoModel3dManageDrawer',()=>()=>null);
@@ -20,6 +22,7 @@ const registry = {
     },
 };
 beforeEach(() => {
+    localStorage.clear();
     global.fetch = jest.fn().mockResolvedValue({ok: true, text: async () => 'window.__SV_THREE_VERSION="0.186.1";window.THREE={REVISION:"186"};'});
     request.mockReset();
     request.mockImplementation(({data}) => Promise.resolve(data.operation === 'preview'
@@ -30,10 +33,10 @@ beforeEach(() => {
 test('shows one row per character/set and lazily loads sandboxed HTML preview', async () => {
     const view = render(<SceneAssetsPanel shortVideoId={42}/>);
     await screen.findAllByText('Phòng ăn');
-    expect(screen.getAllByRole('button', {name: 'Mở DeepSeek'})).toHaveLength(2);
+    expect(screen.getAllByRole('button', {name: 'DeepSeek'})).toHaveLength(2);
     expect(request).toHaveBeenCalledWith(expect.objectContaining({data: {short_video_id: 42, operation: 'get'}}));
     expect(request.mock.calls.some(([call]) => call.data.operation === 'preview')).toBe(false);
-    fireEvent.click(screen.getAllByRole('button', {name: 'Xem HTML'})[0]);
+    fireEvent.click(screen.getByRole('button',{name:'Xem preview Người vợ'}));
     const iframe = await screen.findByTitle('Preview Người vợ');
     expect(iframe.getAttribute('sandbox')).toBe('allow-scripts');
     expect(iframe.getAttribute('srcdoc')).toContain('canonical wife');
@@ -43,18 +46,17 @@ test('shows one row per character/set and lazily loads sandboxed HTML preview', 
     view.unmount();
 });
 
-test('manual HTML save carries the spec revision that was opened, not the polled replacement', async () => {
-    const view = render(<SceneAssetsPanel shortVideoId={42}/>);
-    await screen.findAllByText('Người vợ');
-    fireEvent.click(screen.getAllByRole('button', {name: 'Cập nhật HTML'})[0]);
-    const editor = await screen.findByLabelText('HTML hồ sơ');
-    fireEvent.change(editor, {target: {value: '<!doctype html><html>new factory</html>'}});
-    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', {name: 'Lưu HTML'}));
-    await waitFor(() => expect(request).toHaveBeenCalledWith(expect.objectContaining({data: {
-        short_video_id: 42, operation: 'html', asset_id: 'wife', spec_hash: 'wife-spec', text: '<!doctype html><html>new factory</html>',
-    }})));
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-    view.unmount();
+test('profile edit uses thumbnail corner and removed HTML utility controls stay absent',async()=>{
+ const view=render(<SceneAssetsPanel shortVideoId={42}/>);await screen.findAllByText('Người vợ');
+ expect(screen.queryByRole('button',{name:'Cập nhật HTML'})).toBeNull();
+ expect(screen.queryByRole('button',{name:'Kiểm tra / tự sửa'})).toBeNull();
+ expect(screen.queryByRole('button',{name:'Xem HTML'})).toBeNull();
+ fireEvent.click(screen.getByRole('button',{name:'Sửa hồ sơ Người vợ'}));
+ expect(await screen.findByRole('dialog')).toBeTruthy();
+ fireEvent.change(screen.getByLabelText('Tên hiển thị'),{target:{value:'Tên mới'}});
+ fireEvent.click(screen.getByRole('button',{name:'Lưu hồ sơ'}));
+ await waitFor(()=>expect(request).toHaveBeenCalledWith(expect.objectContaining({data:expect.objectContaining({operation:'manifest',text:expect.stringContaining('Tên mới')})})));
+ view.unmount();
 });
 
 test('a rejected manifest keeps the editor open and preserves the existing asset rows', async () => {
@@ -91,31 +93,30 @@ test('enqueue all defaults to missing builds and displays persisted queue status
         registry: {...registry, assets: {...registry.assets, wife: {...registry.assets.wife,
             generation: {status: 'queued', job_id: 123}}}},
     } : {success: true, registry}));
-    fireEvent.click(screen.getByRole('button', {name: 'Tạo HTML còn thiếu · tất cả'}));
+    fireEvent.click(screen.getByRole('button', {name: 'Tạo HTML còn thiếu'}));
     await screen.findByText('Đang chờ queue');
-    expect(request).toHaveBeenCalledWith(expect.objectContaining({data: {short_video_id: 66, operation: 'enqueue', kind: 'all'}}));
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({data: {short_video_id: 66, operation: 'enqueue', provider:'deepseek', kind: 'all'}}));
     const row = screen.getByTestId('scene-asset-wife');
-    expect(within(row).getByRole('button', {name: 'Tạo bằng queue'}).hasAttribute('disabled')).toBe(true);
-    expect(within(row).getByRole('button', {name: 'Xem HTML'}).hasAttribute('disabled')).toBe(false);
+    expect(within(row).getByRole('button', {name: 'Tạo'}).hasAttribute('disabled')).toBe(true);
+    expect(within(row).getByRole('button', {name: 'Xem preview Người vợ'}).hasAttribute('disabled')).toBe(false);
     view.unmount();
 });
 
 test('rebuild all requires an explicit dialog action and sends force flag', async () => {
     const view = render(<SceneAssetsPanel shortVideoId={66}/>);
     await screen.findAllByText('Phòng ăn');
-    fireEvent.click(screen.getByRole('button', {name: 'Tạo lại tất cả HTML'}));
+    fireEvent.click(screen.getByRole('button', {name: 'Tạo lại tất cả'}));
     expect(request.mock.calls.some(([call]) => call.data.operation === 'enqueue')).toBe(false);
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', {name: 'Tạo lại tất cả'}));
-    await waitFor(() => expect(request).toHaveBeenCalledWith(expect.objectContaining({data: {short_video_id: 66, operation: 'enqueue', kind: 'all', force: true}})));
+    await waitFor(() => expect(request).toHaveBeenCalledWith(expect.objectContaining({data: {short_video_id: 66, operation: 'enqueue', provider:'deepseek', kind: 'all', force: true}})));
     view.unmount();
 });
 
-test('saved HTML can be audited/repaired without pasting it again', async () => {
-    const view = render(<SceneAssetsPanel shortVideoId={66}/>);
-    await screen.findAllByText('Phòng ăn');
-    fireEvent.click(within(screen.getByTestId('scene-asset-wife')).getByRole('button', {name: 'Kiểm tra / tự sửa'}));
-    await waitFor(() => expect(request).toHaveBeenCalledWith(expect.objectContaining({data: {short_video_id: 66, operation: 'repair', asset_id: 'wife'}})));
-    view.unmount();
+test('Claude opens the character with the exact asset id',async()=>{
+ const view=render(<SceneAssetsPanel shortVideoId={66}/>);await screen.findAllByText('Phòng ăn');
+ fireEvent.click(within(screen.getByTestId('scene-asset-wife')).getByRole('button',{name:'Claude'}));
+ await waitFor(()=>expect(request).toHaveBeenCalledWith(expect.objectContaining({data:{short_video_id:66,operation:'open',asset_id:'wife',provider:'claude'}})));
+ view.unmount();
 });
 
 test('repair progress is distinct from generation and keeps old preview available', async () => {
@@ -125,21 +126,25 @@ test('repair progress is distinct from generation and keeps old preview availabl
     const view = render(<SceneAssetsPanel shortVideoId={66}/>);
     await screen.findByText('Đang tự sửa (2/3)');
     const row=screen.getByTestId('scene-asset-wife');
-    expect(within(row).getByRole('button', {name:'Xem HTML'}).hasAttribute('disabled')).toBe(false);
-    expect(within(row).getByRole('button', {name:'Kiểm tra / tự sửa'}).hasAttribute('disabled')).toBe(true);
+    expect(within(row).getByRole('button', {name:'Xem preview Người vợ'}).hasAttribute('disabled')).toBe(false);
+    expect(within(row).getByRole('button', {name:'DeepSeek'}).hasAttribute('disabled')).toBe(true);
     view.unmount();
 });
 
-test('manual HTML save acknowledges a queued check rather than claiming immediate persistence', async () => {
-    const view=render(<SceneAssetsPanel shortVideoId={66}/>);
-    await screen.findAllByText('Phòng ăn');
-    fireEvent.click(within(screen.getByTestId('scene-asset-wife')).getByRole('button',{name:'Cập nhật HTML'}));
-    await screen.findByLabelText('HTML hồ sơ');
-    request.mockResolvedValue({success:true, queued:1, registry, message:'Đã nhận HTML. Queue sẽ chạy preview và tự sửa.'});
-    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button',{name:'Lưu HTML'}));
-    await screen.findByText('Đã nhận HTML. Queue sẽ chạy preview và tự sửa.');
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-    view.unmount();
+test('Claude selector applies to missing, group and individual queue actions',async()=>{
+ request.mockResolvedValue({success:true,registry:{...registry,assets:{wife:{...registry.assets.wife,ready:false},dinner:{...registry.assets.dinner,ready:false}}}});
+ const view=render(<SceneAssetsPanel shortVideoId={66}/>);await screen.findAllByText('Phòng ăn');
+ fireEvent.mouseDown(screen.getByLabelText('Tạo HTML bằng'));fireEvent.click(screen.getByRole('option',{name:'Claude'}));
+ fireEvent.click(screen.getByRole('button',{name:'Tạo HTML còn thiếu'}));
+ await waitFor(()=>expect(request).toHaveBeenCalledWith(expect.objectContaining({data:{short_video_id:66,operation:'enqueue',kind:'all',provider:'claude'}})));
+ await waitFor(()=>expect(screen.getByRole('button',{name:'Tạo nhân vật còn thiếu'})).toBeEnabled());
+ fireEvent.click(screen.getByRole('button',{name:'Tạo nhân vật còn thiếu'}));
+ await waitFor(()=>expect(request).toHaveBeenCalledWith(expect.objectContaining({data:{short_video_id:66,operation:'enqueue',kind:'character',provider:'claude'}})));
+ const queue=within(screen.getByTestId('scene-asset-wife')).getByRole('button',{name:'Tạo'});
+ await waitFor(()=>expect(queue).toBeEnabled());fireEvent.click(queue);
+ await waitFor(()=>expect(request).toHaveBeenCalledWith(expect.objectContaining({data:{short_video_id:66,operation:'enqueue',asset_id:'wife',force:true,provider:'claude'}})));
+
+ view.unmount();
 });
 
 test('shows an explicit loading state and blocks edits until the registry arrives', async () => {
@@ -187,11 +192,11 @@ test('cancelled queue jobs show why they stopped and can be re-queued', async ()
     const row = screen.getByTestId('scene-asset-wife');
     expect(within(row).getByText('Job queue đã dừng')).toBeTruthy();
     expect(within(row).getByText('Job queue đã bị xoá khỏi hàng đợi. Bấm "Chạy lại queue" để tạo job mới.')).toBeTruthy();
-    const retry = within(row).getByRole('button', {name: 'Chạy lại queue'});
+    const retry = within(row).getByRole('button', {name: 'Tạo'});
     expect(retry.hasAttribute('disabled')).toBe(false);
     fireEvent.click(retry);
     await waitFor(() => expect(request).toHaveBeenCalledWith(expect.objectContaining({data: {
-        short_video_id: 66, operation: 'enqueue', asset_id: 'wife', force: true,
+        short_video_id: 66, operation: 'enqueue', provider:'deepseek', asset_id: 'wife', force: true,
     }})));
     view.unmount();
 });
@@ -215,7 +220,7 @@ test('large beat mapping mounts in batches instead of blocking on every beat', a
 test('adds a library character before a prompt manifest exists',async()=>{
     request.mockImplementation(({url,data})=>Promise.resolve(url.endsWith('/model-3d/list') ? {success:true,models:[{id:4,title:'Aster · Urban Explorer',slug:'aster-urban-explorer',kind:'person',character:{enabled:true}}]} : {success:true,registry:{assets:{},beats:{}}}));
     const view=render(<SceneAssetsPanel shortVideoId={42}/>);
-    const add=await screen.findByRole('button',{name:'Thêm nhân vật từ thư viện'});
+    const add=await screen.findByRole('button',{name:'Thêm nhân vật thư viện'});
     await waitFor(()=>expect(add.hasAttribute('disabled')).toBe(false));fireEvent.click(add);
     fireEvent.click(await screen.findByText('aster-urban-explorer'));
     await waitFor(()=>expect(request).toHaveBeenCalledWith(expect.objectContaining({data:{short_video_id:42,operation:'add_model',model_id:4}})));
@@ -243,4 +248,56 @@ test('provides an explicit return-to-HTML action for a library role',async()=>{
     await waitFor(()=>expect(changed).toHaveBeenCalledWith(expect.objectContaining({detail:{shortVideoId:42,beatId:''}})));
     document.removeEventListener('vn4-model3d-beat-asset-changed',changed);
     view.unmount();
+});
+
+test('Claude regenerate-all confirms selected provider before enqueue',async()=>{
+ const view=render(<SceneAssetsPanel shortVideoId={66}/>);await screen.findAllByText('Phòng ăn');
+ fireEvent.mouseDown(screen.getByLabelText('Tạo HTML bằng'));fireEvent.click(screen.getByRole('option',{name:'Claude'}));
+ fireEvent.click(screen.getByRole('button',{name:'Tạo lại tất cả'}));
+ expect(request.mock.calls.some(([call])=>call.data.operation==='enqueue')).toBe(false);
+ fireEvent.click(within(screen.getByRole('dialog')).getByRole('button',{name:'Tạo lại tất cả'}));
+ await waitFor(()=>expect(request).toHaveBeenCalledWith(expect.objectContaining({data:{short_video_id:66,operation:'enqueue',kind:'all',force:true,provider:'claude'}})));
+ view.unmount();
+});
+
+test('linked asset names reopen chat while unlinked names remain plain text',async()=>{
+ request.mockResolvedValue({success:true,registry:{...registry,assets:{...registry.assets,wife:{...registry.assets.wife,chat_url:'https://claude.ai/chat/old-chat'}}}});
+ const view=render(<SceneAssetsPanel shortVideoId={66}/>);await screen.findAllByText('Phòng ăn');
+ const wife=within(screen.getByTestId('scene-asset-wife')),set=within(screen.getByTestId('scene-asset-dinner'));
+ expect(wife.queryByRole('button',{name:'Mở lại chat'})).toBeNull();
+ expect(set.queryByRole('button',{name:'Phòng ăn'})).toBeNull();
+ fireEvent.click(set.getByText('Phòng ăn'));
+ expect(request.mock.calls.some(([call])=>call.data.operation==='open')).toBe(false);
+ fireEvent.click(wife.getByRole('button',{name:'Người vợ'}));
+ await waitFor(()=>expect(request).toHaveBeenCalledWith(expect.objectContaining({data:{short_video_id:66,operation:'open',asset_id:'wife',mode:'reopen',provider:'claude'}})));
+ view.unmount();
+});
+
+test.each(['deepseek','claude'] as const)('copy prompt uses selected %s for character and environment without starting jobs',async(provider)=>{
+ (writePromptTextToClipboard as jest.Mock).mockResolvedValue(true);
+ request.mockImplementation(({data})=>Promise.resolve(data.operation==='prompt'?{success:true,prompt:`Complete prompt for ${data.asset_id} with video style`}:{success:true,registry}));
+ const view=render(<SceneAssetsPanel shortVideoId={67}/>);await screen.findAllByText('Phòng ăn');
+ if(provider==='claude'){fireEvent.mouseDown(screen.getByLabelText('Tạo HTML bằng'));fireEvent.click(screen.getByRole('option',{name:'Claude'}));}
+ for (const id of ['wife','dinner']) {
+   const button=within(screen.getByTestId('scene-asset-'+id)).getByRole('button',{name:'Copy prompt'});
+   await waitFor(()=>expect(button).toBeEnabled());fireEvent.click(button);
+   await waitFor(()=>expect(writePromptTextToClipboard).toHaveBeenCalledWith(`Complete prompt for ${id} with video style`));
+   expect(request).toHaveBeenCalledWith(expect.objectContaining({data:{short_video_id:67,operation:'prompt',asset_id:id,provider}}));
+ }
+ expect(request.mock.calls.some(([call])=>['open','enqueue'].includes(call.data.operation))).toBe(false);
+ view.unmount();
+});
+
+test('provider selection survives reopening and stays independent for each video',async()=>{
+ let view=render(<SceneAssetsPanel shortVideoId={67}/>);await screen.findAllByText('Phòng ăn');
+ fireEvent.mouseDown(screen.getByLabelText('Tạo HTML bằng'));fireEvent.click(screen.getByRole('option',{name:'Claude'}));
+ expect(localStorage.getItem('scene-assets-provider:67')).toBe('claude');
+ view.unmount();
+ view=render(<SceneAssetsPanel shortVideoId={67}/>);await screen.findAllByText('Phòng ăn');
+ expect(screen.getByLabelText('Tạo HTML bằng')).toHaveTextContent('Claude');
+ view.rerender(<SceneAssetsPanel shortVideoId={68}/>);await screen.findAllByText('Phòng ăn');
+ expect(screen.getByLabelText('Tạo HTML bằng')).toHaveTextContent('DeepSeek');
+ view.rerender(<SceneAssetsPanel shortVideoId={67}/>);await screen.findAllByText('Phòng ăn');
+ expect(screen.getByLabelText('Tạo HTML bằng')).toHaveTextContent('Claude');
+ view.unmount();
 });

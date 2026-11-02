@@ -616,6 +616,16 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const { openCreateScriptGemini, openImproveScriptGemini } = useAgentVideoOpenGeminiScriptActions();
     const apiRef = React.useRef(api);
     apiRef.current = api;
+    const mountedRef = React.useRef(false);
+    const contentSessionRef = React.useRef({shortVideoId, open});
+    if (contentSessionRef.current.shortVideoId !== shortVideoId || contentSessionRef.current.open !== open) {
+        contentSessionRef.current = {shortVideoId, open};
+    }
+    React.useEffect(() => {
+        mountedRef.current = true;
+        return () => { mountedRef.current = false; };
+    }, []);
+
 
     const [title, setTitle] = React.useState('');
     const [topicGroup, setTopicGroup] = React.useState('');
@@ -1883,6 +1893,10 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         if (!shortVideoId || !open) {
             return;
         }
+        const session = contentSessionRef.current;
+        if (!mountedRef.current || session.shortVideoId !== shortVideoId || !session.open) {
+            return;
+        }
         apiRef.current.ajax({
             url: 'plugin/vn4-e-learning/app-mobile/marketing/short-video/get-agent-audio-content',
             method: 'POST',
@@ -1895,6 +1909,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             },
             loading: false,
             success: (res: AgentVideoContentResponse) => {
+                if (!mountedRef.current || contentSessionRef.current !== session || !session.open) {
+                    return;
+                }
                 applyResponse(res);
             },
         });

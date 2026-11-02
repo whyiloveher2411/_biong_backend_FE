@@ -54,7 +54,13 @@ const HEADER_BTN_SX = {
     },
 } as const;
 
-export default function ShortVideoAgentVideoWorkspace({
+/** Remount the complete editor when changing videos, including media, timeline
+ * engine caches, pending edits and the content hook's per-video refs. */
+export default function ShortVideoAgentVideoWorkspace(props: Props) {
+    return <ShortVideoAgentVideoSession key={props.shortVideoId} {...props} />;
+}
+
+function ShortVideoAgentVideoSession({
     open,
     shortVideoId,
     onClose,
