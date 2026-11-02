@@ -30,3 +30,14 @@ test('narration proxy is scoped to video and preserves the exact versioned sourc
  expect(url).toContain('short_video_id=67');expect(url).toContain('source='+encodeURIComponent('https://files.example/narration.mp3?v=2'));
  expect(voicePreviewUrl('blob:local-audio',67)).toBe('blob:local-audio');
 });
+
+test.each([false,true])('missing voice stays red when muted=%s and generates audio without seeking',muted=>{
+ const generate=jest.fn(),seek=jest.fn(),toggle=jest.fn();
+ const view=render(<div onClick={seek}><TimelineVoiceClipView mix={{muted,volume:1}} duration={3} missing beatId="beat_2" onGenerate={generate} onVolume={()=>{}} onToggle={toggle}/></div>);
+ expect(screen.getByLabelText('Voice beat_2: chưa có audio')).toHaveStyle('background-color: #b32632');
+ fireEvent.click(screen.getByRole('button',{name:'Tạo audio beat_2'}));expect(generate).toHaveBeenCalledTimes(1);expect(seek).not.toHaveBeenCalled();
+ view.rerender(<TimelineVoiceClipView mix={{muted,volume:1}} duration={3} missing beatId="beat_2" generating generationBusy onGenerate={generate} onVolume={()=>{}} onToggle={toggle}/>);
+ expect(screen.getByRole('button',{name:'Tạo audio beat_2'})).toBeDisabled();expect(screen.getByText('Đang tạo…')).toBeInTheDocument();
+ view.rerender(<TimelineVoiceClipView mix={{muted,volume:1}} duration={3} beatId="beat_2" onGenerate={generate} onVolume={()=>{}} onToggle={toggle}/>);
+ expect(screen.queryByRole('button',{name:'Tạo audio beat_2'})).toBeNull();
+});

@@ -7295,6 +7295,11 @@ multicast-dns@^6.0.1:
     dns-packet "^1.3.1"
     thunky "^1.0.2"
 
+n8ao@2.0.1:
+  version "2.0.1"
+  resolved "https://registry.npmjs.org/n8ao/-/n8ao-2.0.1.tgz"
+  integrity sha512-MoP1QKUdj4/3cKEnhFl917t0eQwWGER1l43ckz5mNOPyYWGRDGQbVoTOQz/VBvy01in6QVNG+AL6Xxx5AjZBYA==
+
 nanoid@^3.1.30:
   version "3.1.30"
   resolved "https://registry.npmjs.org/nanoid/-/nanoid-3.1.30.tgz"
@@ -8242,6 +8247,11 @@ postcss@^8.1.6, postcss@^8.2.15, postcss@^8.3.5, postcss@^8.4.4:
     nanoid "^3.1.30"
     picocolors "^1.0.0"
     source-map-js "^1.0.1"
+
+postprocessing@6.39.6:
+  version "6.39.6"
+  resolved "https://registry.npmjs.org/postprocessing/-/postprocessing-6.39.6.tgz"
+  integrity sha512-HIVhnU8R9tF2YBMXOF2x+TKt3ia+caSHGsycSqrfkd426vH/jwm7w19YQCWsA8jMQJXvAsniLYMiJaNugxUFtA==
 
 prelude-ls@^1.2.1:
   version "1.2.1"

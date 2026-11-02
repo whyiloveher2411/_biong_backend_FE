@@ -55,7 +55,9 @@ try {
  const envScene=new THREE.Scene();envScene.background=new THREE.Color(0x151c28);
  [[-3,2,3],[3,1,1]].forEach(function(p){const panel=new THREE.Mesh(new THREE.PlaneGeometry(1.5,3),new THREE.MeshBasicMaterial({color:0x8997aa,side:THREE.DoubleSide}));panel.position.set(p[0],p[1],p[2]);panel.lookAt(0,0,0);envScene.add(panel);});
  const pmrem=new THREE.PMREMGenerator(renderer),env=pmrem.fromScene(envScene);scene.environment=env.texture;scene.environmentIntensity=.2;pmrem.dispose();
+ envScene.traverse(function(o){if(o.isMesh){o.geometry.dispose();o.material.dispose();}});
  const ground=new THREE.Mesh(new THREE.PlaneGeometry(scale*16,scale*16),new THREE.MeshStandardMaterial({color:0x20242e,roughness:1}));ground.rotation.x=-Math.PI/2;ground.position.y=-.01;ground.receiveShadow=true;scene.add(ground);
+ const quality=THREE.SVQuality.enableAO(renderer,scene,camera,{radius:Math.max(.02,Math.min(.3,scale*.1)),intensity:1});
  let yaw=.18,pitch=.06,distance=1,baseDistance=1,target=center.clone();
  function render(){camera.position.set(target.x+Math.sin(yaw)*Math.cos(pitch)*distance,target.y+Math.sin(pitch)*distance,target.z+Math.cos(yaw)*Math.cos(pitch)*distance);camera.lookAt(target);renderer.render(scene,camera);}
  function fit(){const top=toolbar.getBoundingClientRect().height,w=innerWidth,h=Math.max(1,innerHeight-top);stage.style.top=top+'px';renderer.setSize(w,h);camera.aspect=w/h;camera.far=Math.max(100,scale*100);camera.updateProjectionMatrix();const v=THREE.MathUtils.degToRad(camera.fov/2),horizontal=Math.atan(Math.tan(v)*camera.aspect);baseDistance=Math.max(size.y/(2*Math.tan(v)),Math.hypot(size.x,size.z)/(2*Math.tan(horizontal)))*1.25+size.z/2;distance=baseDistance;render();}
@@ -75,7 +77,7 @@ try {
  let drag=null;renderer.domElement.onpointerdown=function(e){drag=[e.clientX,e.clientY];this.setPointerCapture(e.pointerId);};
  renderer.domElement.onpointermove=function(e){if(!drag)return;yaw-=(e.clientX-drag[0])*.008;pitch=Math.max(-.45,Math.min(.9,pitch+(e.clientY-drag[1])*.006));drag=[e.clientX,e.clientY];render();};renderer.domElement.onpointerup=renderer.domElement.onpointercancel=function(){drag=null;};
  renderer.domElement.addEventListener('wheel',function(e){e.preventDefault();distance=Math.max(baseDistance*.35,Math.min(baseDistance*3,distance*Math.exp(e.deltaY*.001)));render();},{passive:false});
- window.addEventListener('pagehide',stop);
+ window.addEventListener('pagehide',function(){stop();quality.dispose();env.dispose();renderer.dispose();});
  new ResizeObserver(fit).observe(toolbar);window.addEventListener('resize',fit);fit();
  window.__SV_CHARACTER_PREVIEW={asset,scene,camera,renderer,state};
 } catch(e){document.getElementById('error').textContent=String(e.message||e);}

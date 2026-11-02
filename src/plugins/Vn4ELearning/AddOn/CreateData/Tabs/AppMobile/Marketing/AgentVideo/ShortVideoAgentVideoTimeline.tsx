@@ -3,6 +3,7 @@ import {timelineAudioBeatBounds} from 'helpers/timelineAudio';
 import VolumeOffIcon from '@mui/icons-material/VolumeOff';
 import VolumeUpIcon from '@mui/icons-material/VolumeUp';
 import TimelineVoiceClipView from './TimelineVoiceClipView';
+import {timelineVoiceBeats} from './timelineVoiceBeats';
 import {useVoiceMix} from 'helpers/timelineVoice';
 import {beatPlaybackUpdate} from './timelinePlaybackSync';
 import TimelineAudioClipView from './TimelineAudioClipView';
@@ -908,12 +909,18 @@ export default function ShortVideoAgentVideoTimeline({
         }
         return lanes.map((actions, lane) => ({ id: `audio_suggestions_lane_${lane}`, classNames: [`audio-suggestions-lane-${lane}`], actions }));
     }, [audioSuggestionMarkers]);
+    const hasVoiceState = Boolean(agentState);
+    const beatVoiceAudio = agentState?.beatAudio;
+    const fullVoiceUrl = agentState?.agentBeatAudio ? '' : agentState?.audioFileUrl || '';
+    const voiceBeats = React.useMemo(() => hasVoiceState ? timelineVoiceBeats(beatMap?.sections || [], beatVoiceAudio, fullVoiceUrl) : [],
+        [beatMap?.sections, beatVoiceAudio, fullVoiceUrl, hasVoiceState]);
     const editorData = React.useMemo(
         () => {
             const videoRows = buildAgentVideoTimelineRows(contentDurationSec);
-            return [...videoRows, {id:'voice_row',actions:[{id:'main_voice',start:0,end:contentDurationSec,effectId:'voice',movable:false,flexible:false}]}, ...audioSuggestionRows, ...timelineAudio.rows];
+            const voiceActions = voiceBeats.length ? voiceBeats.map(beat => ({id:beat.id,start:beat.start,end:beat.end,effectId:'voice',movable:false,flexible:false})) : [{id:'main_voice',start:0,end:contentDurationSec,effectId:'voice',movable:false,flexible:false}];
+            return [...videoRows, {id:'voice_row',actions:voiceActions}, ...audioSuggestionRows, ...timelineAudio.rows];
         },
-        [audioSuggestionRows,contentDurationSec,timelineAudio.rows],
+        [audioSuggestionRows,contentDurationSec,timelineAudio.rows,voiceBeats],
     );
 
     const minScaleCount = Math.max(20, Math.ceil(timelineWorkspaceEndSec) + 2);
@@ -2000,7 +2007,11 @@ export default function ShortVideoAgentVideoTimeline({
                             onClickTimeArea={handleClickTimeArea}
                             getActionRender={(action) => {
                                 const commonHoverSx = { width: '100%', height: '100%', position: 'relative' as const, opacity: hoveredAudioGroup ? 0.16 : 1, transition: 'opacity 140ms ease' };
-                                if(action.effectId==='voice')return <TimelineVoiceClipView mix={voiceMix} duration={contentDurationSec} onVolume={voiceMix.setVolume} onToggle={voiceMix.toggle}/>;
+                                if(action.effectId==='voice'){
+                                    const beat=voiceBeats.find(item=>item.id===action.id);
+                                    const generationId=agentState?.workflowActive==='video-html-2d'?beat?.beatId:beat?.markId;
+                                    return <TimelineVoiceClipView mix={voiceMix} duration={action.end-action.start} onVolume={voiceMix.setVolume} onToggle={voiceMix.toggle} missing={beat?.missing} beatId={beat?.beatId} generationBusy={Boolean(agentState?.generatingBeatAudio)||!agentState} generating={Boolean(generationId)&&agentState?.generatingBeatAudio===generationId} onGenerate={()=>{if(generationId)void agentState?.handleGenerateBeatAudio(generationId);}}/>;
+                                }
                                 if (action.effectId === 'audio') {
                                     const clip = timelineAudio.clips.find(item => item.id === action.id);
                                     const group = clip?.suggestion_key || `audio:${action.id}`;
