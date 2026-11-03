@@ -36,3 +36,18 @@ test('catalog failure can be retried without closing',async()=>{
  render(<CharacterDesignDialog shortVideoId={42} asset={asset} busy={false} onSave={jest.fn()} onClose={jest.fn()}/>);
  await screen.findByText('Mất kết nối');fireEvent.click(screen.getByRole('button',{name:'Thử lại'}));await screen.findByText('Đầu Mai');
 });
+
+test('facial options select a named part with no sliders and save its recipe',async()=>{
+ const onSave=jest.fn().mockResolvedValue(true);
+ (sceneAssetsRequest as jest.Mock).mockResolvedValue({success:true,designer:{...designer,config:{...config,parameters:{headWidth:1}},catalog:[{...designer.catalog[0],items:[...designer.catalog[0].items,{id:'round',name:'Mặt tròn',badge:'HTML',parameters:{headWidth:1.15,headHeight:.9,jawWidth:1.15}}]}]}});
+ render(<CharacterDesignDialog shortVideoId={42} asset={asset} busy={false} onSave={onSave} onClose={jest.fn()}/>);
+ await screen.findByRole('button',{name:'Mặt tròn'});
+ expect(screen.queryByRole('slider')).toBeNull();
+ const initialHtml=screen.getByTestId('design-preview').getAttribute('data-html');
+ fireEvent.click(screen.getByRole('button',{name:'Mặt tròn'}));
+ expect(screen.getByRole('button',{name:'Mặt tròn'}).getAttribute('aria-pressed')).toBe('true');
+ expect(screen.getByTestId('design-preview').getAttribute('data-html')).toBe(initialHtml);
+ expect(screen.getByTestId('design-preview').textContent).toContain('headWidth\":1.15');
+ fireEvent.click(screen.getByRole('button',{name:'Lưu nhân vật'}));
+ await waitFor(()=>expect(onSave).toHaveBeenCalledWith(expect.objectContaining({design:expect.objectContaining({selections:expect.objectContaining({head:'round'}),parameters:{headWidth:1.15,headHeight:.9,jawWidth:1.15}})})));
+});

@@ -20,10 +20,10 @@ export type SceneAssetRegistry = {
     schema_version?: string; storyboard_version?: 'causal_3d_v1'; revision?: string; assets?: Record<string, SceneAsset>; beats?: Record<string, SceneAssetBeat>;
 };
 export type CharacterDesignConfig = {
-    template: 'mai_v1'; selections: Record<string, string>; colors: Record<string, string>;
+    template: 'mai_v1'; selections: Record<string, string>; colors: Record<string, string>; parameters?: Record<string, number>;
 };
 export type CharacterDesignCatalog = {
-    catalog: {id: string; name: string; colors: string[]; items: {id: string; name: string; badge: string; thumbnail?: string}[]}[];
+    catalog: {id: string; name: string; colors: string[]; items: {id: string; name: string; badge: string; thumbnail?: string; parameters?: Record<string,number>}[]}[];
     template_html: string; config: CharacterDesignConfig;
     expected_module_hash: string; expected_spec_hash: string; replacing: boolean;
 };
