@@ -1,3 +1,4 @@
+import {installTestAudioContext} from 'testUtils/audioContext';
 import React from 'react';
 import {act,render} from '@testing-library/react';
 import useTimelineAudio from './useTimelineAudio';
@@ -42,3 +43,35 @@ test('beat-start sound has one transport authority and plays once across duplica
   expect(media.currentTime).toBe(0);
  }finally{view?.unmount();window.Audio=AudioOriginal;warn.mockRestore();URL.revokeObjectURL=revoke;}
 });
+test('a failed item is reloaded on replay while another item keeps playing, with time-based preloading',async()=>{
+ const healthy={...clip,id:'healthy',sound_id:'healthy',sound:{...clip.sound,id:'healthy',file:'healthy.wav',title:'Healthy'}};
+ class Media extends EventTarget {
+  paused=true;duration=.91896;currentTime=0;playbackRate=1;volume=1;preload='';error:{code:number}|null=null;
+  play=jest.fn(async()=>{this.paused=false;});pause=jest.fn(()=>{this.paused=true;});
+ }
+ const created:{url:string;media:Media}[]=[];let failedOnce=false;
+ const AudioOriginal=window.Audio;
+ window.Audio=jest.fn((url:string)=>{
+  const media=new Media();
+  if(url==='blob:door.wav'&&!failedOnce){failedOnce=true;media.error={code:3};media.duration=NaN;}
+  created.push({url,media});return media;
+ }) as unknown as typeof Audio;
+ const warn=jest.spyOn(console,'warn').mockImplementation(()=>{}),revoke=URL.revokeObjectURL;URL.revokeObjectURL=jest.fn();
+ (timelineAudioApi as jest.Mock).mockResolvedValue({success:true,clips:[clip,healthy],revision:'r2'});
+ (loadLibrarySoundBlobUrl as jest.Mock).mockImplementation(async file=>'blob:'+file);
+ let view:ReturnType<typeof render>|undefined;
+ try{
+  // No beat map: the upcoming 8-second window must still preload both items.
+  await act(async()=>{view=render(<Player time={20} playing={false}/>);});
+  expect(created).toHaveLength(2);expect(created.every(x=>x.media.play.mock.calls.length===0)).toBe(true);
+  expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:door.wav');
+  await act(async()=>{view!.rerender(<Player time={22.39} playing/>);});
+  expect(created.filter(x=>x.url==='blob:door.wav')).toHaveLength(2);
+  expect(created.find(x=>x.url==='blob:healthy.wav')!.media.play).toHaveBeenCalledTimes(1);
+  expect(created.filter(x=>x.url==='blob:door.wav')[1].media.play).toHaveBeenCalledTimes(1);
+ }finally{view?.unmount();window.Audio=AudioOriginal;warn.mockRestore();URL.revokeObjectURL=revoke;}
+});
+
+let audioContextTest:ReturnType<typeof installTestAudioContext>;
+beforeEach(()=>{audioContextTest=installTestAudioContext();});
+afterEach(()=>audioContextTest.restore());

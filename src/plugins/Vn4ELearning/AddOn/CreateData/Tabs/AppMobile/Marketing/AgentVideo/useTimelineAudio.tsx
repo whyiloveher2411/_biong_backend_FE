@@ -5,6 +5,8 @@ import VolumeUpIcon from '@mui/icons-material/VolumeUp';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import React from 'react';
 import {TimelineAudioPlayback} from 'helpers/timelineAudioPlayback';
+import {waitForAudioMetadata} from 'helpers/audioMetadata';
+import {TimelineAudioOutput} from 'helpers/timelineAudioOutput';
 import {Alert,Box,Button,Dialog,DialogActions,DialogContent,DialogContentText,DialogTitle,Divider,ListItemIcon,ListItemText,Menu,MenuItem,Stack,TextField,Typography} from '@mui/material';
 import type {TimelineRow} from '@xzdarcy/timeline-engine';
 import DrawerCustom from 'components/molecules/DrawerCustom';
@@ -13,16 +15,21 @@ import {constrainTimelineAudio,timelineAudioBeatBounds,openVideoPixabayAudio,Tim
 
 export default function useTimelineAudio(videoId:number,time:number,playing:boolean,total:number,beatSections:ReadonlyArray<{id:string;startSec:number;endSec:number}>=[]){
  const [clips,setClips]=React.useState<TimelineAudioClip[]>([]),[suggestions,setSuggestions]=React.useState<Record<string,TimelineAudioPlanEntry>>({}),[revision,setRevision]=React.useState(''),[dirty,setDirty]=React.useState(false),[error,setError]=React.useState(''),[playbackError,setPlaybackError]=React.useState(''),[busy,setBusy]=React.useState(false),[library,setLibrary]=React.useState(false),[selected,setSelected]=React.useState(''),[infoId,setInfoId]=React.useState(''),[uiEpoch]=React.useState(0),[pendingDeleteId,setPendingDeleteId]=React.useState(''),[menu,setMenu]=React.useState<{id:string;x:number;y:number}|null>(null);
- const audio=React.useRef(new Map<string,HTMLAudioElement>()),gains=React.useRef(new Map<string,GainNode>()),blobUrls=React.useRef(new Map<string,string>()),audioFiles=React.useRef(new Map<string,string>()),audioContext=React.useRef<AudioContext|null>(null),clipsRef=React.useRef(clips),dirtyRef=React.useRef(false),busyRef=React.useRef(false),editingRef=React.useRef(false);clipsRef.current=clips;dirtyRef.current=dirty;
+ const audio=React.useRef(new Map<string,HTMLAudioElement>()),metadataLoads=React.useRef(new Map<string,AbortController>()),blobUrls=React.useRef(new Map<string,string>()),audioFiles=React.useRef(new Map<string,string>()),clipsRef=React.useRef(clips),dirtyRef=React.useRef(false),busyRef=React.useRef(false),editingRef=React.useRef(false);clipsRef.current=clips;dirtyRef.current=dirty;
  React.useEffect(()=>{let active=true;dirtyRef.current=false;setClips([]);setSuggestions({});setSelected('');setInfoId('');setMenu(null);setPendingDeleteId('');setDirty(false);setRevision('');const load=()=>{if(videoId<=0)return;void timelineAudioApi(videoId).then(r=>{if(!active)return;if(!r.success)throw new Error(r.message);if(!dirtyRef.current&&!editingRef.current){setClips(packTimelineAudio((r.clips||[]).map(c=>constrainTimelineAudio(c,beatSections))));setRevision(r.revision);}setSuggestions(r.suggestions||{});}).catch(e=>active&&setError(String(e.message)));};load();const timer=window.setInterval(load,6000);const refresh=(event:Event)=>{const d=(event as CustomEvent).detail;if(d?.videoId===videoId)load();};document.addEventListener('timeline-audio-suggestions-updated',refresh);return()=>{active=false;window.clearInterval(timer);document.removeEventListener('timeline-audio-suggestions-updated',refresh);};},[videoId]);
- const ensureAudioContext=React.useCallback(()=>{const Ctx=window.AudioContext||(window as Window&{webkitAudioContext?:typeof AudioContext}).webkitAudioContext;if(!Ctx)return null;return audioContext.current||(audioContext.current=new Ctx());},[]);
- const unlockAudioContext=React.useCallback(()=>{try{const context=ensureAudioContext();if(context?.state==='suspended')void context.resume().catch(resumeError=>console.warn('Could not unlock timeline audio context',resumeError));}catch(audioContextError){console.warn('Timeline audio context is unavailable',audioContextError);}},[ensureAudioContext]);
+ const output=React.useMemo(()=>new TimelineAudioOutput(),[videoId]);
+ const unlockAudioContext=React.useCallback(()=>{void output.ready().catch(audioContextError=>{console.warn('Timeline audio context is unavailable',audioContextError);});},[output]);
  React.useEffect(()=>{document.addEventListener('pointerdown',unlockAudioContext,true);document.addEventListener('keydown',unlockAudioContext,true);return()=>{document.removeEventListener('pointerdown',unlockAudioContext,true);document.removeEventListener('keydown',unlockAudioContext,true);};},[unlockAudioContext]);
- const createAudio=React.useCallback((id:string,url:string)=>{const a=new Audio(url);a.preload='auto';audio.current.set(id,a);try{const context=ensureAudioContext();if(!context)throw new Error('AudioContext unavailable');const source=context.createMediaElementSource(a);const gain=context.createGain();source.connect(gain);gain.connect(context.destination);gains.current.set(id,gain);}catch(audioSetupError){console.warn('Timeline audio gain graph unavailable',audioSetupError);setPlaybackError('Không tạo được bộ khuếch đại âm thanh. Hãy thử trình duyệt khác hoặc tải lại trang.');}return a;},[ensureAudioContext]);
- const applyAudioSample=React.useCallback((clip:TimelineAudioClip,a:HTMLAudioElement,volume:number)=>{a.playbackRate=clip.speed||1;const gain=gains.current.get(clip.id);if(gain){a.volume=1;gain.gain.value=volume;}else a.volume=Math.min(1,volume);},[]);
+ const createAudio=React.useCallback((id:string,url:string)=>{
+  const a=new Audio(url);a.preload='auto';
+  try{output.attach(a);}catch(error){a.pause();output.release(a);throw error;}
+  audio.current.set(id,a);metadataLoads.current.set(id,new AbortController());return a;
+ },[output]);
+ const applyAudioSample=React.useCallback((clip:TimelineAudioClip,a:HTMLAudioElement,volume:number)=>{output.apply(a,volume,clip.speed||1);},[output]);
  const playback=React.useMemo(()=>new TimelineAudioPlayback(async (clip,isCurrent)=>{
-  if(audioFiles.current.get(clip.id)!==clip.sound.file){
-   audio.current.get(clip.id)?.pause();audio.current.delete(clip.id);gains.current.get(clip.id)?.disconnect();gains.current.delete(clip.id);
+  if(audioFiles.current.get(clip.id)!==clip.sound.file||audio.current.get(clip.id)?.error){
+   metadataLoads.current.get(clip.id)?.abort();metadataLoads.current.delete(clip.id);
+   const old=audio.current.get(clip.id);if(old){old.pause();output.release(old);}audio.current.delete(clip.id);
    const oldUrl=blobUrls.current.get(clip.id);if(oldUrl)URL.revokeObjectURL(oldUrl);blobUrls.current.delete(clip.id);
   }
   let a=audio.current.get(clip.id);
@@ -31,25 +38,29 @@ export default function useTimelineAudio(videoId:number,time:number,playing:bool
    if(!url){url=await loadLibrarySoundBlobUrl(clip.sound.file);if(!isCurrent()){URL.revokeObjectURL(url);throw new Error('Playback disposed');}blobUrls.current.set(clip.id,url);}
    audioFiles.current.set(clip.id,clip.sound.file);a=createAudio(clip.id,url);
   }
-  // Seek only after metadata exists; setting currentTime before this is unreliable.
-  if(!Number.isFinite(a.duration))await new Promise<void>((resolve,reject)=>{
-   const media=a!;const ready=()=>{cleanup();resolve();};const failed=()=>{cleanup();reject(new Error('Không tải được file âm thanh.'));};
-   const cleanup=()=>{media.removeEventListener('loadedmetadata',ready);media.removeEventListener('error',failed);};
-   media.addEventListener('loadedmetadata',ready);media.addEventListener('error',failed);
-  });
+  try{await waitForAudioMetadata(a,10000,metadataLoads.current.get(clip.id)?.signal);}catch(error){
+   // Discard only this failed element. A replay must not reuse poisoned metadata.
+   a.pause();
+   if(audio.current.get(clip.id)===a){
+    metadataLoads.current.get(clip.id)?.abort();metadataLoads.current.delete(clip.id);
+    audio.current.delete(clip.id);audioFiles.current.delete(clip.id);
+    output.release(a);
+    const url=blobUrls.current.get(clip.id);if(url)URL.revokeObjectURL(url);blobUrls.current.delete(clip.id);
+   }
+   throw error;
+  }
   return a;
- },applyAudioSample,error=>{console.warn('Timeline sound playback failed',error);setPlaybackError('Không phát được âm thanh. Bấm Phát lại để thử lại.');}),[videoId,createAudio,applyAudioSample]);
+ },applyAudioSample,(error,clip)=>{console.warn('Timeline sound playback failed',clip?.id,clip?.sound.file,error);setPlaybackError('Không phát được '+(clip?.sound.title||clip?.id||'âm thanh')+': '+(error instanceof Error?error.message:String(error)));},undefined,()=>output.ready()),[videoId,createAudio,applyAudioSample,output]);
  React.useEffect(()=>{
-  if(playing&&audioContext.current?.state==='suspended')void audioContext.current.resume().catch(error=>{console.warn('Could not resume timeline audio context',error);setPlaybackError('Trình duyệt chưa cho phép phát âm thanh.');});
-  const index=beatSections.findIndex(beat=>time>=beat.startSec&&time<beat.endSec);
-  const window=beatSections.slice(Math.max(0,index),Math.max(0,index)+3);
-  const preload=new Set(clips.filter(clip=>window.some(beat=>clip.start_sec<beat.endSec&&clip.start_sec+clip.duration_sec>beat.startSec)).map(clip=>clip.id));
+  const index=beatSections.findIndex(beat=>beat.endSec>time);
+  const upcoming=index<0?[]:beatSections.slice(index,index+3);
+  const preload=new Set(clips.filter(clip=>!clip.muted&&((clip.start_sec<time+8&&clip.start_sec+clip.duration_sec>time)||upcoming.some(beat=>clip.start_sec<beat.endSec&&clip.start_sec+clip.duration_sec>beat.startSec))).map(clip=>clip.id));
   playback.sync(time,playing,clips,preload);
  },[time,playing,clips,playback,beatSections]);
- React.useEffect(()=>()=>{playback.dispose();audio.current.forEach(a=>a.pause());audio.current.clear();audioFiles.current.clear();gains.current.clear();blobUrls.current.forEach(url=>URL.revokeObjectURL(url));blobUrls.current.clear();if(audioContext.current){void audioContext.current.close().catch(error=>console.warn('Could not close timeline audio context',error));audioContext.current=null;}},[playback]);
+ React.useEffect(()=>()=>{playback.dispose();metadataLoads.current.forEach(controller=>controller.abort());metadataLoads.current.clear();audio.current.forEach(a=>a.pause());audio.current.clear();audioFiles.current.clear();blobUrls.current.forEach(url=>URL.revokeObjectURL(url));blobUrls.current.clear();output.dispose();},[playback,output]);
  const change=(next:TimelineAudioClip[])=>{dirtyRef.current=true;setClips(packTimelineAudio(next.map(c=>constrainTimelineAudio(c,beatSections))));setDirty(true);setError('');};
  const patch=(id:string,p:Partial<TimelineAudioClip>)=>change(clips.map(c=>{if(c.id!==id)return c;const beat=timelineAudioBeatBounds(c,beatSections);return {...c,...p,...(beat?{event_beat_id:beat.id}:{}),...(p.speed?{duration_sec:c.duration_sec*(c.speed||1)/p.speed}:{})};}));
- const add=(s:LibrarySound)=>{const start=Math.max(0,time),duration=Math.max(.05,Math.min(s.duration_sec,total-start));const id='audio_'+Date.now()+'_'+Math.random().toString(36).slice(2,7);change([...clips,{id,sound_id:s.id,sound:s,start_sec:start,duration_sec:duration,offset_sec:0,volume:1,loop:false,speed:1,fade_in:0,fade_out:0}]);setSelected(id);setLibrary(false);};
+ const add=(s:LibrarySound)=>{const start=Math.max(0,time),duration=Math.max(.05,Math.min(s.duration_sec,total-start));const id='audio_'+Date.now()+'_'+Math.random().toString(36).slice(2,7);change([...clips,{id,sound_id:s.id,sound:s,start_sec:start,duration_sec:duration,offset_sec:0,volume:s.source_type==='code'?2:1,loop:false,speed:1,fade_in:0,fade_out:0}]);setSelected(id);setLibrary(false);};
  const save=async()=>{if(busyRef.current||editingRef.current||!dirtyRef.current||!revision)return;busyRef.current=true;setBusy(true);setError('');const submitted=clips;try{const r=await timelineAudioApi(videoId,submitted,revision);if(!r.success)throw new Error(r.message);setRevision(r.revision);if(clipsRef.current===submitted&&!editingRef.current){setClips(packTimelineAudio(r.clips));dirtyRef.current=false;setDirty(false);}}catch(e){setError(e instanceof Error?e.message:'Không lưu được âm thanh.');}finally{busyRef.current=false;setBusy(false);}};
  React.useEffect(()=>{if(!dirty||busy||error||!revision)return;const timer=window.setTimeout(()=>void save(),700);return()=>window.clearTimeout(timer);},[busy,clips,dirty,error,revision]);
  const laneCount=clips.length?Math.max(...clips.map(c=>c.lane||0))+2:0;
@@ -60,7 +71,7 @@ export default function useTimelineAudio(videoId:number,time:number,playing:bool
  const move=(id:string)=>{const clip=clips.find(c=>c.id===id);if(!clip)return;const beat=beatSections.find(s=>clip.start_sec>=s.startSec&&clip.start_sec<s.endSec)||beatSections.find(s=>s.id===clip.event_beat_id);patch(id,{start_sec:Math.max(0,beat?.startSec??0)});};
  const deleteClip=clips.find(c=>c.id===pendingDeleteId);
  const remove=(id:string)=>{change(clips.filter(c=>c.id!==id));setSelected('');setInfoId('');};
- const controls=<><Button size="small" sx={{whiteSpace:'nowrap',flexShrink:0,fontSize:12,textTransform:'none'}} onClick={()=>setLibrary(true)}>Âm thanh của video</Button>{planningCount>0&&<Typography variant="caption" color="info.light" sx={{whiteSpace:'nowrap',flexShrink:0}}>Đang đồng bộ {planningCount} sự kiện âm thanh…</Typography>}{failedPlanCount>0&&<Typography variant="caption" color="error" sx={{whiteSpace:'nowrap',flexShrink:0}}>{failedPlanCount} beat có lỗi âm thanh</Typography>}{selected&&<Typography variant="caption" sx={{whiteSpace:'nowrap',flexShrink:0}}>Âm lượng {Math.round((clips.find(c=>c.id===selected)?.volume||0)*100)}%</Typography>}{dirty&&<Typography variant="caption" color={error?'error':'text.secondary'} sx={{whiteSpace:'nowrap',flexShrink:0}}>{error|| (busy?'Đang tự lưu…':'Đang chờ tự lưu…')}</Typography>}{playbackError&&<Typography variant="caption" color="error" sx={{whiteSpace:'nowrap',flexShrink:0}}>{playbackError}</Typography>}{error&&<Button size="small" sx={{whiteSpace:'nowrap',flexShrink:0,fontSize:12,textTransform:'none'}} onClick={()=>setError('')}>Thử lưu lại</Button>}{playbackError&&<Button size="small" sx={{whiteSpace:'nowrap',flexShrink:0,fontSize:12,textTransform:'none'}} onClick={()=>setPlaybackError('')}>Thử phát lại</Button>}</>;
+ const controls=<><Button size="small" sx={{whiteSpace:'nowrap',flexShrink:0,fontSize:12,textTransform:'none'}} onClick={()=>setLibrary(true)}>Âm thanh của video</Button>{planningCount>0&&<Typography variant="caption" color="info.light" sx={{whiteSpace:'nowrap',flexShrink:0}}>Đang đồng bộ {planningCount} sự kiện âm thanh…</Typography>}{failedPlanCount>0&&<Typography variant="caption" color="error" sx={{whiteSpace:'nowrap',flexShrink:0}}>{failedPlanCount} beat có lỗi âm thanh</Typography>}{selected&&<Typography variant="caption" sx={{whiteSpace:'nowrap',flexShrink:0}}>Âm lượng {Math.round((clips.find(c=>c.id===selected)?.volume||0)*100)}%</Typography>}{dirty&&<Typography variant="caption" color={error?'error':'text.secondary'} sx={{whiteSpace:'nowrap',flexShrink:0}}>{error|| (busy?'Đang tự lưu…':'Đang chờ tự lưu…')}</Typography>}{playbackError&&<Typography variant="caption" color="error" sx={{whiteSpace:'nowrap',flexShrink:0}}>{playbackError}</Typography>}{error&&<Button size="small" sx={{whiteSpace:'nowrap',flexShrink:0,fontSize:12,textTransform:'none'}} onClick={()=>setError('')}>Thử lưu lại</Button>}{playbackError&&<Button size="small" sx={{whiteSpace:'nowrap',flexShrink:0,fontSize:12,textTransform:'none'}} onClick={()=>{setPlaybackError('');playback.retryFailed();}}>Thử phát lại</Button>}</>;
  const dialogs=<><DrawerCustom open={library} onClose={()=>setLibrary(false)} title="Âm thanh riêng của video" width={520}><Stack spacing={1}>{Array.from(new Map(clips.filter(c=>c.sound.video_id===videoId).map(c=>[c.sound.id,c.sound])).values()).map(sound=><Button key={sound.id} onClick={()=>add(sound)}>{sound.title}</Button>)}{!clips.some(c=>c.sound.video_id===videoId)&&<Typography>Chưa có âm thanh riêng. Lưu HTML beat để tạo âm thanh code; bấm sự kiện tự nhiên trên timeline để chọn tại Pixabay.</Typography>}</Stack></DrawerCustom><Menu open={!!menu} onClose={()=>setMenu(null)} anchorReference="anchorPosition" anchorPosition={menu?{left:menu.x,top:menu.y}:undefined} PaperProps={{sx:{minWidth:230}}} MenuListProps={{dense:true,sx:{py:.5}}}>
   <MenuItem onClick={()=>{if(menu)setInfoId(menu.id);setMenu(null);}}><ListItemIcon><InfoOutlinedIcon fontSize="small"/></ListItemIcon><ListItemText>Thông tin</ListItemText></MenuItem>
   <Divider sx={{my:.5}}/>

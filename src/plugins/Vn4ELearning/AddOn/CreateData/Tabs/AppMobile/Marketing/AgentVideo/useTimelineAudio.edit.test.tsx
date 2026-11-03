@@ -1,3 +1,4 @@
+import {installTestAudioContext} from 'testUtils/audioContext';
 import React from 'react';
 import {render,screen,fireEvent,waitFor,act} from '@testing-library/react';
 import useTimelineAudio from './useTimelineAudio';
@@ -39,3 +40,7 @@ test('delete requires confirmation and cancel leaves the clip intact',async()=>{
  fireEvent.click(screen.getByText('Menu A'));fireEvent.click(await screen.findByRole('menuitem',{name:'Xoá'}));fireEvent.click(await screen.findByRole('button',{name:'Xoá âm thanh'}));
  expect(editor.clips.map(c=>c.id)).toEqual(['b']);view.unmount();
 });
+
+let audioContextTest:ReturnType<typeof installTestAudioContext>;
+beforeEach(()=>{audioContextTest=installTestAudioContext();});
+afterEach(()=>audioContextTest.restore());
