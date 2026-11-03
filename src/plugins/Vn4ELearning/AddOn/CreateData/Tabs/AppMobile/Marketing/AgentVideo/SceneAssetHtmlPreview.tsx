@@ -20,7 +20,10 @@ function runtimeSource(): Promise<string> {
     return runtimeRequest;
 }
 
-export default function SceneAssetHtmlPreview({html, title, kind, height = '65vh'}: {html: string; title: string; kind?: string; height?: string}) {
+export default function SceneAssetHtmlPreview({html, title, kind, height = '65vh', previewMessage}: {html: string; title: string; kind?: string; height?: string; previewMessage?: Record<string, unknown>}) {
+    const frame = React.useRef<HTMLIFrameElement>(null);
+    const sendPreviewMessage = () => { if (previewMessage) frame.current?.contentWindow?.postMessage(previewMessage, '*'); };
+    React.useEffect(sendPreviewMessage, [previewMessage]);
     const [runtime, setRuntime] = React.useState('');
     const [error, setError] = React.useState('');
     const [readySource, setReadySource] = React.useState('');
@@ -52,5 +55,5 @@ export default function SceneAssetHtmlPreview({html, title, kind, height = '65vh
     }, [html, kind, runtime, readySource, buildCharacterDocument]);
     if (error || prepared.error) return <Alert severity="error">{error || prepared.error}</Alert>;
     if (!prepared.document || readySource !== html) return <Box role="status" sx={{height, display: 'grid', placeItems: 'center'}}><CircularProgress aria-label="Đang tải preview hồ sơ"/></Box>;
-    return <iframe title={title} sandbox="allow-scripts" srcDoc={prepared.document} style={{width: '100%', height, border: 0, display: 'block'}}/>;
+    return <iframe ref={frame} onLoad={sendPreviewMessage} title={title} sandbox="allow-scripts" srcDoc={prepared.document} style={{width: '100%', height, border: 0, display: 'block'}}/>;
 }

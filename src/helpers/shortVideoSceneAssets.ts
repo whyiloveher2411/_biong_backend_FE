@@ -5,6 +5,7 @@ export type SceneAsset = {
     id: string; kind: 'character' | 'environment'; name: string; spec: string;
     spec_hash: string; html_sha256?: string; updated_at?: string; has_html?: boolean; html?: string; ready?: boolean; module_hash?: string;
     model_snapshot?: ShortVideoModel3d;
+    character_design?: CharacterDesignConfig;
     has_html_backup?: boolean; html_backup_ready?: boolean;
     chat_url?: string;
     generation?: {provider?: 'deepseek'|'claude'; status: 'queued' | 'processing' | 'completed' | 'failed' | 'superseded' | 'cancelled'; job_id?: number; error?: string; continue_clicks?: number; phase?: string; repair_attempt?: number; preview_checked?: boolean};
@@ -18,7 +19,16 @@ export type SceneAssetBeat = {
 export type SceneAssetRegistry = {
     schema_version?: string; storyboard_version?: 'causal_3d_v1'; revision?: string; assets?: Record<string, SceneAsset>; beats?: Record<string, SceneAssetBeat>;
 };
+export type CharacterDesignConfig = {
+    template: 'mai_v1'; selections: Record<string, string>; colors: Record<string, string>;
+};
+export type CharacterDesignCatalog = {
+    catalog: {id: string; name: string; colors: string[]; items: {id: string; name: string; badge: string; thumbnail?: string}[]}[];
+    template_html: string; config: CharacterDesignConfig;
+    expected_module_hash: string; expected_spec_hash: string; replacing: boolean;
+};
 export type SceneAssetResponse = {
+    designer?: CharacterDesignCatalog;
     success?: boolean; prompt?: string; queued?: number; asset?: SceneAsset; registry?: SceneAssetRegistry; message?: string | {content?: string};
 };
 export function sceneAssetsRequest(shortVideoId: number, operation: string, data: Record<string, unknown> = {}): Promise<SceneAssetResponse> {

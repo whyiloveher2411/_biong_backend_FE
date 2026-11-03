@@ -301,3 +301,83 @@ test('provider selection survives reopening and stays independent for each video
  expect(screen.getByLabelText('Tạo HTML bằng')).toHaveTextContent('Claude');
  view.unmount();
 });
+
+const validHtml = (inside: string) => `<!doctype html><html><head><script src="http://localhost:8000/three.min.js?v=0.186.1"></script></head><body><script id="sv-asset-module">window.SVAssetFactory = function(THREE, kit) { /* ${inside} */ return {root:null}; };</script></body></html>`;
+
+test('profile dialog loads the saved HTML and saves an edit without touching the spec',async()=>{
+ const view=render(<SceneAssetsPanel shortVideoId={42}/>);
+ await screen.findAllByText('Người vợ');
+ fireEvent.click(screen.getByRole('button',{name:'Sửa hồ sơ Người vợ'}));
+ const field=await screen.findByLabelText('HTML hồ sơ');
+ await waitFor(()=>expect((field as HTMLTextAreaElement).value).toContain('canonical wife'));
+ fireEvent.change(field,{target:{value:validHtml('hand edited')}});
+ await waitFor(()=>expect(screen.getByText(/Có thay đổi chưa lưu/)).toBeTruthy());
+ fireEvent.click(screen.getByRole('button',{name:'Lưu hồ sơ'}));
+ await waitFor(()=>expect(request).toHaveBeenCalledWith(expect.objectContaining({data:expect.objectContaining({
+   short_video_id:42,operation:'html',asset_id:'wife',spec_hash:'wife-spec',text:validHtml('hand edited'),
+ })})));
+ expect(request.mock.calls.some(([call])=>call.data.operation==='manifest')).toBe(false);
+ await waitFor(()=>expect(screen.queryByRole('dialog')).toBeNull());
+ view.unmount();
+});
+
+test('changing spec and HTML writes the manifest first and sends the new spec hash with the HTML',async()=>{
+ const previewAsset={...registry.assets.wife,html:validHtml('loaded')};
+ request.mockImplementation(({data})=>{
+  if(data.operation==='preview')return Promise.resolve({success:true,asset:previewAsset});
+  if(data.operation==='manifest')return Promise.resolve({success:true,registry:{...registry,revision:'rev-2',assets:{...registry.assets,wife:{...registry.assets.wife,spec:'Đầm đỏ',spec_hash:'wife-spec-2'}}}});
+  return Promise.resolve({success:true,registry});
+ });
+ const view=render(<SceneAssetsPanel shortVideoId={42}/>);
+ await screen.findAllByText('Người vợ');
+ fireEvent.click(screen.getByRole('button',{name:'Sửa hồ sơ Người vợ'}));
+ const field=await screen.findByLabelText('HTML hồ sơ');
+ await waitFor(()=>expect((field as HTMLTextAreaElement).value).toContain('loaded'));
+ fireEvent.change(screen.getByLabelText('Đặc tả cố định'),{target:{value:'Đầm đỏ'}});
+ fireEvent.change(field,{target:{value:validHtml('edited')}});
+ fireEvent.click(screen.getByRole('button',{name:'Lưu hồ sơ'}));
+ await waitFor(()=>expect(request).toHaveBeenCalledWith(expect.objectContaining({data:expect.objectContaining({operation:'html',asset_id:'wife',spec_hash:'wife-spec-2',text:validHtml('edited')})})));
+ const operations=request.mock.calls.map(([call])=>call.data.operation);
+ const manifestAt=operations.indexOf('manifest'),htmlAt=operations.lastIndexOf('html');
+ expect(manifestAt).toBeGreaterThanOrEqual(0);
+ expect(htmlAt).toBeGreaterThan(manifestAt);
+ view.unmount();
+});
+
+test('structurally invalid HTML is blocked before it reaches the API',async()=>{
+ const view=render(<SceneAssetsPanel shortVideoId={42}/>);
+ await screen.findAllByText('Người vợ');
+ fireEvent.click(screen.getByRole('button',{name:'Sửa hồ sơ Người vợ'}));
+ const field=await screen.findByLabelText('HTML hồ sơ');
+ await waitFor(()=>expect((field as HTMLTextAreaElement).value).toContain('canonical wife'));
+ fireEvent.change(field,{target:{value:'<html><body>thiếu module</body></html>'}});
+ expect(await screen.findByText('HTML cần bắt đầu bằng <!doctype html>.')).toBeTruthy();
+ expect(screen.getByRole('button',{name:'Lưu hồ sơ'}).hasAttribute('disabled')).toBe(true);
+ fireEvent.click(screen.getByRole('button',{name:'Lưu hồ sơ'}));
+ expect(request.mock.calls.some(([call])=>['manifest','html'].includes(call.data.operation))).toBe(false);
+ view.unmount();
+});
+
+test('library characters explain that HTML comes from the shared model',async()=>{
+ request.mockResolvedValue({success:true,registry:{...registry,assets:{...registry.assets,wife:{...registry.assets.wife,module_hash:'role-v1',model_snapshot:{id:4,character:{enabled:true}}}}}});
+ const view=render(<SceneAssetsPanel shortVideoId={42}/>);
+ await screen.findAllByText('Người vợ');
+ fireEvent.click(screen.getByRole('button',{name:'Sửa hồ sơ Người vợ'}));
+ expect(await screen.findByText(/Nhân vật thư viện dùng HTML sinh tự động từ GLB/)).toBeTruthy();
+ expect(screen.queryByLabelText('HTML hồ sơ')).toBeNull();
+ expect(request.mock.calls.some(([call])=>call.data.operation==='preview')).toBe(false);
+ view.unmount();
+});
+
+test('design button belongs only to characters and saves the selected HTML default for that role', async()=>{
+ const config={template:'mai_v1',selections:{head:'mai_head_v1'},colors:{skin:'#E0A97C'}};
+ request.mockImplementation(({data})=>Promise.resolve(data.operation==='design_catalog'?{success:true,designer:{config,catalog:[{id:'head',name:'Đầu & da',colors:['skin'],items:[{id:'mai_head_v1',name:'Đầu Mai',badge:'Default'}]}],template_html:'<!doctype html><html><head></head><body>__SV_DESIGN_CONFIG__</body></html>',expected_module_hash:'fresh-module',expected_spec_hash:'wife-spec',replacing:true}}:{success:true,registry}));
+ const view=render(<SceneAssetsPanel shortVideoId={42}/>);
+ await screen.findAllByText('Người vợ');
+ expect(within(screen.getByTestId('scene-asset-dinner')).queryByRole('button',{name:'Thiết kế'})).toBeNull();
+ fireEvent.click(within(screen.getByTestId('scene-asset-wife')).getByRole('button',{name:'Thiết kế'}));
+ await screen.findByText('Đầu Mai');fireEvent.change(screen.getByLabelText('Màu da'),{target:{value:'#AD7351'}});
+ fireEvent.click(screen.getByRole('button',{name:'Lưu nhân vật'}));
+ await waitFor(()=>expect(request).toHaveBeenCalledWith(expect.objectContaining({data:expect.objectContaining({short_video_id:42,operation:'character_design',asset_id:'wife',expected_module_hash:'fresh-module',expected_spec_hash:'wife-spec',design:expect.objectContaining({colors:{skin:'#ad7351'}})})})));
+ await waitFor(()=>expect(screen.queryByRole('dialog',{name:/Thiết kế nhân vật/})).toBeNull());view.unmount();
+});

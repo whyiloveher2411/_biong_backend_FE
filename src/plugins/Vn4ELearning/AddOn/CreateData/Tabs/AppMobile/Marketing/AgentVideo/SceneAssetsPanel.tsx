@@ -14,7 +14,9 @@ import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import ReplayIcon from '@mui/icons-material/Replay';
 
 import { Alert, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, FormControl, IconButton, Tooltip, InputLabel, LinearProgress, MenuItem, Select, Stack, TextField, Typography } from '@mui/material';
-import { SceneAsset, SceneAssetRegistry, sceneAssetMessage, sceneAssetsManifest, sceneAssetsRequest } from 'helpers/shortVideoSceneAssets';
+import { SceneAsset, SceneAssetRegistry, SceneAssetResponse, sceneAssetMessage, sceneAssetsManifest, sceneAssetsRequest } from 'helpers/shortVideoSceneAssets';
+import SceneAssetHtmlPreview from './SceneAssetHtmlPreview';
+import CharacterDesignDialog from './CharacterDesignDialog';
 
 type Props = { shortVideoId: number };
 type AssetProvider = 'deepseek' | 'claude';
@@ -41,6 +43,26 @@ const BEAT_RENDER_BATCH = 20;
 const REGISTRY_POLL_MS = 5000;
 
 /**
+ * Kiểm tra nhanh trước khi gửi: server vẫn là nơi quyết định (module, API Three.js r186,
+ * phần preview ngoài module). Ở đây chỉ chặn các lỗi cấu trúc tốn một vòng request.
+ */
+function assetHtmlIssue(html: string): string {
+    const text = html.trim();
+    if (!text) return 'HTML đang trống. Dán HTML preview hoàn chỉnh hoặc bấm “Tải lại HTML” để giữ bản đang lưu.';
+    if (text.length > 800000) return 'HTML vượt quá 800KB.';
+    if (!/^<!doctype\s+html/i.test(text)) return 'HTML cần bắt đầu bằng <!doctype html>.';
+    if (!/<\/html>$/i.test(text)) return 'HTML cần kết thúc bằng </html>.';
+    if ((text.match(/<!doctype\s+html/gi) || []).length !== 1) return 'Chỉ được có một <!doctype html>.';
+    const modules = text.match(/<script\b[^>]*\bid\s*=\s*(["'])sv-asset-module\1[^>]*>/gi) || [];
+    if (modules.length !== 1) return `HTML cần đúng một <script id="sv-asset-module"> (đang có ${modules.length}).`;
+    if (/\bsrc\s*=/i.test(modules[0])) return 'Module phải inline: bỏ src khỏi <script id="sv-asset-module">.';
+    if (!/window\.SVAssetFactory\s*=\s*function\s*\(\s*THREE\s*,\s*kit\s*\)\s*\{/.test(text)) {
+        return 'Module phải có dạng window.SVAssetFactory = function(THREE, kit) { … };';
+    }
+    return '';
+}
+
+/**
  * React 18 runtime có startTransition nhưng @types/react của project vẫn là 17.
  * Fallback chạy đồng bộ để test/legacy bundle không phụ thuộc vào type mới.
  */
@@ -50,6 +72,7 @@ const startTransition: (callback: () => void) => void = (
 
 /** One row per reusable asset. Background polling observes saves made in the headless overlay. */
 export default function SceneAssetsPanel({shortVideoId}: Props) {
+    const [designAsset, setDesignAsset] = React.useState<SceneAsset | null>(null);
     const [wardrobeAsset,setWardrobeAsset]=React.useState<SceneAsset | null>(null);
     const [wardrobeConfig,setWardrobeConfig]=React.useState<CharacterConfig>({});
     const [switchHtml,setSwitchHtml]=React.useState<SceneAsset | null>(null);
@@ -80,7 +103,13 @@ export default function SceneAssetsPanel({shortVideoId}: Props) {
     const [importOpen, setImportOpen] = React.useState(false);
     const [preview, setPreview] = React.useState<SceneAsset | null>(null);
     const [profile, setProfile] = React.useState<SceneAsset | null>(null);
-    const profileBase = React.useRef<SceneAssetRegistry>({});
+    const [profileHtml, setProfileHtml] = React.useState('');
+    const [profileHtmlBase, setProfileHtmlBase] = React.useState('');
+    const [profileHtmlState, setProfileHtmlState] = React.useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
+    const [profileHtmlError, setProfileHtmlError] = React.useState('');
+    const [profilePreview, setProfilePreview] = React.useState(false);
+    const profileHtmlRequest = React.useRef(0);
+    const profileSpecHash = React.useRef('');
     const [draft, setDraft] = React.useState<SceneAssetRegistry | null>(null);
     const [mappingOpen, setMappingOpen] = React.useState(false);
     const [mappingCount, setMappingCount] = React.useState(BEAT_RENDER_BATCH);
@@ -150,8 +179,8 @@ export default function SceneAssetsPanel({shortVideoId}: Props) {
                 pending = false;
             }
         };
-        setRegistry({}); setLoading(true); setError(''); setDraft(null); setProfile(null); setPreview(null); setImportOpen(false);
-        setBusy(''); setNotice(''); setMappingOpen(false); setMappingCount(BEAT_RENDER_BATCH);
+        setDesignAsset(null); setRegistry({}); setLoading(true); setError(''); setDraft(null); setProfile(null); setPreview(null); setImportOpen(false);
+        setBusy(''); setNotice(''); setMappingOpen(false); setMappingCount(BEAT_RENDER_BATCH); ++profileHtmlRequest.current;
         void load();
         const timer = setInterval(load, REGISTRY_POLL_MS);
         return () => { cancelled = true; mounted.current = false; clearInterval(timer); ++requestSerial.current; };
@@ -169,22 +198,94 @@ export default function SceneAssetsPanel({shortVideoId}: Props) {
         return () => window.clearTimeout(timer);
     }, [mappingOpen, mappingCount, beatCount]);
 
-    const run = async (key: string, operation: string, data: Record<string, unknown>) => {
-        if (busy || loading) return false;
+    const run = async (key: string, operation: string, data: Record<string, unknown>): Promise<SceneAssetResponse | null> => {
+        if (busy || loading) return null;
         setBusy(key); setError(''); setNotice(''); ++requestSerial.current;
         try {
             const res = await sceneAssetsRequest(shortVideoId, operation, data);
-            if (!mounted.current || currentVideo.current !== shortVideoId) return false;
-            if (!res.success) { setError(sceneAssetMessage(res)); return false; }
+            if (!mounted.current || currentVideo.current !== shortVideoId) return null;
+            if (!res.success) { setError(sceneAssetMessage(res)); return null; }
             if (res.registry) applyRegistry(res.registry);
             // Character source changes alter the asset-config consumed by every
             // saved beat that still references its prior library GLB.
-            if (operation === 'unbind_model') dispatchBeatAssetChanged(shortVideoId, '');
+            if (operation === 'unbind_model' || operation === 'character_design') dispatchBeatAssetChanged(shortVideoId, '');
             setNotice(operation === 'open' ? `Đã mở ${data.provider === 'claude' ? 'Claude' : 'DeepSeek'}. Lưu HTML trong overlay sau khi tạo xong.` : operation === 'enqueue' || operation === 'html' || operation === 'repair' ? sceneAssetMessage(res) : 'Đã lưu.');
-            return true;
-        } catch (e) { if (mounted.current) setError('Không kết nối được CMS.'); return false; }
+            return res;
+        } catch (e) { if (mounted.current) setError('Không kết nối được CMS.'); return null; }
         finally { if (mounted.current && currentVideo.current === shortVideoId) setBusy(''); }
     };
+
+    /** Danh sách get chỉ trả hash, nên HTML phải nạp riêng khi mở dialog sửa hồ sơ. */
+    const loadProfileHtml = async (assetId: string) => {
+        const request = ++profileHtmlRequest.current;
+        setProfileHtmlState('loading'); setProfileHtmlError('');
+        try {
+            const res = await sceneAssetsRequest(shortVideoId, 'preview', {asset_id: assetId});
+            if (request !== profileHtmlRequest.current || !mounted.current) return;
+            if (!res.success || !res.asset) throw new Error(sceneAssetMessage(res));
+            const html = res.asset.html || '';
+            setProfileHtml(html); setProfileHtmlBase(html); setProfileHtmlState('ready');
+            // Preview là bản mới nhất; lưu HTML phải dùng đúng hash này.
+            profileSpecHash.current = res.asset.spec_hash || profileSpecHash.current;
+        } catch (e) {
+            if (request === profileHtmlRequest.current && mounted.current) {
+                setProfileHtmlState('error');
+                setProfileHtmlError(e instanceof Error ? e.message : 'Không tải được HTML đang lưu.');
+            }
+        }
+    };
+    const openProfile = (asset: SceneAsset) => {
+        profileSpecHash.current = asset.spec_hash || '';
+        setProfile({...asset}); setProfileHtml(''); setProfileHtmlBase('');
+        setProfileHtmlError(''); setProfilePreview(false); setError('');
+        setProfileHtmlState(asset.model_snapshot ? 'idle' : 'loading');
+        if (!asset.model_snapshot) void loadProfileHtml(asset.id);
+    };
+    const closeProfile = () => { ++profileHtmlRequest.current; setProfile(null); setProfilePreview(false); };
+    /** Lưu đặc tả trước (đổi spec_hash), rồi lưu HTML với hash vừa cập nhật. */
+    const saveProfile = async () => {
+        if (!profile || busy) return;
+        const htmlChanged = !profile.model_snapshot && profileHtml !== profileHtmlBase;
+        const issue = htmlChanged ? assetHtmlIssue(profileHtml) : '';
+        if (issue) { setError(issue); return; }
+        // Dùng registry mới nhất (poll cập nhật) để giữ thay đổi của phiên khác và revision khớp server.
+        const base = registry;
+        const saved = base.assets?.[profile.id];
+        const specChanged = !saved || profile.name !== saved.name || profile.spec !== saved.spec;
+        if (!specChanged && !htmlChanged) { closeProfile(); return; }
+        let done = '';
+        let specHash = profileSpecHash.current;
+        if (specChanged) {
+            const next = {...base, assets: {...base.assets, [profile.id]: profile}};
+            const res = await run('profile', 'manifest', {text: sceneAssetsManifest(next), expected_revision: base.revision || ''});
+            if (!res) return;
+            specHash = res.registry?.assets?.[profile.id]?.spec_hash || specHash;
+            profileSpecHash.current = specHash;
+            done = 'Đã lưu hồ sơ';
+        }
+        if (htmlChanged) {
+            const res = await run('profile-html', 'html', {asset_id: profile.id, spec_hash: specHash, text: profileHtml});
+            if (!res) return;
+            setProfileHtmlBase(profileHtml);
+            // Server đưa HTML thủ công vào queue: chạy preview, tự sửa nếu lỗi, chỉ lưu bản đạt.
+            done = (done ? done + ' · ' : '') + sceneAssetMessage(res);
+        }
+        setNotice(done || 'Đã lưu.');
+        closeProfile();
+    };
+    const profileHtmlIssue = React.useMemo(() => profileHtml !== profileHtmlBase ? assetHtmlIssue(profileHtml) : '', [profileHtml, profileHtmlBase]);
+    const profileSaved = profile ? registry.assets?.[profile.id] : undefined;
+    const profileDirty = Boolean(profile && (
+        (profileSaved !== undefined && (profile.name !== profileSaved.name || profile.spec !== profileSaved.spec))
+        || (!profile.model_snapshot && profileHtml !== profileHtmlBase)
+    ));
+    /** HTML có thể dài; đóng nhầm không được xoá mất phần đang sửa. */
+    const requestCloseProfile = () => {
+        if (busy) return;
+        if (profileDirty && !window.confirm('Bỏ thay đổi chưa lưu của hồ sơ này?')) return;
+        closeProfile();
+    };
+
     const copyAssetPrompt = async (asset: SceneAsset) => {
         if (busy || loading) return;
         setBusy('copy:'+asset.id); setError(''); setNotice('');
@@ -219,7 +320,7 @@ export default function SceneAssetsPanel({shortVideoId}: Props) {
             <Button size="small" sx={compactButtonSx} onClick={()=>setLibraryOpen(true)}>Thư viện & trang phục</Button>
             <Button size="small" sx={compactButtonSx} disabled={locked} onClick={() => {setImportText(assets.length ? sceneAssetsManifest(registry) : ''); importRevision.current = registry.revision || ''; setImportOpen(true);}}>Nhập / sửa danh sách JSON</Button>
         </Stack>
-        <Typography variant="caption" color="text.secondary">Bấm hình đại diện để xem preview; bấm biểu tượng bút để sửa hồ sơ. Chọn DeepSeek hoặc Claude bên dưới để tạo HTML qua queue.</Typography>
+        <Typography variant="caption" color="text.secondary">Bấm hình đại diện để xem preview; bấm biểu tượng bút để sửa hồ sơ và HTML trực tiếp. Chọn DeepSeek hoặc Claude bên dưới để tạo HTML qua queue.</Typography>
         {loading && <Box role="status" aria-live="polite" sx={{display: 'flex', alignItems: 'center', gap: 1.25, p: 1.5, border: '1px dashed', borderColor: 'divider', borderRadius: 2}}>
             <CircularProgress size={18}/>
             <Box>
@@ -246,14 +347,14 @@ export default function SceneAssetsPanel({shortVideoId}: Props) {
                 <Stack direction="row" alignItems="center" flexWrap="wrap" gap={1} sx={{p: 1, bgcolor: isCharacter ? 'rgba(25,118,210,.07)' : 'rgba(156,39,176,.07)'}}>
                     {isCharacter ? <PersonOutlineIcon color="primary"/> : <CottageOutlinedIcon color="secondary"/>}
                     <Box sx={{flex: 1, minWidth: 160}}><Typography variant="subtitle1" fontWeight={700}>{isCharacter ? 'Nhân vật' : 'Bối cảnh'}</Typography><Typography variant="caption" color="text.secondary">{isCharacter ? 'Ngoại hình, rig và biểu cảm dùng chung' : 'Không gian, đồ vật cố định và vị trí staging'} · {done}/{rows.length} có HTML{active ? ` · ${active} đang chờ/chạy` : ''}</Typography></Box>
-                    <Button size="small" sx={compactButtonSx} variant="contained" color={color} startIcon={<PlayArrowIcon/>} disabled={locked || !rows.some(a => !a.ready && !['queued', 'processing'].includes(a.generation?.status || ''))} onClick={() => void run('queue:' + kind, 'enqueue', {kind,provider})}>{isCharacter ? 'Tạo nhân vật còn thiếu' : 'Tạo bối cảnh còn thiếu'}</Button>
+                    <Button size="small" sx={compactButtonSx} variant="contained" color={color} startIcon={<PlayArrowIcon/>} disabled={locked || !rows.some(a => !a.ready && !a.character_design && !['queued', 'processing'].includes(a.generation?.status || ''))} onClick={() => void run('queue:' + kind, 'enqueue', {kind,provider})}>{isCharacter ? 'Tạo nhân vật còn thiếu' : 'Tạo bối cảnh còn thiếu'}</Button>
                 </Stack>
                 <Stack spacing={1} sx={{p: 1.25}}>
                     {!rows.length && <Typography variant="body2" color="text.secondary">Chưa có {isCharacter ? 'nhân vật' : 'bối cảnh'}.</Typography>}
                     {rows.map(asset => {
                         const generation = asset.generation;
                         const running = ['queued', 'processing'].includes(generation?.status || '');
-                        const label = generation?.status === 'queued' ? 'Đang chờ queue' : generation?.status === 'processing' ? generation.phase === 'repairing' ? `Đang tự sửa (${generation.repair_attempt || 0}/3)` : 'Đang tạo / chạy kiểm tra…' : generation?.status === 'failed' ? 'Tạo HTML lỗi' : generation?.status === 'cancelled' ? 'Job queue đã dừng' : asset.model_snapshot ? 'Nhân vật thư viện' : asset.ready ? 'Đã có HTML' : asset.has_html ? 'Cần cập nhật' : 'Chưa có HTML';
+                        const label = generation?.status === 'queued' ? 'Đang chờ queue' : generation?.status === 'processing' ? generation.phase === 'repairing' ? `Đang tự sửa (${generation.repair_attempt || 0}/3)` : 'Đang tạo / chạy kiểm tra…' : generation?.status === 'failed' ? 'Tạo HTML lỗi' : generation?.status === 'cancelled' ? 'Job queue đã dừng' : asset.model_snapshot ? 'Nhân vật thư viện' : asset.character_design ? (asset.ready ? 'Nhân vật thiết kế' : 'Cần cập nhật thiết kế') : asset.ready ? 'Đã có HTML' : asset.has_html ? 'Cần cập nhật' : 'Chưa có HTML';
                         return <Box key={asset.id} data-testid={'scene-asset-' + asset.id} sx={{p: 1, border: '1px solid', borderColor: 'divider', borderLeft: '4px solid', borderLeftColor: isCharacter ? 'primary.main' : 'secondary.main', borderRadius: 1.5, bgcolor: 'background.paper', contentVisibility: 'auto', containIntrinsicSize: 'auto 130px'}}>
                             <Stack gap={1} sx={{display:'grid',gridTemplateColumns:{xs:'68px minmax(0,1fr)',sm:'68px minmax(0,1fr) auto'},alignItems:'start'}}>
                                 <Stack alignItems="center" spacing={.75} sx={{width:68,gridColumn:1,gridRow:{xs:'1 / span 2',sm:1}}}>
@@ -261,7 +362,7 @@ export default function SceneAssetsPanel({shortVideoId}: Props) {
                                         <Tooltip title="Xem preview"><IconButton aria-label={`Xem preview ${asset.name}`} onClick={()=>setPreview(asset)} sx={{width:48,height:48,bgcolor:'action.hover',borderRadius:isCharacter?'50%':1.5}}>
                                             {asset.model_snapshot?.thumbnail_url?<Box component="img" src={asset.model_snapshot.thumbnail_url} alt="" sx={{width:'100%',height:'100%',objectFit:'cover',borderRadius:'inherit'}}/>:isCharacter?<PersonOutlineIcon color="primary"/>:<CottageOutlinedIcon color="secondary"/>}
                                         </IconButton></Tooltip>
-                                        <Tooltip title="Sửa hồ sơ"><IconButton size="small" aria-label={`Sửa hồ sơ ${asset.name}`} disabled={locked||running} onClick={()=>{profileBase.current=registry;setProfile({...asset});}} sx={{position:'absolute',right:-4,bottom:-4,width:22,height:22,bgcolor:'background.paper',border:'1px solid',borderColor:'divider','&:hover':{bgcolor:'action.selected'}}}><EditOutlinedIcon sx={{fontSize:14}}/></IconButton></Tooltip>
+                                        <Tooltip title="Sửa hồ sơ"><IconButton size="small" aria-label={`Sửa hồ sơ ${asset.name}`} disabled={locked||running} onClick={()=>openProfile(asset)} sx={{position:'absolute',right:-4,bottom:-4,width:22,height:22,bgcolor:'background.paper',border:'1px solid',borderColor:'divider','&:hover':{bgcolor:'action.selected'}}}><EditOutlinedIcon sx={{fontSize:14}}/></IconButton></Tooltip>
                                     </Box>
                                     {asset.model_snapshot&&<Button size="small" sx={{...compactButtonSx,px:.5,fontSize:11}} variant="outlined" disabled={locked} onClick={()=>{setError('');setWardrobeAsset(asset);setWardrobeConfig(JSON.parse(JSON.stringify(asset.model_snapshot?.character||{})));}}>Trang phục</Button>}
                                 </Stack>
@@ -269,17 +370,18 @@ export default function SceneAssetsPanel({shortVideoId}: Props) {
                                     <Stack direction="row" alignItems="center" gap={.75} flexWrap="wrap">
                                         {asset.chat_url?<Button size="small" variant="text" disabled={locked||running} onClick={()=>void run('chat:'+asset.id,'open',{asset_id:asset.id,mode:'reopen',provider:asset.chat_url?.includes('claude.ai')?'claude':'deepseek'})} sx={{minWidth:0,p:0,color:'primary.main',fontSize:14,fontWeight:700,textAlign:'left',textTransform:'none',overflowWrap:'anywhere'}}>{asset.name}</Button>:<Typography variant="body2" fontWeight={700} sx={{overflowWrap:'anywhere'}}>{asset.name}</Typography>}
                                         {isCharacter&&<Button size="small" sx={compactButtonSx} variant="contained" disabled={locked||running} onClick={()=>void pickCharacter(asset)}>Thư viện</Button>}
+                                        {isCharacter&&<Button size="small" sx={compactButtonSx} variant="outlined" disabled={locked||running} onClick={()=>setDesignAsset(asset)}>Thiết kế</Button>}
                                     </Stack>
                                     <Typography variant="caption" color="text.secondary">{asset.id}{generation?.job_id ? ` · Job #${generation.job_id}` : ''}</Typography>
-                                    {!asset.model_snapshot&&<Stack direction="row" gap={.75} flexWrap="wrap" alignItems="center" sx={{mt:1}}>
+                                    {!asset.model_snapshot&&!asset.character_design&&<Stack direction="row" gap={.75} flexWrap="wrap" alignItems="center" sx={{mt:1}}>
                                         {(['deepseek','claude'] as const).map(target=><Button key={target} size="small" sx={compactButtonSx} variant="outlined" startIcon={<img src={`${process.env.PUBLIC_URL||''}/images/workflow/${target}.svg`} width={18} height={18} alt=""/>} disabled={locked||running} onClick={()=>void run(asset.id,'open',{asset_id:asset.id,provider:target})}>{target==='claude'?'Claude':'DeepSeek'}</Button>)}
                                     </Stack>}
                                 </Box>
                                 <Stack alignItems="flex-end" spacing={.75} sx={{minWidth:0,gridColumn:{xs:2,sm:3},gridRow:{xs:2,sm:1},alignItems:{xs:'flex-start',sm:'flex-end'}}}>
                                     <Chip size="small" sx={{maxWidth:'100%'}} color={running?'info':generation?.status==='failed'?'error':asset.ready?'success':'warning'} label={generation?.provider&&!asset.model_snapshot?`${generation.provider==='claude'?'Claude':'DeepSeek'} · ${label}`:label}/>
                                     {asset.model_snapshot&&<Button size="small" sx={compactButtonSx} variant="outlined" disabled={locked} onClick={()=>setSwitchHtml(asset)}>Dùng HTML</Button>}
-                                    {!asset.model_snapshot&&<Button size="small" sx={compactButtonSx} variant="outlined" startIcon={<PlayArrowIcon/>} disabled={locked||running} onClick={()=>void run('queue:'+asset.id,'enqueue',{asset_id:asset.id,force:true,provider})}>Tạo</Button>}
-                                    {!asset.model_snapshot&&<Button size="small" sx={compactButtonSx} startIcon={busy==='copy:'+asset.id?<CircularProgress size={12}/>:<ContentCopyIcon/>} disabled={locked} onClick={()=>void copyAssetPrompt(asset)}>Copy prompt</Button>}
+                                    {!asset.model_snapshot&&!asset.character_design&&<Button size="small" sx={compactButtonSx} variant="outlined" startIcon={<PlayArrowIcon/>} disabled={locked||running} onClick={()=>void run('queue:'+asset.id,'enqueue',{asset_id:asset.id,force:true,provider})}>Tạo</Button>}
+                                    {!asset.model_snapshot&&!asset.character_design&&<Button size="small" sx={compactButtonSx} startIcon={busy==='copy:'+asset.id?<CircularProgress size={12}/>:<ContentCopyIcon/>} disabled={locked} onClick={()=>void copyAssetPrompt(asset)}>Copy prompt</Button>}
                                 </Stack>
                             </Stack>
                             {generation?.error && ['failed', 'superseded', 'cancelled'].includes(generation.status) && <Alert severity={generation.status === 'failed' ? 'error' : 'info'} sx={{mt: 1}}>{generation.error}</Alert>}
@@ -327,12 +429,51 @@ export default function SceneAssetsPanel({shortVideoId}: Props) {
         </DialogContent><DialogActions><Button disabled={!!busy} onClick={()=>setSwitchHtml(null)}>Hủy</Button><Button variant="contained" disabled={!!busy} onClick={async()=>{if(switchHtml && await run('html-mode:'+switchHtml.id,'unbind_model',{asset_id:switchHtml.id,expected_module_hash:switchHtml.module_hash}))setSwitchHtml(null);}}>Chuyển sang HTML</Button></DialogActions></Dialog>
         <Dialog open={regenerate} onClose={() => !busy && setRegenerate(false)}><DialogTitle>Tạo lại toàn bộ HTML hồ sơ?</DialogTitle><DialogContent>{providerLabel} sẽ tạo lại các nhân vật và bối cảnh qua queue. Bản HTML hiện tại chỉ được thay khi bản mới đã hoàn chỉnh, kiểm tra chạy được và lưu đúng vào DB. Các beat dùng phiên bản cũ sẽ được báo cần dựng lại.</DialogContent><DialogActions><Button onClick={() => setRegenerate(false)}>Hủy</Button><Button variant="contained" color="warning" disabled={Boolean(busy)} onClick={async () => {if (await run('queue-all', 'enqueue', {kind: 'all', force: true, provider})) setRegenerate(false);}}>Tạo lại tất cả</Button></DialogActions></Dialog>
         <Dialog open={importOpen} onClose={() => !busy && setImportOpen(false)} fullWidth maxWidth="md"><DialogTitle>Danh sách nhân vật và bối cảnh</DialogTitle><DialogContent><Typography variant="body2" sx={{mb: 1}}>Dán JSON chatbot trả về. Giữ nguyên ID để bảo toàn HTML đã tạo. Thay đổi đặc tả sẽ yêu cầu tạo lại HTML tương ứng.</Typography><TextField fullWidth multiline minRows={12} value={importText} onChange={e => setImportText(e.target.value)} inputProps={{'aria-label': 'JSON hồ sơ'}}/></DialogContent><DialogActions><Button disabled={Boolean(busy)} onClick={() => setImportOpen(false)}>Đóng</Button><Button disabled={Boolean(busy) || !importText.trim()} onClick={async () => {if (await run('manifest', 'manifest', {text: importText, expected_revision: importRevision.current})) {setImportOpen(false); setDraft(null);}}}>Lưu danh sách</Button></DialogActions></Dialog>
-        <Dialog open={Boolean(profile)} onClose={() => !busy && setProfile(null)} fullWidth maxWidth="md"><DialogTitle>Sửa hồ sơ · {profile?.id}</DialogTitle><DialogContent><Alert severity="info" sx={{mb: 2}}>Đổi đặc tả sẽ yêu cầu tạo lại HTML hồ sơ. Những beat đã dùng hồ sơ này sẽ được báo cần dựng lại.</Alert><TextField fullWidth label="Tên hiển thị" value={profile?.name || ''} onChange={e => setProfile(p => p ? {...p, name: e.target.value} : p)} sx={{mb: 2}}/><TextField fullWidth multiline minRows={8} label="Đặc tả cố định" value={profile?.spec || ''} onChange={e => setProfile(p => p ? {...p, spec: e.target.value} : p)}/></DialogContent><DialogActions><Button disabled={Boolean(busy)} onClick={() => setProfile(null)}>Đóng</Button><Button disabled={Boolean(busy) || !profile?.name.trim() || !profile?.spec.trim()} onClick={async () => {
-            if (!profile) return;
-            const base = profileBase.current;
-            const next = {...base, assets: {...base.assets, [profile.id]: profile}};
-            if (await run('profile', 'manifest', {text: sceneAssetsManifest(next), expected_revision: base.revision || ''})) setProfile(null);
-        }}>Lưu hồ sơ</Button></DialogActions></Dialog>
+        <Dialog open={Boolean(profile)} onClose={() => !busy && requestCloseProfile()} fullWidth maxWidth="md">
+            <DialogTitle>Sửa hồ sơ · {profile?.id}</DialogTitle>
+            <DialogContent>
+                {error && <Alert severity="error" onClose={() => setError('')} sx={{mb: 2}}>{error}</Alert>}
+                {profile?.character_design ? <Alert severity="info" sx={{mb:2}}>Đổi đặc tả sẽ yêu cầu mở “Thiết kế” và lưu lại nhân vật. Những beat đã dùng vai này cần dựng lại.</Alert> : <Alert severity="info" sx={{mb: 2}}>Đổi đặc tả sẽ yêu cầu tạo lại HTML hồ sơ. Sửa HTML trực tiếp sẽ đưa bản mới vào queue: chạy preview trong trình duyệt, tự sửa nếu lỗi và chỉ lưu bản kiểm tra đạt. Những beat đã dùng hồ sơ này sẽ được báo cần dựng lại.</Alert>}
+                <TextField fullWidth label="Tên hiển thị" value={profile?.name || ''} onChange={e => setProfile(p => p ? {...p, name: e.target.value} : p)} disabled={Boolean(busy)} sx={{mb: 2}}/>
+                <TextField fullWidth multiline minRows={8} label="Đặc tả cố định" value={profile?.spec || ''} onChange={e => setProfile(p => p ? {...p, spec: e.target.value} : p)} disabled={Boolean(busy)}/>
+                {profile?.character_design ? <Alert severity="info" sx={{mt:2}}>Nhân vật này dùng bộ asset default. Đóng hồ sơ và bấm “Thiết kế” để chỉnh ngoại hình.</Alert> : profile?.model_snapshot
+                    ? <Alert severity="info" sx={{mt: 2}}>Nhân vật thư viện dùng HTML sinh tự động từ GLB nên không sửa HTML tại đây. Chỉnh ngoại hình trong “Trang phục”, hoặc bấm “Dùng HTML” ở dòng hồ sơ để quay lại HTML tự tạo.</Alert>
+                    : <Box sx={{mt: 2}}>
+                        <Stack direction="row" alignItems="center" gap={1} flexWrap="wrap" sx={{mb: 1}}>
+                            <Typography variant="subtitle2">HTML hồ sơ</Typography>
+                            <Chip size="small" variant="outlined" color={profileHtml !== profileHtmlBase ? 'warning' : 'default'} label={
+                                profileHtmlState === 'loading' ? 'Đang tải HTML'
+                                    : profileHtmlState === 'error' ? 'Không tải được HTML đang lưu'
+                                    : profileHtml !== profileHtmlBase ? 'Có thay đổi chưa lưu'
+                                    : profileHtmlBase ? 'Đang dùng bản đã lưu' : 'Chưa có HTML'}/>
+                            <Box sx={{flex: 1}}/>
+                            <Button size="small" sx={compactButtonSx} variant="outlined" disabled={Boolean(busy) || profileHtmlState === 'loading' || !profile} onClick={() => {
+                                if (!profile) return;
+                                if (profileHtml !== profileHtmlBase && !window.confirm('Bỏ HTML đang sửa và tải lại bản đã lưu?')) return;
+                                void loadProfileHtml(profile.id);
+                            }}>Tải lại HTML</Button>
+                            <Button size="small" sx={compactButtonSx} disabled={Boolean(busy) || !profileHtml.trim()} aria-expanded={profilePreview} onClick={() => setProfilePreview(value => !value)}>{profilePreview ? 'Ẩn xem trước' : 'Xem trước'}</Button>
+                        </Stack>
+                        {profileHtmlState === 'loading' && <LinearProgress sx={{mb: 1, borderRadius: 1}}/>}
+                        {profileHtmlError && <Alert severity="warning" sx={{mb: 1}}>{profileHtmlError} Bạn vẫn có thể dán HTML mới rồi lưu.</Alert>}
+                        <TextField fullWidth multiline minRows={14} label="HTML preview (doctype + sv-asset-module)" value={profileHtml} disabled={Boolean(busy) || profileHtmlState === 'loading'}
+                            onChange={e => setProfileHtml(e.target.value)}
+                            error={Boolean(profileHtmlIssue)}
+                            helperText={profileHtmlIssue || `${profileHtml.length.toLocaleString('vi-VN')} ký tự · “Lưu hồ sơ” sẽ chạy preview qua queue trước khi ghi đè bản đang lưu`}
+                            inputProps={{'aria-label': 'HTML hồ sơ', spellCheck: false, style: {fontFamily: 'monospace', fontSize: 12, lineHeight: 1.45}}}/>
+                        {profilePreview && profileHtml.trim() && <Box sx={{mt: 1.5}}>
+                            {profileHtmlIssue ? <Alert severity="warning">Sửa lỗi cấu trúc ở trên trước khi xem trước.</Alert>
+                                : <SceneAssetHtmlPreview html={profileHtml} title={`Xem trước ${profile?.name || ''}`} kind={profile?.kind} height="45vh"/>}
+                        </Box>}
+                    </Box>}
+            </DialogContent>
+            <DialogActions>
+                <Button disabled={Boolean(busy)} onClick={requestCloseProfile}>Đóng</Button>
+                <Button variant="contained" disabled={Boolean(busy) || profileHtmlState === 'loading' || !profile?.name.trim() || !profile?.spec.trim() || Boolean(profileHtmlIssue)} onClick={() => void saveProfile()}>Lưu hồ sơ</Button>
+            </DialogActions>
+        </Dialog>
+        {designAsset && <CharacterDesignDialog key={`${shortVideoId}:${designAsset.id}`} shortVideoId={shortVideoId} asset={designAsset} busy={!!busy}
+            onClose={()=>setDesignAsset(null)} onSave={async data=>!!(await run('design:'+designAsset.id, 'character_design', data))}/>}
         <SceneAssetPreviewDialog shortVideoId={shortVideoId} asset={preview} defaultProvider={provider} onClose={() => setPreview(null)} onRegistryChange={applyRegistry} previewTitle={`Preview ${preview?.name || ''}`}/>
     </Stack>;
 }
