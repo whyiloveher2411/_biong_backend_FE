@@ -1,4 +1,5 @@
 import React from 'react';
+import {prepareTimelineAudioRange} from 'helpers/timelineAudioReadiness';
 import { Box, Alert, Button } from '@mui/material';
 import { useVoiceMedia, voicePreviewUrl } from 'helpers/timelineVoice';
 import type { BeatMap, BeatImageEntry } from './agentVideoBeatMap';
@@ -29,6 +30,7 @@ export default function ShortVideoAgentWholePreview({ videoId, beatMap, beatHtml
     const audioRefs = React.useRef(new Map<string, HTMLAudioElement>());
     const ready = React.useRef(new Map<string, string>());
     const control = React.useRef({ time: 0, playing: false });
+    const generation=React.useRef(0);
     const current = React.useRef({ sections, duration, index, audioUrl, beatHtml, beatImage });
     current.current = { sections, duration, index, audioUrl, beatHtml, beatImage };
     const publish = React.useCallback((seconds: number, running: boolean, soundRunning = running) => {
@@ -40,7 +42,7 @@ export default function ShortVideoAgentWholePreview({ videoId, beatMap, beatHtml
     }, [videoId]);
     React.useEffect(() => { const retained = new Set(sections.slice(index, index + 3).map(b => b.id)); ready.current.forEach((_, id) => { if (!retained.has(id))
         ready.current.delete(id); }); }, [index, sections]);
-    const pause = React.useCallback(() => { control.current.playing = false; audioRefs.current.forEach(a => a.pause()); }, []);
+    const pause = React.useCallback(() => { ++generation.current;control.current.playing = false; audioRefs.current.forEach(a => a.pause()); }, []);
     React.useEffect(() => {
         const command = (event: Event) => {
             const d = (event as CustomEvent).detail;
@@ -80,8 +82,10 @@ export default function ShortVideoAgentWholePreview({ videoId, beatMap, beatHtml
         if (!playing)
             return;
         let frame = 0, cancelled = false, last = performance.now(), started = '';
+        const token=generation.current;
+        const active=()=>!cancelled&&control.current.playing&&generation.current===token;
         const tick = async (now: number) => {
-            if (cancelled || !control.current.playing)
+            if (!active())
                 return;
             const t = control.current.time, data = current.current;
             const beat = data.sections.find(b => t >= b.startSec && t < b.endSec);
@@ -110,29 +114,33 @@ export default function ShortVideoAgentWholePreview({ videoId, beatMap, beatHtml
             if (started !== beat.id) {
                 audioRefs.current.forEach(a => { if (a !== audio)
                     a.pause(); });
-                if (audio) {
-                    audio.currentTime = data.audioUrl ? t : local;
-                    try {
-                        await audio.play();
+                setBuffering(true);
+                publish(t,true,false);
+                try {
+                    await prepareTimelineAudioRange(videoId,t,beat.endSec);
+                    if(!active())return;
+                    if(audio){audio.currentTime=data.audioUrl?t:local;await audio.play();}
+                } catch (e) {
+                    if(active()){
+                        pause();
+                        setError('Không phát được audio của '+beat.id+': '+(e instanceof Error?e.message:String(e)));
+                        publish(t,false);
                     }
-                    catch (e) {
-                        if (!cancelled) {
-                            pause();
-                            setError('Không phát được audio. Vui lòng thử lại.');
-                            publish(t, false);
-                        }
-                        return;
-                    }
-                }
-                if (cancelled || !control.current.playing) {
-                    if(!control.current.playing)audio?.pause();
                     return;
                 }
+                if(!active())return;
+                setBuffering(false);
                 started = beat.id;
                 last = performance.now();
+                // Voice may advance while play() resolves. Publish the requested
+                // start once so a callout at beat time zero retains its attack.
+                publish(t,true);
+                frame=requestAnimationFrame(tick);
+                return;
             }
-            let next = t + Math.min(.1, (now - last) / 1000);
-            last = now;
+            const clockNow=performance.now();
+            let next = t + Math.max(0,Math.min(.1, (clockNow - last) / 1000));
+            last = clockNow;
             if (audio && !audio.ended && !audio.paused)
                 next = data.audioUrl ? audio.currentTime : beat.startSec + audio.currentTime;
             next = Math.min(beat.endSec, Math.max(t, next));
@@ -146,7 +154,7 @@ export default function ShortVideoAgentWholePreview({ videoId, beatMap, beatHtml
         };
         frame = requestAnimationFrame(tick);
         return () => { cancelled = true; cancelAnimationFrame(frame); };
-    }, [playing, run, pause, publish]);
+    }, [playing, run, pause, publish, videoId]);
     return <Box sx={{ position: 'absolute', inset: 0, zIndex: visible ? 10 : -1, bgcolor: 'background.paper', visibility: visible ? 'visible' : 'hidden', pointerEvents: visible ? 'auto' : 'none', overflow: 'hidden' }} aria-label="Preview toàn video">
         {visible && playing && buffering ? <Alert severity="info" sx={{ position: 'absolute', top: 44, zIndex: 2 }}>Đang tải HTML và tài nguyên của beat…</Alert> : null}
         {error ? <Alert severity="error" sx={{ position: 'absolute', top: 44, zIndex: 2 }}>{error}</Alert> : null}
@@ -156,7 +164,7 @@ export default function ShortVideoAgentWholePreview({ videoId, beatMap, beatHtml
             const signature = beatHtml[beat.id]?.html || beatImage[beat.id]?.image_url || 'empty';
             const url = audioUrl || (beatAudio?.items || []).find(a => a.order === order && a.status === 'ready')?.url || '';
             return <Box key={beat.id} sx={{ position: 'absolute', inset: 0, visibility: visible && offset === 0 ? 'visible' : 'hidden', pointerEvents: offset === 0 ? 'auto' : 'none' }}>
-                {beatHtml[beat.id]?.html ? <BeatHtmlMotionPreview html={beatHtml[beat.id].html!} timeSec={offset === 0 ? Math.max(0, time - beat.startSec) : 0} durationSec={beat.endSec - beat.startSec} beatId={beat.id} shortVideoId={videoId} playing={playing && offset === 0} onReady={() => ready.current.set(beat.id, signature)}/> : <img src={beatImage[beat.id]?.image_url || ''} alt={beat.id} onLoad={() => ready.current.set(beat.id, signature)} style={{ width: '100%', height: '100%', objectFit: 'contain' }}/>}
+                {beatHtml[beat.id]?.html ? <BeatHtmlMotionPreview html={beatHtml[beat.id].html!} timeSec={offset === 0 ? Math.max(0, time - beat.startSec) : 0} durationSec={beat.endSec - beat.startSec} beatId={beat.id} shortVideoId={videoId} playing={playing && !buffering && offset === 0} onReady={() => ready.current.set(beat.id, signature)}/> : <img src={beatImage[beat.id]?.image_url || ''} alt={beat.id} onLoad={() => ready.current.set(beat.id, signature)} style={{ width: '100%', height: '100%', objectFit: 'contain' }}/>}
                 {!beatHtml[beat.id]?.html && !beatImage[beat.id]?.image_url ? <EmptyReady onReady={() => ready.current.set(beat.id, signature)}/> : null}
                 {url ? <Voice key={url} url={url} videoId={videoId} register={a => { if (a)
                 audioRefs.current.set(beat.id, a);
@@ -175,7 +183,7 @@ function Voice({ url, videoId, register }: {
     useVoiceMedia(ref, videoId);
     const registerRef = React.useRef(register);
     registerRef.current = register;
-    React.useEffect(() => { registerRef.current(ref.current); return () => { ref.current?.pause(); registerRef.current(null); }; }, []);
+    React.useEffect(() => { const audio=ref.current;registerRef.current(audio); return () => { audio?.pause(); registerRef.current(null); }; }, []);
     return <audio ref={ref} src={voicePreviewUrl(url, videoId)} crossOrigin="anonymous" preload="auto"/>;
 }
 function EmptyReady({ onReady }: {

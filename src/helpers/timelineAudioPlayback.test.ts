@@ -194,3 +194,14 @@ test('cancelling during device preparation prevents the obsolete play call itsel
  wall=.01;player.sync(clip.start_sec+.01,true,[{...clip,muted:true}]);ready();await flush();
  expect(media.play).not.toHaveBeenCalled();expect(error).not.toHaveBeenCalled();player.dispose();
 });
+test('whole-video readiness shares a pending preload without starting or changing transport',async()=>{
+ let resolve!:(media:HTMLAudioElement)=>void;
+ const media={currentTime:0,play:jest.fn(async()=>{}),pause:jest.fn()} as unknown as HTMLAudioElement;
+ const acquire=jest.fn(()=>new Promise<HTMLAudioElement>(r=>{resolve=r;}));
+ const player=new TimelineAudioPlayback(acquire,()=>{},()=>{},()=>0);
+ player.sync(22,false,[clip],new Set([clip.id]));
+ let ready=false;const pending=player.prepareClips([clip]).then(()=>{ready=true;});await flush();
+ expect(ready).toBe(false);expect(acquire).toHaveBeenCalledTimes(1);
+ resolve(media);await pending;expect(media.play).not.toHaveBeenCalled();
+ player.sync(22.39,true,[clip]);await flush();expect(media.play).toHaveBeenCalledTimes(1);expect(acquire).toHaveBeenCalledTimes(1);player.dispose();
+});

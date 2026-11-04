@@ -24,3 +24,9 @@ test('disposing the preview cancels metadata waits and clears their timers',asyn
  const result=expect(waitForAudioMetadata(audio,10000,controller.signal)).rejects.toThrow('huỷ');
  controller.abort();await result;expect(jest.getTimerCount()).toBe(0);
 });
+test('whole-video readiness waits for decoded data even when duration is known',async()=>{
+ const {waitForAudioData}=await import('./audioMetadata');
+ const audio=media();Object.defineProperty(audio,'duration',{value:1});Object.defineProperty(audio,'readyState',{configurable:true,value:1});
+ let ready=false;const waiting=waitForAudioData(audio).then(()=>{ready=true;});await Promise.resolve();expect(ready).toBe(false);
+ Object.defineProperty(audio,'readyState',{value:2});audio.dispatchEvent(new Event('loadeddata'));await waiting;expect(ready).toBe(true);
+});

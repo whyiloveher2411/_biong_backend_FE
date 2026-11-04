@@ -1,4 +1,5 @@
 import React from 'react';
+import {registerTimelineAudioReadiness} from 'helpers/timelineAudioReadiness';
 import { act, render, screen, fireEvent } from '@testing-library/react';
 import WholePreview from './ShortVideoAgentWholePreview';
 import type { BeatMap } from './agentVideoBeatMap';
@@ -85,4 +86,44 @@ test('beats without HTML or narration still advance and unmount cleanly',async()
     for(let i=0;i<45;i++)await step();
     expect(HTMLMediaElement.prototype.play).not.toHaveBeenCalled();
     view.unmount();
+});
+
+const startTick=()=>{now+=100;const batch=[...frames.values()];frames.clear();act(()=>{for(const cb of batch)void cb(now);});};
+const settle=async()=>{await act(async()=>{for(let i=0;i<10;i++)await Promise.resolve();});};
+test('whole video freezes voice and its clock until timeline SFX are ready; pause cancels the wait',async()=>{
+ let resolve!:()=>void;const prepare=jest.fn(()=>new Promise<void>(r=>{resolve=r;}));
+ const unregister=registerTimelineAudioReadiness(67,prepare);
+ const view=render(<WholePreview {...props}/>);
+ try{
+  fireEvent.click(screen.getByTestId('beat_1'));command('play',0);startTick();await settle();
+  expect(prepare).toHaveBeenCalledWith(0,1);expect(HTMLMediaElement.prototype.play).not.toHaveBeenCalled();
+  expect(screen.getByTestId('beat_1')).toHaveTextContent('0');
+  command('pause',0);resolve();await settle();expect(HTMLMediaElement.prototype.play).not.toHaveBeenCalled();
+  prepare.mockResolvedValue(undefined);command('play',0);await step();expect(HTMLMediaElement.prototype.play).toHaveBeenCalledTimes(1);
+ }finally{view.unmount();unregister();}
+});
+test('a rejected voice play from the previous run cannot stop the new whole-video run',async()=>{
+ let reject!:(error:unknown)=>void;
+ (HTMLMediaElement.prototype.play as jest.Mock).mockImplementationOnce(function(this:HTMLMediaElement){Object.defineProperty(this,'paused',{configurable:true,value:false});return new Promise<void>((_,r)=>{reject=r;});});
+ const view=render(<WholePreview {...props}/>);
+ try{
+  fireEvent.click(screen.getByTestId('beat_1'));command('play',0);startTick();await settle();
+  expect(HTMLMediaElement.prototype.play).toHaveBeenCalledTimes(1);
+  command('pause',0);command('play',0);await step();
+  expect(HTMLMediaElement.prototype.play).toHaveBeenCalledTimes(2);
+  reject(new DOMException('The play() request was interrupted by a call to pause().','AbortError'));await settle();
+  expect(screen.queryByText(/Không phát được audio/)).toBeNull();
+  expect(view.container.querySelector('audio')!.paused).toBe(false);
+ }finally{view.unmount();}
+});
+
+test('whole-video start publishes the requested cue time before catching up to the voice clock',async()=>{
+ (HTMLMediaElement.prototype.play as jest.Mock).mockImplementationOnce(function(this:HTMLMediaElement){this.currentTime+=.033;Object.defineProperty(this,'paused',{configurable:true,value:false});return Promise.resolve();});
+ const updates:any[]=[];const receive=(e:Event)=>updates.push((e as CustomEvent).detail);
+ document.addEventListener('timeline-audio-playhead',receive);const view=render(<WholePreview {...props}/>);
+ try{
+  fireEvent.click(screen.getByTestId('beat_1'));command('play',0);await step();
+  expect(updates.filter(x=>x.soundPlaying).map(x=>x.time)).toEqual([0]);
+  await step();expect(updates.filter(x=>x.soundPlaying).at(-1).time).toBeCloseTo(.033);
+ }finally{view.unmount();document.removeEventListener('timeline-audio-playhead',receive);}
 });

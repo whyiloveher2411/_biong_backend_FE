@@ -23,8 +23,9 @@ export type CharacterDesignConfig = {
     template: 'mai_v1'; selections: Record<string, string>; colors: Record<string, string>; parameters?: Record<string, number>;
 };
 export type CharacterDesignCatalog = {
-    catalog: {id: string; name: string; colors: string[]; items: {id: string; name: string; badge: string; thumbnail?: string; parameters?: Record<string,number>}[]}[];
+    catalog: {id: string; name: string; colors: string[]; items: {id: string; name: string; badge: string; thumbnail?: string; genders?: string[]; parameters?: Record<string,number>}[]}[];
     template_html: string; config: CharacterDesignConfig;
+    genders?: Record<string,{label:string;defaults:Record<string,string>}>;
     expected_module_hash: string; expected_spec_hash: string; replacing: boolean;
 };
 export type SceneAssetResponse = {

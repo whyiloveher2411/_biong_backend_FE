@@ -5,8 +5,9 @@ import VolumeUpIcon from '@mui/icons-material/VolumeUp';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import React from 'react';
 import {TimelineAudioPlayback} from 'helpers/timelineAudioPlayback';
-import {waitForAudioMetadata} from 'helpers/audioMetadata';
+import {waitForAudioMetadata,waitForAudioData} from 'helpers/audioMetadata';
 import {TimelineAudioOutput} from 'helpers/timelineAudioOutput';
+import {registerTimelineAudioReadiness} from 'helpers/timelineAudioReadiness';
 import {Alert,Box,Button,Dialog,DialogActions,DialogContent,DialogContentText,DialogTitle,Divider,ListItemIcon,ListItemText,Menu,MenuItem,Stack,TextField,Typography} from '@mui/material';
 import type {TimelineRow} from '@xzdarcy/timeline-engine';
 import DrawerCustom from 'components/molecules/DrawerCustom';
@@ -15,8 +16,9 @@ import {constrainTimelineAudio,timelineAudioBeatBounds,openVideoPixabayAudio,Tim
 
 export default function useTimelineAudio(videoId:number,time:number,playing:boolean,total:number,beatSections:ReadonlyArray<{id:string;startSec:number;endSec:number}>=[]){
  const [clips,setClips]=React.useState<TimelineAudioClip[]>([]),[suggestions,setSuggestions]=React.useState<Record<string,TimelineAudioPlanEntry>>({}),[revision,setRevision]=React.useState(''),[dirty,setDirty]=React.useState(false),[error,setError]=React.useState(''),[playbackError,setPlaybackError]=React.useState(''),[busy,setBusy]=React.useState(false),[library,setLibrary]=React.useState(false),[selected,setSelected]=React.useState(''),[infoId,setInfoId]=React.useState(''),[uiEpoch]=React.useState(0),[pendingDeleteId,setPendingDeleteId]=React.useState(''),[menu,setMenu]=React.useState<{id:string;x:number;y:number}|null>(null);
+ const audioLoaded=React.useRef(false),audioLoad=React.useRef<Promise<void>>(Promise.resolve());
  const audio=React.useRef(new Map<string,HTMLAudioElement>()),metadataLoads=React.useRef(new Map<string,AbortController>()),blobUrls=React.useRef(new Map<string,string>()),audioFiles=React.useRef(new Map<string,string>()),clipsRef=React.useRef(clips),dirtyRef=React.useRef(false),busyRef=React.useRef(false),editingRef=React.useRef(false);clipsRef.current=clips;dirtyRef.current=dirty;
- React.useEffect(()=>{let active=true;dirtyRef.current=false;setClips([]);setSuggestions({});setSelected('');setInfoId('');setMenu(null);setPendingDeleteId('');setDirty(false);setRevision('');const load=()=>{if(videoId<=0)return;void timelineAudioApi(videoId).then(r=>{if(!active)return;if(!r.success)throw new Error(r.message);if(!dirtyRef.current&&!editingRef.current){setClips(packTimelineAudio((r.clips||[]).map(c=>constrainTimelineAudio(c,beatSections))));setRevision(r.revision);}setSuggestions(r.suggestions||{});}).catch(e=>active&&setError(String(e.message)));};load();const timer=window.setInterval(load,6000);const refresh=(event:Event)=>{const d=(event as CustomEvent).detail;if(d?.videoId===videoId)load();};document.addEventListener('timeline-audio-suggestions-updated',refresh);return()=>{active=false;window.clearInterval(timer);document.removeEventListener('timeline-audio-suggestions-updated',refresh);};},[videoId]);
+ React.useEffect(()=>{let active=true;audioLoaded.current=false;dirtyRef.current=false;setClips([]);setSuggestions({});setSelected('');setInfoId('');setMenu(null);setPendingDeleteId('');setDirty(false);setRevision('');const load=()=>{if(videoId<=0)return;audioLoad.current=timelineAudioApi(videoId).then(r=>{if(!active)return;if(!r.success)throw new Error(r.message);audioLoaded.current=true;if(!dirtyRef.current&&!editingRef.current){setClips(packTimelineAudio((r.clips||[]).map(c=>constrainTimelineAudio(c,beatSections))));setRevision(r.revision);}setSuggestions(r.suggestions||{});}).catch(e=>{if(active)setError(String(e.message));});};load();const timer=window.setInterval(load,6000);const refresh=(event:Event)=>{const d=(event as CustomEvent).detail;if(d?.videoId===videoId)load();};document.addEventListener('timeline-audio-suggestions-updated',refresh);return()=>{active=false;window.clearInterval(timer);document.removeEventListener('timeline-audio-suggestions-updated',refresh);};},[videoId]);
  const output=React.useMemo(()=>new TimelineAudioOutput(),[videoId]);
  const unlockAudioContext=React.useCallback(()=>{void output.ready().catch(audioContextError=>{console.warn('Timeline audio context is unavailable',audioContextError);});},[output]);
  React.useEffect(()=>{document.addEventListener('pointerdown',unlockAudioContext,true);document.addEventListener('keydown',unlockAudioContext,true);return()=>{document.removeEventListener('pointerdown',unlockAudioContext,true);document.removeEventListener('keydown',unlockAudioContext,true);};},[unlockAudioContext]);
@@ -50,7 +52,13 @@ export default function useTimelineAudio(videoId:number,time:number,playing:bool
    throw error;
   }
   return a;
- },applyAudioSample,(error,clip)=>{console.warn('Timeline sound playback failed',clip?.id,clip?.sound.file,error);setPlaybackError('Không phát được '+(clip?.sound.title||clip?.id||'âm thanh')+': '+(error instanceof Error?error.message:String(error)));},undefined,()=>output.ready()),[videoId,createAudio,applyAudioSample,output]);
+ },applyAudioSample,(error,clip)=>{console.warn('Timeline sound playback failed',clip?.id,clip?.sound.file,error);setPlaybackError('Không phát được '+(clip?.sound.title||clip?.id||'âm thanh')+': '+(error instanceof Error?error.message:String(error)));},undefined,async(media,clip)=>{await waitForAudioData(media,10000,metadataLoads.current.get(clip.id)?.signal);await output.ready();}),[videoId,createAudio,applyAudioSample,output]);
+ React.useEffect(()=>registerTimelineAudioReadiness(videoId,async(start,end)=>{
+  if(!audioLoaded.current)await audioLoad.current;
+  if(!audioLoaded.current)throw new Error('Chưa tải được danh sách âm thanh của video.');
+  const needed=clipsRef.current.filter(clip=>!clip.muted&&clip.start_sec<end&&clip.start_sec+clip.duration_sec>start);
+  await playback.prepareClips(needed);
+ }),[videoId,playback]);
  React.useEffect(()=>{
   const index=beatSections.findIndex(beat=>beat.endSec>time);
   const upcoming=index<0?[]:beatSections.slice(index,index+3);

@@ -15,3 +15,19 @@ export function waitForAudioMetadata(media:HTMLAudioElement,timeoutMs=10000,sign
   check();
  });
 }
+/** Metadata alone is insufficient for very short SFX: decode the first audio frame too. */
+export async function waitForAudioData(media:HTMLAudioElement,timeoutMs=10000,signal?:AbortSignal):Promise<void>{
+ await waitForAudioMetadata(media,timeoutMs,signal);
+ if(signal?.aborted)throw new Error('Đã huỷ tải âm thanh.');
+ if(media.readyState>=2)return;
+ await new Promise<void>((resolve,reject)=>{
+  let timer:ReturnType<typeof setTimeout>|undefined;
+  const cleanup=()=>{media.removeEventListener('loadeddata',check);media.removeEventListener('canplay',check);media.removeEventListener('error',failed);signal?.removeEventListener('abort',aborted);if(timer!==undefined)clearTimeout(timer);};
+  const aborted=()=>{cleanup();reject(new Error('Đã huỷ tải âm thanh.'));};
+  const failed=()=>{cleanup();reject(new Error('Không giải mã được âm thanh (media error '+(media.error?.code||'unknown')+').'));};
+  const check=()=>{if(media.error){failed();return;}if(media.readyState>=2){cleanup();resolve();}};
+  media.addEventListener('loadeddata',check);media.addEventListener('canplay',check);media.addEventListener('error',failed);signal?.addEventListener('abort',aborted);
+  timer=setTimeout(()=>{cleanup();reject(new Error('Quá thời gian giải mã âm thanh.'));},timeoutMs);
+  check();
+ });
+}

@@ -3,6 +3,7 @@ import React from 'react';
 import {act,render} from '@testing-library/react';
 import useTimelineAudio from './useTimelineAudio';
 import {timelineAudioApi} from 'helpers/timelineAudio';
+import {prepareTimelineAudioRange} from 'helpers/timelineAudioReadiness';
 import {loadLibrarySoundBlobUrl} from 'helpers/modelAudio';
 jest.mock('../SoundLibraryDrawer',()=>()=>null);
 jest.mock('components/molecules/DrawerCustom',()=>()=>null);
@@ -12,7 +13,7 @@ const clip={id:'door',sound_id:'door',sound:{id:'door',file:'door.wav',title:'Má
 function Player({time,playing}:{time:number;playing:boolean}){useTimelineAudio(67,time,playing,100);return null;}
 
 test('beat-start sound has one transport authority and plays once across duplicate event/render updates',async()=>{
- const media={paused:true,duration:.91896,currentTime:0,playbackRate:1,volume:1,preload:'',play:jest.fn(),pause:jest.fn()};
+ const media={paused:true,readyState:4,duration:.91896,currentTime:0,playbackRate:1,volume:1,preload:'',play:jest.fn(),pause:jest.fn()};
  media.play.mockImplementation(()=>{media.paused=false;return Promise.resolve();});
  media.pause.mockImplementation(()=>{media.paused=true;});
  const AudioOriginal=window.Audio;
@@ -46,7 +47,7 @@ test('beat-start sound has one transport authority and plays once across duplica
 test('a failed item is reloaded on replay while another item keeps playing, with time-based preloading',async()=>{
  const healthy={...clip,id:'healthy',sound_id:'healthy',sound:{...clip.sound,id:'healthy',file:'healthy.wav',title:'Healthy'}};
  class Media extends EventTarget {
-  paused=true;duration=.91896;currentTime=0;playbackRate=1;volume=1;preload='';error:{code:number}|null=null;
+  paused=true;readyState=4;duration=.91896;currentTime=0;playbackRate=1;volume=1;preload='';error:{code:number}|null=null;
   play=jest.fn(async()=>{this.paused=false;});pause=jest.fn(()=>{this.paused=true;});
  }
  const created:{url:string;media:Media}[]=[];let failedOnce=false;
@@ -75,3 +76,20 @@ test('a failed item is reloaded on replay while another item keeps playing, with
 let audioContextTest:ReturnType<typeof installTestAudioContext>;
 beforeEach(()=>{audioContextTest=installTestAudioContext();});
 afterEach(()=>audioContextTest.restore());
+
+test('whole-video Play waits for the initial clip list and decoded SFX instead of racing ahead',async()=>{
+ let resolveList!:(response:unknown)=>void;
+ (timelineAudioApi as jest.Mock).mockReturnValue(new Promise(resolve=>{resolveList=resolve;}));
+ (loadLibrarySoundBlobUrl as jest.Mock).mockResolvedValue('blob:door');
+ const original=window.Audio,revoke=URL.revokeObjectURL;
+ const media={readyState:4,duration:.91896,currentTime:0,play:jest.fn(async()=>{}),pause:jest.fn()};
+ window.Audio=jest.fn(()=>media) as unknown as typeof Audio;URL.revokeObjectURL=jest.fn();
+ const view=render(<Player time={22} playing={false}/>);
+ try{
+  let ready=false;const waiting=prepareTimelineAudioRange(67,22,23).then(()=>{ready=true;});
+  await act(async()=>{await Promise.resolve();});expect(ready).toBe(false);
+  await act(async()=>{resolveList({success:true,clips:[clip],revision:'loaded'});await waiting;});
+  expect(ready).toBe(true);expect(media.play).not.toHaveBeenCalled();expect(loadLibrarySoundBlobUrl).toHaveBeenCalledTimes(1);
+  await act(async()=>{view.rerender(<Player time={22.39} playing/>);});expect(media.play).toHaveBeenCalledTimes(1);
+ }finally{view.unmount();window.Audio=original;URL.revokeObjectURL=revoke;}
+});

@@ -10,7 +10,7 @@ jest.mock('helpers/modelAudio',()=>({librarySoundUrl:()=>'/gasp.wav',loadLibrary
 jest.mock('components/molecules/DrawerCustom',()=>({open,children}:{open:boolean;children:React.ReactNode})=>open?<div>{children}</div>:null);
 const AudioOriginal=window.Audio,revokeOriginal=URL.revokeObjectURL;
 beforeEach(()=>{
- window.Audio=jest.fn(()=>({duration:2,currentTime:0,play:jest.fn(async()=>{}),pause:jest.fn()})) as unknown as typeof Audio;
+ window.Audio=jest.fn(()=>({duration:2,readyState:4,currentTime:0,play:jest.fn(async()=>{}),pause:jest.fn()})) as unknown as typeof Audio;
  URL.revokeObjectURL=jest.fn();
  (loadLibrarySoundBlobUrl as jest.Mock).mockResolvedValue('blob:gasp');
 });
