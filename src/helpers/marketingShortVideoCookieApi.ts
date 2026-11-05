@@ -707,3 +707,8 @@ export function readZohoMail(targetEmail: string): Promise<ClaudeSignupResult & 
     return ajax({ url: `${COOKIE_BASE_PATH}/zoho-read-mail`, method: 'POST', loading: false,
         data: { target_email: targetEmail, limit: 10, include_body: false } }) as Promise<ClaudeSignupResult & { scanned?: number; emails?: Array<{ uid: number; subject: string }> }>;
 }
+
+export function enqueueClaudeSignups(accounts: Array<{ email: string; display_name: string }>, acceptAgeTerms: boolean): Promise<ClaudeSignupResult & { queued?: number; skipped?: string[]; jobs?: Array<{ job_id: number; email: string }> }> {
+    return ajax({ url: `${COOKIE_BASE_PATH}/signup-claude-batch`, method: 'POST', loading: false,
+        data: { accounts, accept_age_terms: acceptAgeTerms } }) as ReturnType<typeof enqueueClaudeSignups>;
+}

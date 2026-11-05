@@ -6131,7 +6131,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 return;
             }
             startDeepseekWatch(beatId);
-            showMessage('Đã mở Claude Sonnet 5.5 Medium — tạo HTML kèm sự kiện âm thanh; backend tự đồng bộ timeline.', 'success');
+            showMessage('Đã đưa beat vào queue Claude — giữ browser mở đến khi Claude trả lời xong rồi kiểm tra và lưu HTML.', 'success');
         } catch (error) {
             showMessage(error instanceof Error ? error.message : String(error), 'error');
         } finally {

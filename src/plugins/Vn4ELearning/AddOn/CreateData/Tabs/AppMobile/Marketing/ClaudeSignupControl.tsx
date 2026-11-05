@@ -1,9 +1,10 @@
 import React from 'react';
 import { Alert, Box, Button, Checkbox, CircularProgress, FormControlLabel, Stack, TextField } from '@mui/material';
-import { parseShortVideoCookieApiMessage, readZohoMail, signupClaudeCookie } from 'helpers/marketingShortVideoCookieApi';
+import { parseShortVideoCookieApiMessage, readZohoMail, signupClaudeCookie, enqueueClaudeSignups } from 'helpers/marketingShortVideoCookieApi';
 
 type Props = { onSaved: () => void };
 export default function ClaudeSignupControl({ onSaved }: Props) {
+    const [batch, setBatch] = React.useState('');
     const [email, setEmail] = React.useState('');
     const [name, setName] = React.useState('Spacedev');
     const [acceptAgeTerms, setAcceptAgeTerms] = React.useState(false);
@@ -29,6 +30,22 @@ export default function ClaudeSignupControl({ onSaved }: Props) {
             setNotice({ error: true, text: error instanceof Error ? error.message : String(error) });
         } finally { setBusy(false); }
     };
+    const submitBatch = async () => {
+        if (busy) return;
+        setBusy(true); setNotice(null);
+        try {
+            const accounts = batch.split(/\r?\n/).filter(line => line.trim()).map(line => {
+                const [email, ...parts] = line.split(/[,;\t]/);
+                return { email: email.trim(), display_name: parts.join(' ').trim() };
+            });
+            const result = await enqueueClaudeSignups(accounts, acceptAgeTerms);
+            setNotice({ error: !result.success, text: result.success
+                ? `Đã tạo ${result.queued || 0} job. Bỏ qua ${result.skipped?.length || 0} email trùng. Job: ${result.jobs?.map(job => job.job_id).join(', ') || '—'}. Theo dõi kết quả trong quản lý Queue.`
+                : result.error || 'Không tạo được queue.' });
+            if (result.success) { setBatch(''); onSaved(); }
+        } catch (error) { setNotice({ error: true, text: error instanceof Error ? error.message : String(error) }); }
+        finally { setBusy(false); }
+    };
     return <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, p: 2 }}>
         <Stack spacing={1.5}>
             <Alert severity="info">Đăng ký Claude bằng email, xác nhận qua Zoho, hoàn tất onboarding và lưu cookie. Chrome hiển thị trong quá trình chạy. Thông tin Zoho lấy từ cấu hình server.</Alert>
@@ -46,6 +63,11 @@ export default function ClaudeSignupControl({ onSaved }: Props) {
                 <Button variant="contained" disabled={busy || !email.trim() || !name.trim() || !acceptAgeTerms} onClick={() => void run(true)}
                     startIcon={busy ? <CircularProgress size={14} color="inherit" /> : undefined}>Đăng ký Claude và lưu cookie</Button>
             </Stack>
+            <TextField label="Danh sách tài khoản Claude" multiline minRows={5} value={batch} disabled={busy}
+                onChange={event => setBatch(event.target.value)}
+                placeholder={'engineering@spacedev.vn, Spacedev Engineering\nproduct@spacedev.vn, Spacedev Product'}
+                helperText="Mỗi dòng: email, tên. Tối đa 100 dòng. Tự bỏ email trùng và email đã có cookie hoặc đang chờ/chạy." />
+            <Button variant="contained" disabled={busy || !batch.trim() || !acceptAgeTerms} onClick={() => void submitBatch()}>Tạo queue đăng ký Claude</Button>
             {notice ? <Alert severity={notice.error ? 'error' : 'success'}>{notice.text}</Alert> : null}
         </Stack>
     </Box>;

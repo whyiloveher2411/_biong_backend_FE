@@ -204,7 +204,7 @@ export default function WhiteboardBeatHtmlMotionControl({
             ) : null}
 
             {onOpenClaude ? (
-                <Tooltip title={generationDisabledReason || "Claude Sonnet 5.5 Medium: tạo HTML kèm sự kiện âm thanh"}>
+                <Tooltip title={generationDisabledReason || "Claude Sonnet 5.5 High: tạo HTML kèm sự kiện âm thanh"}>
                     <Box component="button" type="button" aria-label="Tạo HTML beat bằng Claude"
                         disabled={busy || disabled || !!generationDisabledReason || openingClaude}
                         onClick={(event: React.MouseEvent<HTMLButtonElement>) => { event.stopPropagation(); void onOpenClaude(); }}

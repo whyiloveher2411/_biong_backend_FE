@@ -5,10 +5,12 @@ import {
     IconButton,
     Stack,
     Tooltip,
+    Typography,
 } from '@mui/material';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import SettingsIcon from '@mui/icons-material/Settings';
 import type { useAgentVideoContent } from './useAgentVideoContent';
+import { fetchDeepseekHtmlBeatSessionStatus, type DeepseekHtmlBeatSessionResponse } from './agentVideoApi';
 import ShortVideoAgentVideoSettingsDialog from './ShortVideoAgentVideoSettingsDialog';
 
 type Props = {
@@ -39,7 +41,39 @@ const compactButtonSx = {
 export default function WhiteboardBeatHtmlChatControl({ state, beatId, inline = false }: Props) {
     const generationReady=!!state.beatHtmlMediaReadiness?.[beatId]?.ready;
     const generationReason=state.beatHtmlMediaReadiness?.[beatId]?.message || 'Cần có audio và Whisper hợp lệ trước khi tạo HTML beat.';
-    const chatUrl = String(state.beatHtml[beatId]?.chat_url || '').trim();
+    const [session, setSession] = React.useState<DeepseekHtmlBeatSessionResponse | null>(null);
+    React.useEffect(() => {
+        let disposed = false;
+        let busy = false;
+        setSession(null);
+        const poll = async () => {
+            if (busy || document.visibilityState === 'hidden') return;
+            busy = true;
+            try {
+                const result = await fetchDeepseekHtmlBeatSessionStatus(state.shortVideoId, beatId);
+                if (!disposed && result?.success) setSession(result);
+            } catch { /* A transient status error must not interrupt editing. */ }
+            finally { busy = false; }
+        };
+        void poll();
+        const timer = window.setInterval(() => void poll(), 10000);
+        return () => { disposed = true; window.clearInterval(timer); };
+    }, [state.shortVideoId, beatId]);
+    const generation = session?.html_generation;
+    const labels: Record<string, string> = {
+        queued: 'Claude: trong hàng đợi', waiting_account: generation?.last_quota ? 'Claude: chờ tài khoản khác sau quota' : 'Claude: chờ tài khoản',
+        quota_switch: 'Claude: đổi tài khoản do quota',
+        waiting_dependency: 'Claude: chờ beat trước', preparing: 'Claude: chuẩn bị', submitting: 'Claude: đang gửi và chờ phản hồi',
+        waiting_response: 'Claude: đang chờ phản hồi trên browser',
+        saving: 'Claude: kiểm tra và lưu HTML', repair_pending: 'Claude: chờ sửa HTML', repair_submitting: 'Claude: đang gửi và chờ bản sửa',
+        completed: 'Claude: đã lưu HTML', timed_out: 'Claude: chưa thu được phản hồi hoàn chỉnh',
+        submit_uncertain: 'Claude: chưa xác nhận gửi', stale: 'Claude: đầu vào đã thay đổi', failed: 'Claude: lỗi', cancelled: 'Claude: đã huỷ',
+    };
+    const statusLabel = generation?.status ? labels[generation.status] : '';
+    const cooldown = generation?.last_quota?.quota?.cooldown_until;
+    const quotaHint = cooldown ? `Account ${generation?.last_quota?.cookie_id} nghỉ đến ${new Date(cooldown * 1000).toLocaleString('vi-VN')}. ${generation?.last_quota?.quota?.message || ''}` : '';
+    const statusHint = generation?.error || quotaHint || statusLabel;
+    const chatUrl = String(session?.chat_url || state.beatHtml[beatId]?.chat_url || '').trim();
     const opening = (state.openingBeatDeepSeekChatBeatIds || []).includes(beatId);
     const [settingsOpen, setSettingsOpen] = React.useState(false);
 
@@ -51,6 +85,7 @@ export default function WhiteboardBeatHtmlChatControl({ state, beatId, inline = 
     return (
         <>
             <Stack direction="column" spacing={0.5} alignItems="flex-start">
+                {statusLabel ? <Tooltip title={statusHint}><Typography variant="caption" sx={{ color: 'common.white', bgcolor: 'rgba(0,0,0,0.65)', px: 0.75, borderRadius: 1 }}>{statusLabel}</Typography></Tooltip> : null}
                 <Tooltip
                     placement="top"
                     title="Cài đặt video — setting fields theo visual type (prompts/setting-field.md)"

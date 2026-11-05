@@ -1,8 +1,8 @@
 import React from 'react';
 import {fireEvent,render,screen,waitFor} from '@testing-library/react';
 import ClaudeSignupControl from './ClaudeSignupControl';
-import {readZohoMail,signupClaudeCookie} from 'helpers/marketingShortVideoCookieApi';
-jest.mock('helpers/marketingShortVideoCookieApi',()=>({readZohoMail:jest.fn(),signupClaudeCookie:jest.fn(),parseShortVideoCookieApiMessage:()=>''}));
+import {readZohoMail,signupClaudeCookie,enqueueClaudeSignups} from 'helpers/marketingShortVideoCookieApi';
+jest.mock('helpers/marketingShortVideoCookieApi',()=>({enqueueClaudeSignups:jest.fn(),readZohoMail:jest.fn(),signupClaudeCookie:jest.fn(),parseShortVideoCookieApiMessage:()=>''}));
 
 test('Zoho failure is shown without starting signup',async()=>{
     (readZohoMail as jest.Mock).mockResolvedValue({success:false,error:'Zoho chưa bật IMAP'});
@@ -31,4 +31,19 @@ test('signup cannot start before the owner confirms age and terms',()=>{
     expect(button.disabled).toBe(true);
     fireEvent.click(button);
     expect(signupClaudeCookie).not.toHaveBeenCalled();
+});
+
+test('batch queues email and name rows and reports duplicate skips',async()=>{
+    (enqueueClaudeSignups as jest.Mock).mockResolvedValue({success:true,queued:1,skipped:['existing@spacedev.vn'],jobs:[{job_id:42}]});
+    render(<ClaudeSignupControl onSaved={jest.fn()} />);
+    fireEvent.change(screen.getByLabelText('Danh sách tài khoản Claude'),{target:{value:'engineering@spacedev.vn, Engineering\nexisting@spacedev.vn; Existing'}});
+    const button=screen.getByText('Tạo queue đăng ký Claude') as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(button);
+    await waitFor(()=>expect(enqueueClaudeSignups).toHaveBeenCalledWith([
+        {email:'engineering@spacedev.vn',display_name:'Engineering'},
+        {email:'existing@spacedev.vn',display_name:'Existing'},
+    ],true));
+    expect(await screen.findByText(/Đã tạo 1 job. Bỏ qua 1 email trùng/)).toBeTruthy();
 });

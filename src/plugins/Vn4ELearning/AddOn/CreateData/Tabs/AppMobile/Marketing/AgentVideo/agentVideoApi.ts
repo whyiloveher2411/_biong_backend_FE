@@ -3224,6 +3224,7 @@ export type DeepseekHtmlBeatSessionResponse = JsonResponse & {
     mode?: 'new' | 'reopen' | string;
     prompt_chars?: number;
     session_status?: string;
+    html_generation?: { status?: string; poll_count?: number; error?: string; next_check_at?: number; job_id?: number; cookie_id?: number; last_quota?: { cookie_id?: number; quota?: { message?: string; cooldown_until?: number } } };
     has_chat_url?: boolean;
     saved_chat_url?: string;
     saved_cookie_id?: number;
@@ -5669,7 +5670,7 @@ export async function generateBeatHtmlViaDeepseekApi(shortVideoId: number, beatI
         shortVideoBody(shortVideoId, {beat_id: beatId}));
 }
 
-/** Open visible Claude and automatically save beat HTML, then sound suggestions. */
+/** Queue Claude HTML: submit in browser, close, and collect every five minutes. */
 export async function openClaudeHtmlBeatSession(shortVideoId: number, beatId: string): Promise<DeepseekHtmlBeatSessionResponse> {
     return postJson('plugin/vn4-e-learning/app-mobile/marketing/short-video/claude-html-beat-open',
         shortVideoBody(shortVideoId, { beat_id: beatId })) as Promise<DeepseekHtmlBeatSessionResponse>;
