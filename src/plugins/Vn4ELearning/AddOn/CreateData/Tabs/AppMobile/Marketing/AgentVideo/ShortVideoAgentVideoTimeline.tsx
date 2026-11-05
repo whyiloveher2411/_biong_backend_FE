@@ -1,3 +1,4 @@
+import { sceneAssetsRequest } from 'helpers/shortVideoSceneAssets';
 import TimelineAudioEditableClip from './TimelineAudioEditableClip';
 import {timelineAudioBeatBounds} from 'helpers/timelineAudio';
 import VolumeOffIcon from '@mui/icons-material/VolumeOff';
@@ -860,6 +861,60 @@ export default function ShortVideoAgentVideoTimeline({
         || launchingImportAssemble
         || startingFullAuto
         || Boolean(deletingBeatHtmlBeatId);
+    const sceneMappingVideoId = agentState?.workflowActive === 'video-html' ? shortVideoId : 0;
+    const [sceneColors, setSceneColors] = React.useState<{
+        videoId: number;
+        byBeat: Map<string, string>;
+    }>();
+    React.useEffect(() => {
+        if (!(sceneMappingVideoId > 0)) return;
+        let cancelled = false;
+        let loading = false;
+        let previousMapping: string | undefined;
+        const colorsByKey = new Map<string, string>();
+        const loadSceneColors = async () => {
+            if (loading || document.hidden) return;
+            loading = true;
+            try {
+                const result = await sceneAssetsRequest(sceneMappingVideoId, 'get');
+                if (cancelled || !result.success) return;
+                const colorKeysByBeat = Object.entries(result.registry?.beats || {})
+                    .map(([beatId, beat]) => {
+                        const environmentId = beat.environment_id?.trim();
+                        const sceneId = beat.scene_id?.trim();
+                        const colorKey = environmentId ? `environment:${environmentId}` : sceneId ? `scene:${sceneId}` : '';
+                        return [beatId, colorKey] as const;
+                    })
+                    .filter(([, colorKey]) => colorKey);
+                const mapping = JSON.stringify(colorKeysByBeat);
+                if (mapping === previousMapping) return;
+                previousMapping = mapping;
+
+                const byBeat = new Map<string, string>();
+                for (const [beatId, colorKey] of colorKeysByBeat) {
+                    let color = colorsByKey.get(colorKey);
+                    if (!color) {
+                        const hue = (218 + colorsByKey.size * 137.508) % 360;
+                        color = `hsl(${hue}, 75%, 58%)`;
+                        colorsByKey.set(colorKey, color);
+                    }
+                    byBeat.set(beatId, color);
+                }
+                setSceneColors({ videoId: sceneMappingVideoId, byBeat });
+            } catch {
+                // Keep the last successful mapping if the refresh fails.
+            } finally {
+                loading = false;
+            }
+        };
+        void loadSceneColors();
+        const timer = window.setInterval(loadSceneColors, 5000);
+        return () => {
+            cancelled = true;
+            window.clearInterval(timer);
+        };
+    }, [sceneMappingVideoId]);
+
     const showBeatTimelineOverlay = Boolean(beatMap?.sections?.length)
         && (customHtmlPreview || isWhiteboardMode);
     const hasVideo = customHtmlPreview
@@ -2037,6 +2092,7 @@ export default function ShortVideoAgentVideoTimeline({
                                 beatMap={beatMap}
                                 beatHtml={beatHtml}
                                 beatImage={beatImage}
+                                beatSceneColors={sceneColors?.videoId === sceneMappingVideoId ? sceneColors.byBeat : undefined}
                                 beatHasTransition={beatTransitionFlags}
                                 beatHasSfx={agentState?.sfxBeatIdSet}
                                 beatSfxReady={agentState?.sfxBeatReadySet}

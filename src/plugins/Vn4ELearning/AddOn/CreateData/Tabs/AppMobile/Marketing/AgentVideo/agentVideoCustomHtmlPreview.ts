@@ -114,14 +114,14 @@ export function localizeImportHtmlExternalScripts(html: string): string {
  */
 export function localizeImportHtmlAssetScripts(
     html: string,
-    ctx: { shortVideoId?: number; beatId?: string; revision?: number } = {},
+    ctx: { shortVideoId?: number; beatId?: string; revision?: number; publicAssets?: { runtimeUrl: string; catalog: Record<string, unknown> } } = {},
 ): string {
     const source = String(html || '');
     if (!source || !source.includes('assets/') && !/\bAssets\s*\.\s*(?:start|person)\s*\(/.test(source)) {
         return source;
     }
-    const runtimeUrl = buildModel3dRuntimeAssetUrl(Number(ctx.revision || 0));
-    const configUrl = buildModel3dAssetConfigUrl(
+    const runtimeUrl = ctx.publicAssets?.runtimeUrl ?? buildModel3dRuntimeAssetUrl(Number(ctx.revision || 0));
+    const configUrl = ctx.publicAssets ? '' : buildModel3dAssetConfigUrl(
         Number(ctx.shortVideoId || 0),
         String(ctx.beatId || ''),
         Number(ctx.revision || 0),
@@ -133,6 +133,9 @@ export function localizeImportHtmlAssetScripts(
         const match = attrs.match(/\bsrc\s*=\s*["']([^"']+)["']/i);
         return match && /(?:assets\/(?:dist\/assets-config|assets-runtime)\.js|model-3d\/(?:asset-config|runtime)(?:[?"']|$))/.test(match[1]) ? '' : tag;
     });
-    const scaffold = `<script src="${configUrl}"></script><script src="${runtimeUrl}"></script>`;
+    const config = ctx.publicAssets
+        ? `<script>window.HF_ASSETS = ${JSON.stringify({ base: '', catalog: ctx.publicAssets.catalog }).replace(/</g, '\\u003c')};</script>`
+        : `<script src="${configUrl}"></script>`;
+    const scaffold = config + `<script src="${runtimeUrl}"></script>`;
     return clean.replace(/<script\b[^>]*\bsrc\s*=\s*["'][^"']*\bthree(?:\.min)?\.js[^"']*["'][^>]*>\s*<\/script>/i, tag => tag + scaffold);
 }

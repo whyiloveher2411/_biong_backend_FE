@@ -6,7 +6,7 @@ import { saydiVoiceCastRequest, fetchSaydiVoiceSamples, saveSaydiVoiceManifest }
 type DrawerMockProps = {open: boolean; children?: React.ReactNode; title?: React.ReactNode};
 type PickerMockProps = Pick<React.ComponentProps<typeof import('./ShortVideoAgentSaydiVoicePicker')['default']>, 'samples' | 'onSelect' | 'loading' | 'defaultGender'>;
 
-jest.mock('./agentVideoApi', () => ({ saydiVoiceCastRequest: jest.fn(), fetchSaydiVoiceSamples: jest.fn(), saveSaydiVoiceManifest: jest.fn(), resolveSaydiVoicePreviewUrl: jest.fn() }));
+jest.mock('./agentVideoApi', () => ({ agentGeminiTtsSettings: jest.fn(), saydiVoiceCastRequest: jest.fn(), fetchSaydiVoiceSamples: jest.fn(), saveSaydiVoiceManifest: jest.fn(), resolveSaydiVoicePreviewUrl: jest.fn() }));
 jest.mock('components/molecules/DrawerCustom', () => ({ __esModule: true, default: ({ open, children, title }: DrawerMockProps) => open ? <div role="dialog" aria-label={typeof title === 'string' ? title : undefined}>{children}</div> : null }));
 jest.mock('./ShortVideoAgentSaydiVoicePicker', () => ({ __esModule: true, default: ({ samples, onSelect, loading, defaultGender }: PickerMockProps) => <div><span data-testid="automatic-gender">{defaultGender}</span>{loading ? 'Đang tải danh mục' : samples.map((s) => <button key={s.name} onClick={() => void onSelect(s.name)}>Chọn {s.name}</button>)}</div> }));
 const request = saydiVoiceCastRequest as jest.Mock;
@@ -106,4 +106,9 @@ test('guards against selecting a sample already assigned to another speaking rol
     fireEvent.click(await screen.findByText('Chọn voice-taken'));
     expect(screen.getAllByText(/Giọng này đã gán cho Người dẫn/).length).toBeGreaterThan(0);
     expect(request.mock.calls.every((args) => args.length === 1)).toBe(true);
+});
+
+beforeEach(() => {
+    const { agentGeminiTtsSettings } = jest.requireMock('./agentVideoApi');
+    agentGeminiTtsSettings.mockResolvedValue({ success: true, settings: { voice: 'Kore', style: '' }, voices: ['Kore'] });
 });

@@ -3,6 +3,7 @@ import { formatOmnivoiceVoiceDesignVi } from './omnivoiceVoiceDesignLabels';
 import { voiceAvatarColor, voiceInitials } from './ShortVideoAgentOmnivoiceVoicePicker';
 
 export const TTS_PLATFORM_OPTIONS = [
+    { key: 'gemini_tts', label: 'Gemini 3.8 Flash TTS (API)' },
     { key: 'chatgpt_web', label: 'ChatGPT (web)' },
     { key: 'omnivoice_local', label: 'OmniVoice (local)' },
     { key: 'vieneu', label: 'VieNeu (local)' },

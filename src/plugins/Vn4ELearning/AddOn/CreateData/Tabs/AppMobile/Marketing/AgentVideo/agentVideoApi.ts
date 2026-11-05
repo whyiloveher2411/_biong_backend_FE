@@ -5675,3 +5675,29 @@ export async function openClaudeHtmlBeatSession(shortVideoId: number, beatId: st
     return postJson('plugin/vn4-e-learning/app-mobile/marketing/short-video/claude-html-beat-open',
         shortVideoBody(shortVideoId, { beat_id: beatId })) as Promise<DeepseekHtmlBeatSessionResponse>;
 }
+
+export type GeminiVoiceMetadata = {
+    label: string;
+    language: string;
+    gender: string;
+    pitch: string;
+    style: string;
+    use_case: string;
+    description: string;
+};
+
+export type GeminiTtsSettings = { voice: string; style: string };
+
+export function agentGeminiTtsSettings(shortVideoId: number, settings?: GeminiTtsSettings) {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/agent-gemini-tts-settings',
+        shortVideoBody(shortVideoId, settings),
+    ) as Promise<JsonResponse & { settings?: GeminiTtsSettings; voices?: string[]; cached_voices?: string[]; voice_metadata?: Record<string, GeminiVoiceMetadata> }>;
+}
+
+export function previewAgentGeminiTts(shortVideoId: number, settings: GeminiTtsSettings) {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/agent-gemini-tts-settings',
+        shortVideoBody(shortVideoId, { ...settings, preview: true }),
+    ) as Promise<JsonResponse & { audio_base64?: string }>;
+}

@@ -43,7 +43,7 @@ export default function BeatVoiceSummary({ shortVideoId, beatId, compact = false
             {voices.map((voice) => {
                 const color = beatVoiceColor(voice.id, allIds);
                 const label = voice.name || voice.id;
-                const title = `${label} (${voice.id})${voice.description ? ' — ' + voice.description : ''} · ${voice.voice_sample || 'Chưa cài giọng Saydi'}`;
+                const title = `${label} (${voice.id})${voice.description ? ' — ' + voice.description : ''} · ${voice.voice_sample?.replace(/^gemini:/, 'Gemini · ') || 'Chưa cài giọng'}`;
                 return <Tooltip key={voice.id} title={title} placement={compact ? 'left' : 'top'}>
                     <Box component="button" type="button" onClick={() => setSelectedVoice(voice.id)} sx={{border:0, p:0, bgcolor:'transparent', cursor:'pointer', font:'inherit', borderRadius:1, '&:focus-visible':{outline:'2px solid', outlineColor:'primary.main'}}} aria-label={`Giọng đọc: ${label} (${voice.id})`} data-voice-id={voice.id} data-voice-color={color}>
                         {compact ? <Stack alignItems="center" sx={{ width: 64 }}>

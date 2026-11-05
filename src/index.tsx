@@ -12,11 +12,20 @@ import store from './store/configureStore';
 const basename = process.env.REACT_APP_BASENAME;
 
 async function startApp() {
-    await bootstrapApiHost();
-
     const container = document.getElementById('root');
     //@ts-ignore
     const root = createRoot(container);
+    const basePath = (basename || '').replace(/^\/+|\/+$/g, '');
+    const previewPath = `/${basePath ? basePath + '/' : ''}short-video-preview`;
+    if (window.location.pathname.replace(/\/$/, '') === previewPath) {
+        const { default: PublicBeatPreview } = await import(
+            './plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/Marketing/AgentVideo/PublicBeatPreview'
+        );
+        root.render(<PublicBeatPreview />);
+        return;
+    }
+
+    await bootstrapApiHost();
     root.render(<ReduxProvider store={store}>
         <BrowserRouter basename={basename}>
             <App />

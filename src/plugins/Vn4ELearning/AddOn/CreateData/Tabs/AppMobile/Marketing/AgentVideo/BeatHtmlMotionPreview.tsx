@@ -18,6 +18,7 @@ type Props = {
     timeSec: number;
     playing?: boolean;
     onReady?: () => void;
+    publicAssets?: { runtimeUrl: string; catalog: Record<string, unknown> };
     /** Window audio của beat (giây). */
     durationSec: number;
     /** ID beat — dùng để đổi `key` của iframe khi chuyển beat (tránh tái dùng
@@ -79,7 +80,7 @@ export function detectAuthoredSize(html: string): { w: number; h: number } | nul
  * (`timeSec`). Đặt TRONG khung geometry của editor nên zoom/pan + kéo timeline
  * (playhead) đều áp dụng lên preview.
  */
-export default function BeatHtmlMotionPreview({ html, timeSec, durationSec, beatId, shortVideoId = 0, playing=false, onReady }: Props) {
+export default function BeatHtmlMotionPreview({ html, timeSec, durationSec, beatId, shortVideoId = 0, playing=false, onReady, publicAssets }: Props) {
     const containerRef = React.useRef<HTMLDivElement | null>(null);
     const iframeRef = React.useRef<HTMLIFrameElement | null>(null);
     const latestTimeRef = React.useRef(0);
@@ -96,9 +97,40 @@ export default function BeatHtmlMotionPreview({ html, timeSec, durationSec, beat
         // Beat dùng asset library → dùng bundle Three.js r186 cùng bộ render,
         // và đổi 2 thẻ assets/ tương đối sang URL same-origin có token.
         const localized = localizeImportHtmlExternalScripts(raw);
-        const withAssets = localizeImportHtmlAssetScripts(localized, { shortVideoId, beatId, revision: assetRevision });
-        return ensureImportHtmlDataDuration(withAssets, duration);
-    }, [html, duration, shortVideoId, beatId, assetRevision]);
+        const withAssets = localizeImportHtmlAssetScripts(localized, { shortVideoId, beatId, revision: assetRevision, publicAssets });
+        const normalized = ensureImportHtmlDataDuration(withAssets, duration);
+        if (!publicAssets) return normalized;
+        const bridge = `<script>
+            addEventListener('message', function(event) {
+                if (event.source !== parent) return;
+                var data = event.data || {};
+                if (data.type === 'hf-seek' || data.type === 'hf-model-audio-playback') {
+                    dispatchEvent(new CustomEvent(data.type, { detail: data.detail }));
+                }
+            });
+            addEventListener('load', async function() {
+                var root = document.documentElement;
+                if (${/\bAssets\.start\s*\(/.test(withAssets)}
+                    && root.getAttribute('data-hf-ready') !== '1') {
+                    await new Promise(function(resolve) {
+                        var observer = new MutationObserver(function() {
+                            if (root.getAttribute('data-hf-ready') === '1') {
+                                observer.disconnect();
+                                resolve();
+                            }
+                        });
+                        observer.observe(root, { attributes: true, attributeFilter: ['data-hf-ready'] });
+                    });
+                }
+                if (document.fonts) await document.fonts.ready;
+                parent.postMessage({ type: 'public-beat-ready' }, '*');
+            });
+        </script>`;
+        return /<\/body>/i.test(normalized)
+            ? normalized.replace(/<\/body>/i, tag => bridge + tag)
+            : normalized + bridge;
+
+    }, [html, duration, shortVideoId, beatId, assetRevision, publicAssets]);
     const authored = React.useMemo(() => detectAuthoredSize(String(html || '')), [html]);
 
     // Đổi beat / đổi nội dung HTML → đổi key để React tạo iframe MỚI (buộc reload
@@ -120,14 +152,42 @@ export default function BeatHtmlMotionPreview({ html, timeSec, durationSec, beat
     const seek = React.useCallback((time: number) => {
         const clamped = Math.max(0, Math.min(duration, Number(time) || 0));
         latestTimeRef.current = clamped;
-        seekCustomHtmlIframe(iframeRef.current, clamped);
-    }, [duration]);
+        if (publicAssets) {
+            iframeRef.current?.contentWindow?.postMessage({ type: 'hf-seek', detail: { time: clamped } }, '*');
+        } else {
+            seekCustomHtmlIframe(iframeRef.current, clamped);
+        }
+    }, [duration, publicAssets]);
 
     React.useEffect(() => {
         seek(timeSec);
     }, [timeSec, seek, srcDoc]);
 
-    React.useEffect(()=>{setModelAudioPlayback(iframeRef.current,playing);return()=>setModelAudioPlayback(iframeRef.current,false);},[playing,srcDoc]);
+    const setPlayback = React.useCallback((value: boolean) => {
+        if (publicAssets) {
+            iframeRef.current?.contentWindow?.postMessage({ type: 'hf-model-audio-playback', detail: { playing: value } }, '*');
+        } else {
+            setModelAudioPlayback(iframeRef.current, value);
+        }
+    }, [publicAssets]);
+    React.useEffect(() => {
+        setPlayback(playing);
+        return () => setPlayback(false);
+    }, [playing, srcDoc, setPlayback]);
+    const onReadyRef = React.useRef(onReady);
+    onReadyRef.current = onReady;
+    React.useEffect(() => {
+        if (!publicAssets) return;
+        const ready = (event: MessageEvent) => {
+            if (event.source === iframeRef.current?.contentWindow && event.data?.type === 'public-beat-ready') {
+                setPlayback(playingRef.current);
+                seek(latestTimeRef.current);
+                onReadyRef.current?.();
+            }
+        };
+        window.addEventListener('message', ready);
+        return () => window.removeEventListener('message', ready);
+    }, [publicAssets, seek, setPlayback]);
 
     const fitScale = authored && size.w > 0 && size.h > 0
         ? Math.min(size.w / authored.w, size.h / authored.h)
@@ -170,8 +230,11 @@ export default function BeatHtmlMotionPreview({ html, timeSec, durationSec, beat
                 ref={iframeRef}
                 title="HTML motion beat"
                 srcDoc={srcDoc}
+                sandbox={publicAssets ? "allow-scripts" : undefined}
+                allow={publicAssets ? "autoplay *" : undefined}
                 scrolling="no"
                 onLoad={() => {
+                    if (publicAssets) return;
                     setModelAudioPlayback(iframeRef.current,playing); seek(latestTimeRef.current);
                     const iframe=iframeRef.current, doc=iframe?.contentDocument;
                     if(!doc)return;

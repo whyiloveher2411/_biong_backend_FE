@@ -3,7 +3,7 @@ import { render, screen, act, fireEvent, waitFor } from '@testing-library/react'
 import BeatVoiceSummary from './BeatVoiceSummary';
 import { saydiVoiceCastRequest, fetchSaydiVoiceSamples } from './agentVideoApi';
 
-jest.mock('./agentVideoApi', () => ({ saydiVoiceCastRequest: jest.fn(), fetchSaydiVoiceSamples:jest.fn(), saveSaydiVoiceManifest:jest.fn(), resolveSaydiVoicePreviewUrl:jest.fn() }));
+jest.mock('./agentVideoApi', () => ({ agentGeminiTtsSettings: jest.fn(), saydiVoiceCastRequest: jest.fn(), fetchSaydiVoiceSamples:jest.fn(), saveSaydiVoiceManifest:jest.fn(), resolveSaydiVoicePreviewUrl:jest.fn() }));
 const request = saydiVoiceCastRequest as jest.Mock;
 const roles = { narrator: {}, rosa: {}, daniel: {} };
 const rosa = { id: 'rosa', name: 'Rosa', description: 'Người chủ tiệm', voice_sample: 'sample-f' };
@@ -61,4 +61,9 @@ test('voice shortcut opens the existing role drawer with gender filter and saves
  await waitFor(()=>expect(assigned).toBe('sample-new'));
  await waitFor(()=>expect(screen.queryByRole('dialog')).toBeNull());
  expect(fetchSaydiVoiceSamples).toHaveBeenCalledWith(67,{forceRefresh:false});
+});
+
+beforeEach(() => {
+    const { agentGeminiTtsSettings } = jest.requireMock('./agentVideoApi');
+    agentGeminiTtsSettings.mockResolvedValue({ success: true, settings: { voice: 'Kore', style: '' }, voices: ['Kore'] });
 });

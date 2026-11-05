@@ -1,4 +1,5 @@
 import React from 'react';
+import ShortVideoAgentGeminiTtsSettings from './ShortVideoAgentGeminiTtsSettings';
 import ShortVideoAgentSaydiCastSettings from './ShortVideoAgentSaydiCastSettings';
 import {
     Alert,
@@ -219,7 +220,7 @@ export default function ShortVideoAgentAudioSettingsDrawer({
 
             <Box>
                 <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-                    Thứ tự ưu tiên: ChatGPT → OmniVoice → VieNeu → Saydi → Vbee
+                    Thứ tự ưu tiên: Gemini → ChatGPT → OmniVoice → VieNeu → Saydi → Vbee
                 </Typography>
                 <FormGroup>
                     {TTS_PLATFORM_OPTIONS.map((option) => (
@@ -254,6 +255,15 @@ export default function ShortVideoAgentAudioSettingsDrawer({
                     />
                 ) : null}
             </Box>
+
+            {open && (
+                <ShortVideoAgentGeminiTtsSettings
+                    key={shortVideoId}
+                    shortVideoId={shortVideoId}
+                    selected={selectedPlatforms.includes('gemini_tts')}
+                    disabled={regeneratingTts || savingTtsMode}
+                />
+            )}
 
             {showOmnivoice ? (
                 <>
