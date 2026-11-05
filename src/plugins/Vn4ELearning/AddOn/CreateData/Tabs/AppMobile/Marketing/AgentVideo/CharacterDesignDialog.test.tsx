@@ -146,3 +146,25 @@ test('eye controls commit on release, reset independently and save with the sele
  fireEvent.click(screen.getByRole('button',{name:'Lưu nhân vật'}));
  await waitFor(()=>expect(onSave).toHaveBeenCalledWith(expect.objectContaining({design:expect.objectContaining({parameters:{eyeSize:1,eyeSpacing:.4},selections:expect.objectContaining({eyes:'large'})})})));
 });
+
+test('accessory areas save several independent accessory choices', async()=>{
+ const onSave=jest.fn().mockResolvedValue(true);
+ const accessoryCatalog=[
+  {id:'accessory',name:'Phụ kiện',accessoryArea:'head',accessoryName:'Phụ kiện tóc',colors:[],items:[]},
+  {id:'hat',name:'Nón / Mũ',accessoryArea:'head',accessoryName:'Nón / Mũ',colors:[],items:[{id:'cap',name:'Mũ lưỡi trai',badge:'HTML'}]},
+  {id:'glasses',name:'Kính',accessoryArea:'head',accessoryName:'Kính mắt',colors:[],items:[{id:'round',name:'Kính tròn',badge:'HTML'}]},
+  {id:'body_bag',name:'Túi đeo thân',accessoryArea:'torso',accessoryName:'Túi đeo thân',colors:[],items:[{id:'backpack',name:'Balo',badge:'HTML'}]},
+ ];
+ (sceneAssetsRequest as jest.Mock).mockResolvedValue({success:true,designer:{...designer,catalog:[...designer.catalog,...accessoryCatalog]}});
+ render(<CharacterDesignDialog shortVideoId={42} asset={asset} busy={false} onSave={onSave} onClose={jest.fn()}/>);
+ fireEvent.click(await screen.findByRole('tab',{name:'Phụ kiện'}));
+ fireEvent.click(screen.getByRole('button',{name:'Mũ lưỡi trai'}));
+ fireEvent.click(screen.getByRole('button',{name:'Kính mắt'}));
+ fireEvent.click(screen.getByRole('button',{name:'Kính tròn'}));
+ fireEvent.click(screen.getByRole('button',{name:'Thân & thắt lưng'}));
+ fireEvent.click(screen.getByRole('button',{name:'Balo'}));
+ fireEvent.click(screen.getByRole('button',{name:'Lưu nhân vật'}));
+ await waitFor(()=>expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
+  design:expect.objectContaining({selections:expect.objectContaining({hat:'cap',glasses:'round',body_bag:'backpack'})}),
+ })));
+});

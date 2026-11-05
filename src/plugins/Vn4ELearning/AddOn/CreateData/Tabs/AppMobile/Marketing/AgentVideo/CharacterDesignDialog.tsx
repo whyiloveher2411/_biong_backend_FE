@@ -5,8 +5,29 @@ import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import {CharacterDesignCatalog, CharacterDesignConfig, SceneAsset, sceneAssetMessage, sceneAssetsRequest} from 'helpers/shortVideoSceneAssets';
 import SceneAssetHtmlPreview from './SceneAssetHtmlPreview';
 
-const colorNames: Record<string,string> = {skin:'Màu da', hair:'Màu tóc', eyes:'Màu mắt', lips:'Màu môi', top:'Màu áo', bottom:'Màu quần', shoes:'Màu giày', accessory:'Màu dây buộc tóc',brows:'Màu chân mày',beard:'Màu râu',glasses:'Màu gọng kính'};
-const palette = ['#F5F5F5','#9E9E9E','#424242','#9670CF','#982BFA','#5623A7','#4DD0E1','#00E5FF','#005C65','#FFEB3B','#FFFF00','#FFC12B','#81C784','#00E600','#388E3C','#64B5F6','#00B8ED','#1976D2','#E57373','#FF1744','#C62828','#F50087','#AD1457','#E0A97C','#F4D4B5','#AD7351','#754B35','#2B1B14','#000000','#0A0A0A','#D9C4A2','#3A2418','#397B77','#9B4248','#1FA88A','#315B87','#2B3A5C','#EDDFC2','#E8A020','#B85868','#7968A8'];
+const accessoryAreas = [
+    {id:'head',name:'Đầu, tóc & mặt'}, {id:'neck',name:'Cổ & vai'}, {id:'arms',name:'Tay & cổ tay'},
+    {id:'torso',name:'Thân & thắt lưng'}, {id:'hand',name:'Vật cầm tay'},
+];
+const colorNames: Record<string,string> = {skin:'Màu da', hair:'Màu tóc', eyes:'Màu mắt', lips:'Màu môi', top:'Màu áo', bottom:'Màu quần', shoes:'Màu giày', accessory:'Màu phụ kiện',brows:'Màu chân mày',beard:'Màu râu',glasses:'Màu gọng kính'};
+const naturalHair = ['#2B1B14','#171413','#3B2922','#5B3A29','#79513A','#A57149','#BF925E','#D9C4A2','#8D4C33','#75716F','#C4C0BD'];
+const colorPalettes: Record<string,string[]> = {
+    skin: ['#E0A97C','#F4D4B5','#EDC09C','#CF956F','#AD7351','#955D43','#754B35','#58382B','#38241E'],
+    hair: [...naturalHair,'#5C3045','#884F78','#7968A8','#315B87'],
+    brows: naturalHair,
+    beard: naturalHair,
+    eyes: ['#3A2418','#241B17','#62422B','#906837','#687348','#397B77','#315B87','#64A0BE','#77818E'],
+    lips: ['#9B4248','#A5605B','#B86E68','#B85868','#C98A83','#9A5B51','#804840','#A12C3D','#C62828','#742D48'],
+    glasses: ['#30374D','#171413','#5B3A29','#A57149','#C29C62','#B7BBC2','#F5F5F5','#315B87','#B85868','#C62828'],
+    top: ['#1FA88A','#F5F5F5','#171413','#2B3A5C','#315B87','#9E9E9E','#AD1457','#C62828','#388E3C','#7968A8','#FFC12B'],
+    bottom: ['#2B3A5C','#171413','#424242','#315B87','#597494','#947E64','#D9C4A2','#526245','#F5F5F5'],
+    shoes: ['#EDDFC2','#F5F5F5','#171413','#754B35','#AD7351','#9E9E9E','#315B87','#C62828'],
+    accessory: ['#E8A020','#171413','#F5F5F5','#B85868','#7968A8','#315B87','#1FA88A','#C62828'],
+};
+const extraColors = ['#F5F5F5','#9E9E9E','#424242','#9670CF','#982BFA','#5623A7','#4DD0E1','#00E5FF','#005C65',
+    '#FFEB3B','#FFFF00','#FFC12B','#81C784','#00E600','#388E3C','#64B5F6','#00B8ED','#1976D2','#E57373',
+    '#FF1744','#C62828','#F50087','#AD1457','#E0A97C','#F4D4B5','#AD7351','#754B35','#2B1B14','#000000',
+    '#0A0A0A','#D9C4A2','#3A2418','#397B77','#9B4248','#1FA88A','#315B87','#2B3A5C','#EDDFC2','#E8A020','#B85868','#7968A8'];
 const previewMenuProps = {PaperProps:{sx:{bgcolor:'#25283e',color:'#fff','& .MuiMenuItem-root':{color:'#fff'},'& .MuiMenuItem-root.Mui-selected':{bgcolor:'#504967'}}}};
 const emotions = ['neutral','happy','sad','angry','surprised','worried','smug','thinking','crying','laughing'];
 const poses = ['idle','stand','sit','kneel','cover_ears','hold_paw','lift_with_helper','carry_cup','carry_bowl'];
@@ -62,6 +83,7 @@ export default function CharacterDesignDialog({shortVideoId,asset,busy,onClose,o
     },[catalog]);
     const [config,setConfig]=React.useState<CharacterDesignConfig|null>(null);
     const [slot,setSlot]=React.useState('skin');
+    const [accessorySlot,setAccessorySlot]=React.useState('hat');
     const [error,setError]=React.useState('');
     const [saving,setSaving]=React.useState(false);
     const [attempt,setAttempt]=React.useState(0);
@@ -82,7 +104,15 @@ export default function CharacterDesignDialog({shortVideoId,asset,busy,onClose,o
     // The iframe document never changes when choosing parts. Its existing scene receives the design.
     const html=React.useMemo(()=>catalog?characterDesignPreview(catalog.template_html,catalog.config,'reset','idle','neutral'):'',[catalog]);
     const previewMessage=React.useMemo(()=>({type:'sv-design-preview',design:config,colors:config?.colors,view,pose,emotion,focusNonce}),[config,view,pose,emotion,focusNonce]);
-    const current=catalog?.catalog.find(c=>c.id===slot);
+    const accessorySlots=catalog?.catalog.filter(category=>category.accessoryArea)||[];
+    const activeAccessory=accessorySlots.find(category=>category.id===accessorySlot)||accessorySlots[0];
+    const editingSlot=slot==='accessory'&&activeAccessory?activeAccessory.id:slot;
+    const current=catalog?.catalog.find(c=>c.id===editingSlot);
+    const selectAccessory=(id:string)=>{
+        setAccessorySlot(id);
+        setView('part:'+id);
+        setFocusNonce(n=>n+1);
+    };
     const gender=config?.selections.gender||'female';
     const currentItems=current?.items.filter(item=>!item.genders||item.genders.includes(gender))||[];
     const chooseGender=(itemId:string)=>{
@@ -93,7 +123,8 @@ export default function CharacterDesignDialog({shortVideoId,asset,busy,onClose,o
     const chooseItem=(itemId:string)=>{
         if(!config||!catalog)return;
         const item=current?.items.find(i=>i.id===itemId);
-        setConfig({...config,selections:{...config.selections,[slot]:itemId},...(item?.parameters?{parameters:{...config.parameters,...item.parameters}}:{})});
+        setConfig({...config,selections:{...config.selections,[editingSlot]:itemId},...(item?.parameters?{parameters:{...config.parameters,...item.parameters}}:{})});
+        if(slot==='accessory'&&activeAccessory) setFocusNonce(n=>n+1);
     };
     const disabled=busy||saving;
     const save=async()=>{
@@ -136,16 +167,32 @@ export default function CharacterDesignDialog({shortVideoId,asset,busy,onClose,o
                     {current?.colors.map(key=><Stack key={key} direction="row" alignItems="center" spacing={1} sx={{mb:1}}>
                         <Typography variant="caption" sx={{minWidth:70,color:'#fff'}}>{colorNames[key]||key}</Typography>
                         <Box data-horizontal-options role="group" aria-label={`Bảng ${colorNames[key]||key}`} sx={{display:'flex',gap:1,overflowX:'auto',overscrollBehaviorX:'contain',p:.5,flex:1,scrollbarWidth:'thin'}}>
-                            {Array.from(new Set([catalog.config.colors[key].toUpperCase(),...palette,config.colors[key].toUpperCase()])).map(color=><Box component="button" key={color} title={color} aria-label={`${colorNames[key]} ${color}`} aria-pressed={config.colors[key].toUpperCase()===color} disabled={disabled} onClick={()=>setConfig({...config,colors:{...config.colors,[key]:color}})} sx={{width:{xs:38,sm:44},height:{xs:38,sm:44},flexShrink:0,p:.75,borderRadius:2,border:'2px solid',borderColor:config.colors[key].toUpperCase()===color?'#fff':'transparent',bgcolor:'rgba(20,23,43,.4)',cursor:'pointer','&:hover':{bgcolor:'rgba(20,23,43,.7)'},'&:focus-visible':{outline:'2px solid #c3b6ff',outlineOffset:2}}}><Box component="span" sx={{display:'block',width:'100%',height:'100%',borderRadius:1,bgcolor:color}}/></Box>)}
+                            {Array.from(new Set([catalog.config.colors[key].toUpperCase(),...(colorPalettes[key]||[]),config.colors[key].toUpperCase(),...extraColors])).map(color=><Box component="button" key={color} title={color} aria-label={`${colorNames[key]} ${color}`} aria-pressed={config.colors[key].toUpperCase()===color} disabled={disabled} onClick={()=>setConfig({...config,colors:{...config.colors,[key]:color}})} sx={{width:{xs:38,sm:44},height:{xs:38,sm:44},flexShrink:0,p:.75,borderRadius:2,border:'2px solid',borderColor:config.colors[key].toUpperCase()===color?'#fff':'transparent',bgcolor:'rgba(20,23,43,.4)',cursor:'pointer','&:hover':{bgcolor:'rgba(20,23,43,.7)'},'&:focus-visible':{outline:'2px solid #c3b6ff',outlineOffset:2}}}><Box component="span" sx={{display:'block',width:'100%',height:'100%',borderRadius:1,bgcolor:color}}/></Box>)}
                         </Box>
                         <Box component="label" title="Chọn màu khác" sx={{display:'flex',alignItems:'center',width:36,height:36,flexShrink:0,border:'1px solid #85859b',borderRadius:1.5,overflow:'hidden'}}><input type="color" aria-label={colorNames[key]||key} value={config.colors[key]} disabled={disabled} onChange={e=>setConfig({...config,colors:{...config.colors,[key]:e.target.value}})} style={{width:42,height:42,border:0,padding:0,background:'transparent',cursor:'pointer'}}/></Box>
                     </Stack>)}
                     <Box sx={{bgcolor:'rgba(20,23,43,.3)',borderRadius:2,px:{xs:1.5,sm:2.5},pt:.5,pb:2}}>
                         <Box data-horizontal-options role="tablist" aria-label="Bộ phận nhân vật" sx={{display:'flex',gap:{xs:2,sm:3.5},overflowX:'auto',overscrollBehaviorX:'contain',mb:2,scrollbarWidth:'thin'}}>
-                            {catalog.catalog.filter(category=>category.id!=='gender').map(category=><Button role="tab" id={`design-tab-${category.id}`} aria-controls="design-assets-panel" aria-selected={slot===category.id} key={category.id} onClick={()=>{setSlot(category.id);setView('part:'+category.id);setFocusNonce(n=>n+1);}} sx={{flexShrink:0,minWidth:0,px:0,py:1.5,color:'#fff',borderRadius:0,borderBottom:'2px solid',borderColor:slot===category.id?'white':'transparent',fontSize:{xs:14,sm:16},fontWeight:600,textTransform:'none'}}>{category.name}</Button>)}
+                            {catalog.catalog.filter(category=>category.id!=='gender'&&(!category.accessoryArea||category.id==='accessory')).map(category=><Button role="tab" id={`design-tab-${category.id}`} aria-controls="design-assets-panel" aria-selected={slot===category.id} key={category.id} onClick={()=>{setSlot(category.id);setView('part:'+(category.id==='accessory'&&activeAccessory?activeAccessory.id:category.id));setFocusNonce(n=>n+1);}} sx={{flexShrink:0,minWidth:0,px:0,py:1.5,color:'#fff',borderRadius:0,borderBottom:'2px solid',borderColor:slot===category.id?'white':'transparent',fontSize:{xs:14,sm:16},fontWeight:600,textTransform:'none'}}>{category.name}</Button>)}
                         </Box>
-                        {(slot==='brows'||slot==='eyes')&&<Stack direction={{xs:'column',md:'row'}} gap={3} sx={{px:1,mb:2}}>
-                            {(slot==='eyes'?[
+                        {slot==='accessory'&&activeAccessory&&<Stack spacing={1} sx={{mb:2}}>
+                            <Box data-horizontal-options role="group" aria-label="Khu vực phụ kiện" sx={{display:'flex',gap:1,overflowX:'auto'}}>
+                                {accessoryAreas.map(area=><Button key={area.id} size="small" aria-pressed={activeAccessory.accessoryArea===area.id} onClick={()=>{
+                                    const first=accessorySlots.find(category=>area.id==='head'?category.id==='hat':category.accessoryArea===area.id);
+                                    if(first) selectAccessory(first.id);
+                                }} sx={{color:'#fff',flexShrink:0,textTransform:'none',bgcolor:activeAccessory.accessoryArea===area.id?'#6258b4':'transparent'}}>{area.name}</Button>)}
+                            </Box>
+                            <Box data-horizontal-options role="group" aria-label="Loại phụ kiện" sx={{display:'flex',gap:1,overflowX:'auto'}}>
+                                {accessorySlots.filter(category=>category.accessoryArea===activeAccessory.accessoryArea).map(category=><Button key={category.id} size="small" aria-pressed={editingSlot===category.id} onClick={()=>selectAccessory(category.id)} sx={{color:'#fff',flexShrink:0,textTransform:'none',bgcolor:editingSlot===category.id?'#6258b4':'transparent'}}>{category.accessoryName}</Button>)}
+                            </Box>
+                        </Stack>}
+                        {(slot==='brows'||slot==='eyes'||slot==='nose')&&<Stack direction={{xs:'column',md:'row'}} gap={3} sx={{px:1,mb:2,flexWrap:slot==='nose'?'wrap':'nowrap'}}>
+                            {(slot==='nose'?[
+                                {key:'noseBridgeLength',label:'Độ dài sống mũi',id:'nose-bridge-length-label',min:.4,max:1.75,step:.01,value:1,left:'Ngắn',right:'Dài'},
+                                {key:'noseAlarWidth',label:'Độ rộng cánh mũi',id:'nose-alar-width-label',min:.5,max:1.75,step:.01,value:1,left:'Hẹp',right:'Rộng'},
+                                {key:'noseTipVolume',label:'Độ đầy và tròn của đầu mũi',id:'nose-tip-volume-label',min:.45,max:1.85,step:.01,value:1,left:'Thon',right:'Tròn đầy'},
+                                {key:'nostrilTilt',label:'Độ nghiêng lỗ mũi',id:'nostril-tilt-label',min:-2,max:2,step:.01,value:0,left:'Khuất',right:'Lộ rõ'},
+                            ]:slot==='eyes'?[
                                 {key:'eyeSize',label:'Độ lớn của mắt',id:'eye-size-label',min:.8,max:2,step:.01,value:1,left:'Nhỏ',right:'Lớn'},
                                 {key:'eyeSpacing',label:'Khoảng cách hai mắt',id:'eye-spacing-label',min:.4,max:1.15,step:.01,value:1,left:'Gần nhau',right:'Xa nhau'},
                             ]:[
@@ -154,14 +201,14 @@ export default function CharacterDesignDialog({shortVideoId,asset,busy,onClose,o
                                 {key:'browThickness',label:'Độ dày chân mày',id:'brow-thickness-label',min:.7,max:1.6,step:.01,value:1,left:'Mỏng',right:'Dày'},
                                 {key:'browLength',label:'Độ dài chân mày',id:'brow-length-label',min:.7,max:2,step:.01,value:1,left:'Ngắn',right:'Dài'},
                                 {key:'browAngle',label:'Góc chân mày',id:'brow-angle-label',min:-180,max:180,step:1,value:0,left:'−180°',right:'+180°'},
-                            ]).map(control=><Box key={control.key} sx={{flex:1,minWidth:0}}>
+                            ]).map(control=><Box key={control.key} sx={{flex:1,minWidth:{xs:0,md:slot==='nose'?145:0}}}>
                                 <PartAdjustmentSlider label={control.label} defaultValue={control.value} left={control.left} right={control.right} angle={control.key==='browAngle'} labelId={control.id} min={control.min} max={control.max} step={control.step} value={(config.parameters?.[control.key]??control.value)*(control.key==='browAngle'?180/Math.PI:1)} disabled={disabled} onCommit={value=>setConfig(current=>current?{...current,parameters:{...current.parameters,[control.key]:value*(control.key==='browAngle'?Math.PI/180:1)}}:current)}/>
                             </Box>)}
                         </Stack>}
                         <Box data-horizontal-options role="tabpanel" id="design-assets-panel" aria-labelledby={`design-tab-${slot}`} sx={{display:'flex',gap:1.5,overflowX:'auto',overscrollBehaviorX:'contain',pb:1}}>
-                            {current?.id!=='skin'&&currentItems.map(item=><Button key={item.id} disabled={disabled} aria-label={item.name} aria-pressed={config.selections[slot]===item.id} onClick={()=>chooseItem(item.id)} sx={{position:'relative',flexShrink:0,width:{xs:100,sm:116},minWidth:0,p:.5,textTransform:'none',display:'flex',flexDirection:'column',gap:.5,border:'2px solid',borderColor:config.selections[slot]===item.id?'white':'#202238',borderRadius:2.5,color:'white',bgcolor:config.selections[slot]===item.id?'rgba(232,230,255,.2)':'rgba(17,20,37,.4)','&:hover':{bgcolor:'rgba(232,230,255,.15)'}}}>
+                            {current?.id!=='skin'&&currentItems.map(item=><Button key={item.id} disabled={disabled} aria-label={item.name} aria-pressed={config.selections[editingSlot]===item.id} onClick={()=>chooseItem(item.id)} sx={{position:'relative',flexShrink:0,width:{xs:100,sm:116},minWidth:0,p:.5,textTransform:'none',display:'flex',flexDirection:'column',gap:.5,border:'2px solid',borderColor:config.selections[editingSlot]===item.id?'white':'#202238',borderRadius:2.5,color:'white',bgcolor:config.selections[editingSlot]===item.id?'rgba(232,230,255,.2)':'rgba(17,20,37,.4)','&:hover':{bgcolor:'rgba(232,230,255,.15)'}}}>
                                 {item.thumbnail?<Box component="img" src={`${process.env.PUBLIC_URL||''}/images/character-design/${item.thumbnail}`} alt="" sx={{width:'100%',aspectRatio:'1',objectFit:'contain',borderRadius:1.5,bgcolor:'#151a28'}}/>:<Box sx={{height:70,display:'grid',placeItems:'center'}}><CheckCircleIcon/></Box>}
-                                {config.selections[slot]===item.id&&<CheckCircleIcon sx={{position:'absolute',top:8,right:8,fontSize:18,color:'white',filter:'drop-shadow(0 1px 3px #000)'}}/>}
+                                {config.selections[editingSlot]===item.id&&<CheckCircleIcon sx={{position:'absolute',top:8,right:8,fontSize:18,color:'white',filter:'drop-shadow(0 1px 3px #000)'}}/>}
                                 <Typography variant="caption" sx={{fontSize:11,lineHeight:1.3,pb:.5,color:'#fff'}}>{item.name}</Typography>
                             </Button>)}
                         </Box>
