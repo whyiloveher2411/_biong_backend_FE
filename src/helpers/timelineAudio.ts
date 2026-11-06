@@ -35,6 +35,7 @@ export function openVideoPixabayAudio(videoId:number,beatId:string,eventId:strin
 
 export type TimelineAudioBeat={id:string;startSec:number;endSec:number};
 export function timelineAudioBeatBounds(clip:TimelineAudioClip,sections:ReadonlyArray<TimelineAudioBeat>){
+ if(clip.sound.source_type!=='code')return undefined;
  const owner=clip.event_beat_id||sections.find(s=>clip.suggestion_key?.startsWith(`suggestion_${s.id}_`))?.id;
  return sections.find(s=>s.id===owner)||(!owner?sections.find(s=>clip.start_sec>=s.startSec&&clip.start_sec<s.endSec):undefined);
 }

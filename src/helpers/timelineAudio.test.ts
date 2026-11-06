@@ -45,11 +45,16 @@ test('missing volume defaults to 100 percent without overriding intentional zero
 });
 
 test('beat-owned sounds cannot move or resize beyond their original beat',()=>{
- const c={...clip,event_beat_id:'beat_2',start_sec:5,duration_sec:2,offset_sec:0},bounds={start:4,end:8};
+ const c={...clip,sound:{...clip.sound,source_type:'code' as const},event_beat_id:'beat_2',start_sec:5,duration_sec:2,offset_sec:0},bounds={start:4,end:8};
  expect(resolveTimelineAudioDrag(c,100,'move',bounds)).toEqual({start:6,end:8});
  expect(resolveTimelineAudioDrag(c,-100,'move',bounds)).toEqual({start:4,end:6});
  expect(resolveTimelineAudioDrag(c,100,'right',bounds)).toEqual({start:5,end:8});
  expect(resolveTimelineAudioDrag(c,-100,'left',bounds)).toEqual({start:4,end:7});
  const constrained=constrainTimelineAudio({...c,start_sec:20},[{id:'beat_1',startSec:0,endSec:4},{id:'beat_2',startSec:4,endSec:8}]);
  expect(constrained.start_sec).toBe(6);expect(constrained.event_beat_id).toBe('beat_2');
+});
+
+test('legacy background clips can extend past their saved beat',()=>{
+ const clipWithOldOwner={...clip,event_beat_id:'beat_1',start_sec:0,duration_sec:6,offset_sec:0,speed:1};
+ expect(constrainTimelineAudio(clipWithOldOwner,[{id:'beat_1',startSec:0,endSec:2}]).duration_sec).toBe(6);
 });

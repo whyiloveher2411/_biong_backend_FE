@@ -127,4 +127,4 @@ của backend. Chỉ gọi start sau khi user xác nhận brief.
 Trong Claude Code, đăng ký server stdio với tên `biong-short-video` và launcher
 được cấp `BIONG_API_BASE_URL` và `BIONG_MCP_TOKEN`. Từ checkout backend, chạy
 `claude mcp list` để kiểm tra kết nối rồi gọi `/biong-video-html-3d`.
-Brief start cần `app_mobile_id` hợp lệ để CMS lưu tài nguyên và audio.
+Draft mới dùng object store mặc định của CMS. Claude tự viết HTML bằng `prepare_beat_html` và `save_beat_html`. Đọc style workflow qua `short_video_get_image_style` với `asset_mode` trước khi tạo draft.

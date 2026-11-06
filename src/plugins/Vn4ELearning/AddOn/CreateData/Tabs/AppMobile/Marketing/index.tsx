@@ -1099,10 +1099,7 @@ export default function Marketing({ data }: { data: CreatePostTypeData }) {
                     appMobileId={Number(data?.post?.id || 0)}
                 />
             ) : viewMode === 'short_video' ? (
-                <MarketingShortVideoPanel
-                    key={shortVideoTableKey}
-                    appMobileId={Number(data?.post?.id || 0)}
-                />
+                <MarketingShortVideoPanel key={shortVideoTableKey} />
             ) : (
             <Box sx={{
                 flex: 1,

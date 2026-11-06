@@ -116,7 +116,6 @@ server.tool(
   'Tạo draft HTML 3D trong CMS sau khi user xác nhận brief. Giữ cùng idempotency_key khi retry cùng brief. Tool chỉ tạo draft và trả ID.',
   {
     confirmed: z.literal(true),
-    app_mobile_id: z.number().int().positive().describe('ID app mobile trong CMS dùng cho tài nguyên và audio'),
     idempotency_key: z.string().regex(/^[A-Za-z0-9_-]{16,100}$/),
     topic: z.string().trim().min(1).max(200),
     topic_group: z.enum(['Business', 'History', 'What-if']),
@@ -125,7 +124,6 @@ server.tool(
     aspect: z.enum(['16:9', '9:16']).optional().describe('Mặc định 16:9'),
     asset_mode: z.enum(['shared', 'free']),
     tts: z.enum(['gemini', 'saydi']),
-    visual_style: z.string().trim().min(1).max(2000),
   },
   async (brief) => video3dRequest('start', brief)
 );
@@ -139,7 +137,7 @@ server.tool(
 
 server.tool(
   'short_video_3d_step',
-  'Thực hiện đúng một công đoạn CMS của video HTML 3D. Draft mới dùng beat_list, beat_audio (mark_ids), merge_audio rồi chuẩn bị asset/visual, enqueue beat_html (beat_ids), kiểm tra và render. Luồng narration/Whisper có các bước riêng. Với shared, lưu manifest và chờ factory hiện hành. Dùng status để theo dõi.',
+  'Thực hiện đúng một công đoạn CMS của video HTML 3D. Draft mới dùng beat_list, beat_audio (mark_ids), merge_audio rồi chuẩn bị asset/visual, tự viết HTML từ prepare_beat_html rồi save_beat_html, kiểm tra và render. Luồng narration/Whisper có các bước riêng. Với shared, lưu manifest và chờ factory hiện hành. Dùng status để theo dõi.',
   {
     short_video_id: video3dId,
     step: z.discriminatedUnion('action', [
@@ -167,11 +165,10 @@ server.tool(
       }),
       z.object({
         action: z.literal('scene_assets'),
-        operation: z.enum(['get', 'manifest', 'enqueue', 'design_catalog', 'character_design', 'preview']).describe('enqueue chỉ dựng bối cảnh. Nhân vật dùng catalog, character_design, preview.'),
+        operation: z.enum(['get', 'manifest', 'environment_prompt', 'save_environment', 'design_catalog', 'character_design', 'preview']).describe('Bối cảnh do agent tự viết từ environment_prompt và lưu qua save_environment.'),
         text: z.string().optional(),
         expected_revision: z.string().optional(),
         asset_id: z.string().optional(),
-        provider: z.enum(['deepseek', 'claude']).optional(),
         expected_module_hash: z.string().optional(),
         expected_spec_hash: z.string().optional(),
         design: z.object({
@@ -183,7 +180,6 @@ server.tool(
       }),
       z.object({ action: z.literal('save_visual'), mark_id: z.string().min(1), image_prompt: z.string().min(1) }),
       z.object({ action: z.literal('beat_audio'), beat_ids: beatIds }),
-      z.object({ action: z.literal('beat_html'), beat_ids: beatIds }).describe('Enqueue DeepSeek chatbot'),
       z.object({
         action: z.literal('prepare_beat_html'),
         beat_id: z.string().min(1),
@@ -270,14 +266,16 @@ server.tool(
 
 server.tool(
   'short_video_get_image_style',
-  'Lấy prompt phong cách hình ảnh đang gắn với short video — dùng thay [prompt-style] trong prompt workflow. has_image_style=false nghĩa là chưa chọn style.',
+  'Lấy style CMS đã resolve. Với video có sẵn truyền short_video_id, với draft HTML 3D chưa tạo truyền asset_mode để đọc file style workflow.',
   {
-    short_video_id: z.number().int().positive(),
+    short_video_id: z.number().int().positive().optional(),
+    asset_mode: z.enum(['shared', 'free']).optional(),
   },
-  async ({ short_video_id }) => {
-    const result = await apiRequest('get-image-style', {
-      query: { short_video_id },
-    });
+  async ({ short_video_id, asset_mode }) => {
+    const query: Record<string, string | number> = {};
+    if (short_video_id !== undefined) query.short_video_id = short_video_id;
+    if (asset_mode !== undefined) query.asset_mode = asset_mode;
+    const result = await apiRequest('get-image-style', { query });
     return {
       content: [{ type: 'text', text: formatJson(result) }],
     };

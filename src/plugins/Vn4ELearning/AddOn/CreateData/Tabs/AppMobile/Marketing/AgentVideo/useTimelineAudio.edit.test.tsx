@@ -17,7 +17,7 @@ afterAll(()=>{URL.revokeObjectURL=originalRevoke;});
 beforeEach(()=>{(timelineAudioApi as jest.Mock).mockResolvedValue({success:true,revision:'r1',clips:[first,{...first,id:'b',start_sec:5}]});});
 async function load(){const view=render(<Editor/>);await waitFor(()=>expect(editor.clips).toHaveLength(2));return view;}
 test('overlapping edits stay inside their original beat and pack into separate lanes',async()=>{
- (timelineAudioApi as jest.Mock).mockResolvedValue({success:true,revision:'r1',clips:[{...first,start_sec:1,duration_sec:1,event_beat_id:'beat_1'},{...first,id:'b',start_sec:2.5,duration_sec:.5,event_beat_id:'beat_1'}]});
+ (timelineAudioApi as jest.Mock).mockResolvedValue({success:true,revision:'r1',clips:[{...first,sound:{...sound,source_type:'code'},start_sec:1,duration_sec:1,event_beat_id:'beat_1'},{...first,sound:{...sound,source_type:'code'},id:'b',start_sec:2.5,duration_sec:.5,event_beat_id:'beat_1'}]});
  const view=await load();expect(editor.canResize('a',1,3)).toBe(true);expect(editor.canResize('a',1,5)).toBe(false);
  act(()=>{editor.commitEdit('a',1,3);});
  expect(editor.clips[0].duration_sec).toBe(2);expect(timelineAudioOverlap(editor.clips[0],editor.clips[1])).toBe(true);expect(editor.clips[0].lane).not.toBe(editor.clips[1].lane);
