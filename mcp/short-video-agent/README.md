@@ -115,3 +115,16 @@ Nếu Codex gọi tool được nhưng `fetch failed`, nguyên nhân thường l
 API keys media cấu hình trên **backend** `_biong_backend/.env`, không phải MCP `.env`.
 
 Sau khi build: restart MCP server `biong-short-video-agent` trong Cursor Settings.
+
+## Workflow HTML 3D
+
+`short_video_3d_start`, `short_video_3d_step` và `short_video_3d_status`
+dùng endpoint CMS `mcp/short-video/video-html-3d` với cấu hình Bearer hiện có.
+Build lại và khởi động lại MCP sau khi backend đã có endpoint này. Luồng gọi
+từng bước nằm trong tài liệu `docs/short-video/video-html-3d-end-to-end.md`
+của backend. Chỉ gọi start sau khi user xác nhận brief.
+
+Trong Claude Code, đăng ký server stdio với tên `biong-short-video` và launcher
+được cấp `BIONG_API_BASE_URL` và `BIONG_MCP_TOKEN`. Từ checkout backend, chạy
+`claude mcp list` để kiểm tra kết nối rồi gọi `/biong-video-html-3d`.
+Brief start cần `app_mobile_id` hợp lệ để CMS lưu tài nguyên và audio.

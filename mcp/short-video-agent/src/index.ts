@@ -98,6 +98,116 @@ const server = new McpServer({
   version: '2.4.0',
 });
 
+const video3dId = z.number().int().positive();
+const beatIds = z.array(z.string().min(1)).min(1).max(100);
+
+async function video3dRequest(action: string, input: object = {}, shortVideoId?: number) {
+  const body: Record<string, string | number> = { action, input: JSON.stringify(input) };
+  if (shortVideoId !== undefined) body.short_video_id = shortVideoId;
+  const result = await apiRequest('video-html-3d', { body });
+  return {
+    isError: typeof result === 'object' && result !== null && 'success' in result && result.success === false,
+    content: [{ type: 'text' as const, text: formatJson(result) }],
+  };
+}
+
+server.tool(
+  'short_video_3d_start',
+  'Tạo draft HTML 3D trong CMS sau khi user xác nhận brief. Giữ cùng idempotency_key khi retry cùng brief. Tool chỉ tạo draft và trả ID.',
+  {
+    confirmed: z.literal(true),
+    app_mobile_id: z.number().int().positive().describe('ID app mobile trong CMS dùng cho tài nguyên và audio'),
+    idempotency_key: z.string().regex(/^[A-Za-z0-9_-]{16,100}$/),
+    topic: z.string().trim().min(1).max(200),
+    topic_group: z.enum(['Business', 'History', 'What-if']),
+    language: z.string().regex(/^[a-z]{2,3}(-[a-zA-Z0-9]{2,8})*$/),
+    duration_sec: z.number().int().min(15).max(3600),
+    aspect: z.enum(['16:9', '9:16']).optional().describe('Mặc định 16:9'),
+    asset_mode: z.enum(['shared', 'free']),
+    tts: z.enum(['gemini', 'saydi']),
+    visual_style: z.string().trim().min(1).max(2000),
+  },
+  async (brief) => video3dRequest('start', brief)
+);
+
+server.tool(
+  'short_video_3d_status',
+  'Đọc checkpoint gọn của CMS: narration, Whisper, beat audio, HTML còn thiếu, pipeline, upload và URL video. Kiểm tra trạng thái trước khi retry.',
+  { short_video_id: video3dId },
+  async ({ short_video_id }) => video3dRequest('status', {}, short_video_id)
+);
+
+server.tool(
+  'short_video_3d_step',
+  'Thực hiện đúng một công đoạn CMS của video HTML 3D. Draft mới dùng beat_list, beat_audio (mark_ids), merge_audio rồi chuẩn bị asset/visual, enqueue beat_html (beat_ids), kiểm tra và render. Luồng narration/Whisper có các bước riêng. Với shared, lưu manifest và chờ factory hiện hành. Dùng status để theo dõi.',
+  {
+    short_video_id: video3dId,
+    step: z.discriminatedUnion('action', [
+      z.object({ action: z.literal('gemini_voice'), voice: z.string().min(1).optional(), style: z.string().max(1000).optional() }),
+      z.object({ action: z.literal('saydi_catalog') }),
+      z.object({ action: z.literal('saydi_voice'), voice: z.string().min(1) }),
+      z.object({
+        action: z.literal('saydi_cast'),
+        operation: z.enum(['get', 'save', 'save_manifest']),
+        manifest: z.string().optional(),
+        config: z.record(z.unknown()).optional(),
+      }),
+      z.object({ action: z.literal('narration') }),
+      z.object({ action: z.literal('beat_list'), list_text: z.string().min(1) }),
+      z.object({ action: z.literal('translations'), translations: z.record(z.string()), source_language: z.string().optional() }),
+      z.object({ action: z.literal('merge_audio') }),
+      z.object({ action: z.literal('transcribe') }),
+      z.object({ action: z.literal('division_prompt'), phase: z.enum(['full', 'segmentation']).optional(), limit_beats: z.number().int().positive().optional() }),
+      z.object({ action: z.literal('beat_map'), marketing_json_ai: z.union([z.string().min(1), z.record(z.unknown())]) }),
+      z.object({
+        action: z.literal('visual_prompt'),
+        segments: z.array(z.record(z.unknown())).min(1),
+        chunk_index: z.number().int().nonnegative().optional(),
+        chunk_size: z.number().int().min(1).max(50).optional(),
+      }),
+      z.object({
+        action: z.literal('scene_assets'),
+        operation: z.enum(['get', 'manifest', 'enqueue', 'design_catalog', 'character_design', 'preview']).describe('enqueue chỉ dựng bối cảnh. Nhân vật dùng catalog, character_design, preview.'),
+        text: z.string().optional(),
+        expected_revision: z.string().optional(),
+        asset_id: z.string().optional(),
+        provider: z.enum(['deepseek', 'claude']).optional(),
+        expected_module_hash: z.string().optional(),
+        expected_spec_hash: z.string().optional(),
+        design: z.object({
+          template: z.literal('mai_v1').optional(),
+          selections: z.record(z.string()).optional(),
+          colors: z.record(z.string()).optional(),
+          parameters: z.record(z.number()).optional(),
+        }).optional(),
+      }),
+      z.object({ action: z.literal('save_visual'), mark_id: z.string().min(1), image_prompt: z.string().min(1) }),
+      z.object({ action: z.literal('beat_audio'), beat_ids: beatIds }),
+      z.object({ action: z.literal('beat_html'), beat_ids: beatIds }).describe('Enqueue DeepSeek chatbot'),
+      z.object({
+        action: z.literal('prepare_beat_html'),
+        beat_id: z.string().min(1),
+      }).describe('Lấy prompt và revision để Claude Code tự viết HTML'),
+      z.object({
+        action: z.literal('save_beat_html'),
+        beat_id: z.string().min(1),
+        revision: z.string().regex(/^[a-f0-9]{64}$/),
+        html: z.string().min(1).max(524288),
+      }).describe('Audit và lưu HTML Claude Code đã viết qua CMS'),
+      z.object({ action: z.literal('title'), title: z.string().min(1).max(200) }),
+      z.object({ action: z.literal('karaoke'), enabled: z.boolean() }),
+      z.object({ action: z.literal('timeline_audio') }),
+      z.object({
+        action: z.literal('save_timeline_audio'),
+        revision: z.string().min(1),
+        clips: z.array(z.record(z.unknown())),
+      }),
+      z.object({ action: z.literal('render') }),
+    ]),
+  },
+  async ({ short_video_id, step: { action, ...input } }) => video3dRequest(action, input, short_video_id)
+);
+
 server.tool(
   'short_video_get_context',
   'Lấy creative brief + audio_script/audio_file + agent_workflow + production_playbook.media_assets (Pexels stock + Pixabay BGM MCP). Trả workflow_mode, agent_tts_platforms, tts_chain (đã lọc theo user chọn).',

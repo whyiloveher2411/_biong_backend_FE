@@ -458,13 +458,10 @@ export default function AgentVideoBeatBoundaryOverlay({
                                     aria-hidden="true"
                                     sx={{
                                         position: 'absolute',
-                                        top: 4,
-                                        right: 4,
-                                        width: 10,
-                                        height: 10,
-                                        boxSizing: 'border-box',
-                                        bgcolor: sceneColor,
-                                        border: '1px solid rgba(255,255,255,0.9)',
+                                        bottom: 0,
+                                        left: 0,
+                                        right: 0,
+                                        borderBottom: `10px solid ${sceneColor}`,
                                         pointerEvents: 'none',
                                         zIndex: 4,
                                     }}
@@ -554,7 +551,7 @@ export default function AgentVideoBeatBoundaryOverlay({
                                         event.preventDefault();setMenuBeatId(segment.beatId);setMenuAnchorEl(event.currentTarget);
                                     }
                                 }}
-                                sx={{width:'100%',height:'100%',minWidth:0,border:0, borderRight: '2px solid red !important', bgcolor:'transparent',color:'inherit',px:1,pr:sceneColor ? 2 : 1,textAlign:'left',fontSize:12,lineHeight:'32px',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',cursor:'pointer','&:focus-visible':{outline:'2px solid white',outlineOffset:-2}}}
+                                sx={{width:'100%',height:'100%',minWidth:0,border:0, borderRight: '2px solid red !important', bgcolor:'transparent',color:'inherit',px:1,textAlign:'left',fontSize:12,lineHeight:'32px',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',cursor:'pointer','&:focus-visible':{outline:'2px solid white',outlineOffset:-2}}}
                             >{`beat ${segment.beatIndex}`}</Box>}
                             <Box
                                 sx={{
