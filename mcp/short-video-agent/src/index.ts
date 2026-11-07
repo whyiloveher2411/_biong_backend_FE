@@ -99,7 +99,6 @@ const server = new McpServer({
 });
 
 const video3dId = z.number().int().positive();
-const beatIds = z.array(z.string().min(1)).min(1).max(100);
 
 async function video3dRequest(action: string, input: object = {}, shortVideoId?: number) {
   const body: Record<string, string | number> = { action, input: JSON.stringify(input) };
@@ -137,7 +136,7 @@ server.tool(
 
 server.tool(
   'short_video_3d_step',
-  'Thực hiện đúng một công đoạn CMS của video HTML 3D. Draft mới dùng beat_list, beat_audio (mark_ids), merge_audio rồi chuẩn bị asset/visual, tự viết HTML từ prepare_beat_html rồi save_beat_html, kiểm tra và render. Luồng narration/Whisper có các bước riêng. Với shared, lưu manifest và chờ factory hiện hành. Dùng status để theo dõi.',
+  'Thực hiện đúng một công đoạn CMS của video HTML 3D. Draft mới dùng beat_list, TTS/Whisper từng mark ngay trước HTML beat đó; hoàn thiện SFX, BGM Mixkit và kiểm tra dữ liệu rồi dừng. Luồng narration/Whisper có các bước riêng. Với shared, lưu manifest và chờ factory hiện hành. Dùng status để theo dõi.',
   {
     short_video_id: video3dId,
     step: z.discriminatedUnion('action', [
@@ -179,7 +178,7 @@ server.tool(
         }).optional(),
       }),
       z.object({ action: z.literal('save_visual'), mark_id: z.string().min(1), image_prompt: z.string().min(1) }),
-      z.object({ action: z.literal('beat_audio'), beat_ids: beatIds }),
+      z.object({ action: z.literal('beat_audio'), beat_ids: z.array(z.string().min(1)).length(1) }),
       z.object({
         action: z.literal('prepare_beat_html'),
         beat_id: z.string().min(1),
@@ -198,7 +197,20 @@ server.tool(
         revision: z.string().min(1),
         clips: z.array(z.record(z.unknown())),
       }),
-      z.object({ action: z.literal('render') }),
+      z.object({
+        action: z.literal('save_sound_plan'),
+        beat_id: z.string().min(1),
+        events: z.array(z.record(z.unknown())).max(24),
+      }).describe('Lưu và tạo SFX trước HTML; events rỗng biểu thị beat không cần SFX'),
+      z.object({ action: z.literal('natural_sfx'), beat_id: z.string().min(1), event_id: z.string().min(1) }),
+      z.object({
+        action: z.literal('save_bgm'),
+        segments: z.array(z.object({
+          id: z.string().min(1), title: z.string().min(1),
+          download_url: z.string().url(), duration_sec: z.number().positive(),
+          provider: z.literal('mixkit'), volume: z.number().min(0.05).max(1.5),
+        })).min(1).max(50),
+      }),
     ]),
   },
   async ({ short_video_id, step: { action, ...input } }) => video3dRequest(action, input, short_video_id)
