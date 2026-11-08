@@ -93,3 +93,31 @@ test('whole-video Play waits for the initial clip list and decoded SFX instead o
   await act(async()=>{view.rerender(<Player time={22.39} playing/>);});expect(media.play).toHaveBeenCalledTimes(1);
  }finally{view.unmount();window.Audio=original;URL.revokeObjectURL=revoke;}
 });
+
+test('BGM shares transport, seeks its remote file, refreshes and never enters editable SFX clips',async()=>{
+ const bgm={...clip,id:'bgm_slot_0',start_sec:0,duration_sec:90,volume:.12,sound:{...clip.sound,id:'bgm_slot_0',file:'https://example.com/bgm.mp3',preview_url:'https://example.com/bgm.mp3',source_type:'bgm' as const,duration_sec:96.59,title:'Smile'}};
+ const originalAudio=window.Audio,originalFetch=global.fetch,originalCreate=URL.createObjectURL,originalRevoke=URL.revokeObjectURL;
+ const media={paused:true,readyState:4,duration:96.59,currentTime:0,playbackRate:1,volume:1,play:jest.fn(async()=>{media.paused=false;}),pause:jest.fn(()=>{media.paused=true;})};
+ window.Audio=jest.fn(()=>media) as unknown as typeof Audio;
+ global.fetch=jest.fn(async()=>({ok:true,blob:async()=>new Blob(['audio'],{type:'audio/mpeg'})})) as unknown as typeof fetch;
+ URL.createObjectURL=jest.fn(()=> 'blob:bgm');URL.revokeObjectURL=jest.fn();
+ (timelineAudioApi as jest.Mock).mockResolvedValue({success:true,clips:[],bgm_clips:[bgm],revision:'sfx-only'});
+ let state!:ReturnType<typeof useTimelineAudio>;
+ function BgmPlayer({time,playing}:{time:number;playing:boolean}){state=useTimelineAudio(122,time,playing,90);return null;}
+ let view:ReturnType<typeof render>|undefined;
+ try{
+  await act(async()=>{view=render(<BgmPlayer time={0} playing={false}/>);});
+  expect(state.bgmClips).toHaveLength(1);expect(state.clips).toEqual([]);expect(state.rows).toEqual([]);
+  expect(global.fetch).toHaveBeenCalledWith(bgm.sound.file,{credentials:'omit'});
+  await act(async()=>{await prepareTimelineAudioRange(122,30,34);view!.rerender(<BgmPlayer time={30} playing/>);});
+  expect(media.currentTime).toBe(30);expect(media.play).toHaveBeenCalledTimes(1);
+  await act(async()=>{view!.rerender(<BgmPlayer time={31} playing={false}/>);});expect(media.pause).toHaveBeenCalled();
+  (timelineAudioApi as jest.Mock).mockResolvedValue({success:true,clips:[],bgm_clips:[{...bgm,muted:true}],revision:'sfx-only'});
+  await act(async()=>{document.dispatchEvent(new CustomEvent('timeline-audio-suggestions-updated',{detail:{videoId:122}}));});
+  expect(state.bgmClips[0].muted).toBe(true);
+  await act(async()=>{view!.rerender(<BgmPlayer time={32} playing/>);});expect(media.play).toHaveBeenCalledTimes(1);
+  (timelineAudioApi as jest.Mock).mockResolvedValue({success:true,clips:[],bgm_clips:[],revision:'sfx-only'});
+  await act(async()=>{document.dispatchEvent(new CustomEvent('timeline-audio-suggestions-updated',{detail:{videoId:122}}));});
+  expect(state.bgmClips).toEqual([]);
+ }finally{view?.unmount();window.Audio=originalAudio;global.fetch=originalFetch;URL.createObjectURL=originalCreate;URL.revokeObjectURL=originalRevoke;}
+});

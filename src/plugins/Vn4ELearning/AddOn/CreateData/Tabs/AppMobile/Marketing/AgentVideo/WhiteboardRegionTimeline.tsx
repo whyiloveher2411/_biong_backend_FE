@@ -393,6 +393,8 @@ export default function WhiteboardRegionTimeline({
     const onPlayheadChangeRef = React.useRef(onPlayheadChange);
     onPlayheadChangeRef.current = onPlayheadChange;
     const externalPlaybackRef=React.useRef(false);
+    const playbackGenerationRef=React.useRef(0);
+    const ownsPlaybackRef=React.useRef(false);
     const transportCommandRef=React.useRef<(d:{time:number;action:string})=>void>(()=>{ /* Assigned to the current audio controller below. */ });
     const audioTimingRef=React.useRef({beatStartSec,duration});audioTimingRef.current={beatStartSec,duration};
     const playingRef = React.useRef(false);
@@ -412,7 +414,7 @@ export default function WhiteboardRegionTimeline({
 
     React.useEffect(()=>{
         const receive=(event:Event)=>{const d=(event as CustomEvent).detail;if(d?.videoId!==shortVideoId)return;
-            externalPlaybackRef.current=true;if(rafRef.current)cancelAnimationFrame(rafRef.current);
+            externalPlaybackRef.current=true;ownsPlaybackRef.current=false;++playbackGenerationRef.current;if(rafRef.current)cancelAnimationFrame(rafRef.current);
             audioRef.current?.pause();setPlayhead(videoTimeToBeat(d.time,timelineStartSec,duration));setPlaying(!!d.playing);
         };
         const command=(event:Event)=>{const d=(event as CustomEvent).detail;if(d?.videoId===shortVideoId)transportCommandRef.current(d);};
@@ -422,13 +424,36 @@ export default function WhiteboardRegionTimeline({
     React.useEffect(() => {
         const audio = audioRef.current;
         if (!audio) return undefined;
-    const stop = () => {if(!externalPlaybackRef.current){if(rafRef.current)cancelAnimationFrame(rafRef.current);setPlaying(false);const timing=audioTimingRef.current;const stoppedAt=stoppedPlayheadSec(audio.currentTime,timing);setPlayhead(stoppedAt);onPlayheadChangeRef.current?.(stoppedAt,false,'user');}};
+        const stop = () => {
+            if(externalPlaybackRef.current)return;
+            ++playbackGenerationRef.current;playingRef.current=false;
+            if(rafRef.current)cancelAnimationFrame(rafRef.current);
+            setPlaying(false);
+            const stoppedAt=stoppedPlayheadSec(audio.currentTime,audioTimingRef.current);
+            setPlayhead(stoppedAt);onPlayheadChangeRef.current?.(stoppedAt,false,'user');
+        };
+        const paused = () => {if(audio.paused||audio.ended)stop();};
+        const enforceBoundary = () => {
+            const timing=audioTimingRef.current;
+            if(!externalPlaybackRef.current&&ownsPlaybackRef.current&&audio.currentTime>=timing.beatStartSec+timing.duration){audio.pause();stop();}
+        };
+        const failed = () => {audio.pause();stop();};
         audio.addEventListener('ended', stop);
-        audio.addEventListener('pause', stop);
+        audio.addEventListener('pause', paused);
+        audio.addEventListener('timeupdate', enforceBoundary);
+        audio.addEventListener('error', failed);
         return () => {
             audio.removeEventListener('ended', stop);
-            audio.removeEventListener('pause', stop);
+            audio.removeEventListener('pause', paused);
+            audio.removeEventListener('timeupdate', enforceBoundary);
+            audio.removeEventListener('error', failed);
+            ++playbackGenerationRef.current;
             if (rafRef.current) cancelAnimationFrame(rafRef.current);
+            audio.pause();
+            if(ownsPlaybackRef.current&&!externalPlaybackRef.current){
+                ownsPlaybackRef.current=false;
+                onPlayheadChangeRef.current?.(stoppedPlayheadSec(audio.currentTime,audioTimingRef.current),false,'user');
+            }
         };
     }, []);
 
@@ -443,12 +468,18 @@ export default function WhiteboardRegionTimeline({
     const updatePlayhead = () => {
         if(externalPlaybackRef.current)return;
         const audio = audioRef.current;
-        if (!audio || audio.paused) return;
+        if (!audio) return;
+        if (audio.paused) {
+            playingRef.current=false;setPlaying(false);
+            const stoppedAt=stoppedPlayheadSec(audio.currentTime,audioTimingRef.current);
+            setPlayhead(stoppedAt);emitPlayhead(stoppedAt,false,'user');
+            return;
+        }
         const t = Math.max(beatStartSec, Math.min(beatStartSec + duration, audio.currentTime));
         const local = t - beatStartSec;
         // Never publish the exclusive end of this beat: the global timeline
         // would select the next beat before the stopped/inset update arrives.
-        if (t >= beatStartSec + duration - 0.02) {
+        if (t >= beatStartSec + duration) {
             const stoppedAt = stoppedPlayheadSec(t, { beatStartSec, duration });
             audio.pause();
             setPlaying(false);
@@ -458,41 +489,53 @@ export default function WhiteboardRegionTimeline({
         }
         setPlayhead(local);
         emitPlayhead(local, true, 'user');
-        rafRef.current = requestAnimationFrame(updatePlayhead);
+        const version=playbackGenerationRef.current;
+        rafRef.current = requestAnimationFrame(()=>{if(version===playbackGenerationRef.current)updatePlayhead();});
+    };
+
+    const startPlayback = (local: number) => {
+        const audio=audioRef.current;if(!audio)return;
+        externalPlaybackRef.current=false;ownsPlaybackRef.current=true;
+        playingRef.current=true;setPlaying(true);
+        const version=++playbackGenerationRef.current;
+        if(rafRef.current)cancelAnimationFrame(rafRef.current);
+        audio.currentTime=beatStartSec+local;
+        void audio.play().then(()=>{
+            if(version!==playbackGenerationRef.current||externalPlaybackRef.current)return;
+            playingRef.current=true;setPlaying(true);updatePlayhead();
+        }).catch(()=>{
+            if(version!==playbackGenerationRef.current)return;
+            playingRef.current=false;setPlaying(false);emitPlayhead(local,false,'user');
+        });
     };
 
     const togglePlay = () => {
-        const audio = audioRef.current;
-        if (!audio) return;
-        if(externalPlaybackRef.current)audio.currentTime=beatStartSec+playhead;
-        externalPlaybackRef.current=false;
-        if (playing) {
+        const audio=audioRef.current;if(!audio)return;
+        if(playingRef.current&&!externalPlaybackRef.current){
+            ++playbackGenerationRef.current;
             if(rafRef.current)cancelAnimationFrame(rafRef.current);
-            audio.pause();
-            setPlaying(false);
-            emitPlayhead(playhead, false, 'user');
-            return;
+            audio.pause();playingRef.current=false;setPlaying(false);
+            emitPlayhead(stoppedPlayheadSec(audio.currentTime,audioTimingRef.current),false,'user');return;
         }
-        const cur = audio.currentTime;
-        if (cur < beatStartSec || cur >= beatStartSec + duration - 0.02) {
-            audio.currentTime = beatStartSec;
-        }
-        void audio.play().then(() => {
-            setPlaying(true);
-            if (rafRef.current) cancelAnimationFrame(rafRef.current);
-            updatePlayhead();
-        }).catch(() => setPlaying(false));
+        const local=externalPlaybackRef.current?playhead:audio.currentTime-beatStartSec;
+        startPlayback(local<0||local>=duration-.02?0:local);
     };
 
     const seekToSec = (sec: number, origin: 'user' | 'auto' = 'auto') => {
         const audio = audioRef.current;
-        const next = Math.max(0, Math.min(duration, sec));
+        const atEnd=sec>=duration-.02;
+        const next = atEnd?stoppedPlayheadSec(beatStartSec+duration,audioTimingRef.current):Math.max(0,Math.min(duration,sec));
+        if(origin==='user'&&atEnd){
+            ++playbackGenerationRef.current;
+            if(rafRef.current)cancelAnimationFrame(rafRef.current);
+            audio?.pause();playingRef.current=false;setPlaying(false);
+        }
         if (audio && audioUrl) {
             audio.currentTime = Math.max(0, beatStartSec + next);
         }
         setPlayhead(next);
         if(origin==='user'&&externalPlaybackRef.current){externalPlaybackRef.current=false;audio?.pause();setPlaying(false);emitPlayhead(next,false,origin);}
-        else emitPlayhead(next, playingRef.current, origin);
+        else emitPlayhead(next, origin==='user'&&atEnd?false:playingRef.current, origin);
     };
 
     React.useEffect(() => {
@@ -500,6 +543,7 @@ export default function WhiteboardRegionTimeline({
             return;
         }
         const audio = audioRef.current;
+        ++playbackGenerationRef.current;playingRef.current=false;
         if (audio) {
             audio.pause();
         }
@@ -509,30 +553,18 @@ export default function WhiteboardRegionTimeline({
         // Chỉ theo token — tránh loop khi seekRequest object đổi reference.
     }, [seekRequest?.token]);
 
-    const replay = () => {
-        externalPlaybackRef.current=false;
-        const audio = audioRef.current;
-        if (!audio) return;
-        audio.currentTime = beatStartSec;
-        setPlayhead(0);
-        emitPlayhead(0, true, 'user');
-        void audio.play().then(() => {
-            setPlaying(true);
-            if (rafRef.current) cancelAnimationFrame(rafRef.current);
-            rafRef.current = requestAnimationFrame(updatePlayhead);
-        }).catch(() => setPlaying(false));
-    };
+    const replay = () => {setPlayhead(0);startPlayback(0);};
 
-    // With per-beat TTS there may be no global narration media element. The
-    // global transport delegates to this beat's real audio clock in that case.
+    // The beat controller owns its local range, even when invoked by the global transport.
     transportCommandRef.current=d=>{
         const audio=audioRef.current;const local=videoTimeToBeat(d.time,timelineStartSec,duration);
-        externalPlaybackRef.current=false;if(rafRef.current)cancelAnimationFrame(rafRef.current);
-        audio?.pause();setPlayhead(local);
-        if(!audio){setPlaying(false);emitPlayhead(local,false,'user');return;}
-        audio.currentTime=beatStartSec+local;
-        if(d.action==='play')void audio.play().then(()=>{setPlaying(true);emitPlayhead(local,true,'user');rafRef.current=requestAnimationFrame(updatePlayhead);}).catch(()=>{setPlaying(false);emitPlayhead(local,false,'user');});
-        else {setPlaying(false);emitPlayhead(local,false,'user');}
+        if(d.action==='play'){startPlayback(local>=duration-.02?0:local);return;}
+        ++playbackGenerationRef.current;externalPlaybackRef.current=false;
+        if(rafRef.current)cancelAnimationFrame(rafRef.current);
+        audio?.pause();playingRef.current=false;setPlaying(false);
+        const stoppedAt=stoppedPlayheadSec(beatStartSec+local,audioTimingRef.current);
+        if(audio)audio.currentTime=beatStartSec+stoppedAt;
+        setPlayhead(stoppedAt);emitPlayhead(stoppedAt,false,'user');
     };
 
     // ---- Timing helpers ----

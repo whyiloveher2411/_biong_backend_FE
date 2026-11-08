@@ -1,9 +1,9 @@
 import {ajax} from 'hook/useApi';
 import type {LibrarySound} from './modelAudio';
-export type TimelineAudioClip={id:string;sound_id:string;sound:LibrarySound;start_sec:number;duration_sec:number;offset_sec:number;volume:number;muted?:boolean;loop:boolean;speed?:number;lane?:number;fade_in:number;fade_out:number;suggestion_key?:string;event_beat_id?:string;event_id?:string;event_hash?:string};
+export type TimelineAudioClip={id:string;sound_id:string;sound:LibrarySound;start_sec:number;duration_sec:number;offset_sec:number;volume:number;muted?:boolean;loop:boolean;speed?:number;lane?:number;fade_in:number;fade_out:number;segment_index?:number;segment_id?:string;suggestion_key?:string;event_beat_id?:string;event_id?:string;event_hash?:string};
 export type TimelineAudioSuggestion={id:string;beat_id:string;start_sec:number;end_sec:number;title:string;description:string;pixabay_query:string;category:'foley'|'emotion'|'ambience';volume:number;reason:string;loop:boolean;source?:string};
 export type TimelineAudioPlanEntry={status:'queued'|'processing'|'completed'|'failed'|string;suggestions:TimelineAudioSuggestion[];error?:string;beat_start_sec?:number;duration_sec?:number;updated_at?:string};
-export type TimelineAudioResponse={success:boolean;clips:TimelineAudioClip[];suggestions?:Record<string,TimelineAudioPlanEntry>;revision:string;message?:string};
+export type TimelineAudioResponse={success:boolean;clips:TimelineAudioClip[];bgm_clips?:TimelineAudioClip[];suggestions?:Record<string,TimelineAudioPlanEntry>;revision:string;message?:string};
 export function timelineAudioApi(id:number,clips?:TimelineAudioClip[],revision?:string){return ajax({url:'plugin/vn4-e-learning/app-mobile/marketing/short-video/timeline-audio/'+(clips?'save':'get'),method:'POST',loading:false,data:{short_video_id:id,...(clips?{clips,revision}:{})}}) as Promise<TimelineAudioResponse>;}
 export function timelineAudioMaxDuration(c:TimelineAudioClip){return Math.max(0,(c.sound.duration_sec-c.offset_sec)/(c.speed||1));}
 export function normalizeTimelineAudio(c:TimelineAudioClip):TimelineAudioClip {
@@ -50,4 +50,9 @@ export function resolveTimelineAudioDrag(clip:TimelineAudioClip,delta:number,mod
  if(mode==='move'){const length=Math.min(clip.duration_sec,bounds.end-bounds.start);const next=Math.max(bounds.start,Math.min(bounds.end-length,start+delta));return {start:next,end:next+length};}
  if(mode==='left')return {start:Math.max(bounds.start,end-maxDuration,Math.min(end-minDuration,start+delta)),end:Math.min(end,bounds.end)};
  return {start:Math.max(start,bounds.start),end:Math.max(start+minDuration,Math.min(bounds.end,start+maxDuration,end+delta))};
+}
+
+export type BgmVolumePatch={segment_index:number;segment_id:string;download_url:string;volume:number};
+export function saveTimelineBgmVolume(id:number,patches:BgmVolumePatch[]){
+ return ajax({url:'plugin/vn4-e-learning/app-mobile/marketing/short-video/timeline-audio/bgm-volume',method:'POST',loading:false,data:{short_video_id:id,patches}}) as Promise<{success:boolean;bgm_clips:TimelineAudioClip[];message?:string}>;
 }

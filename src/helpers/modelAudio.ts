@@ -2,7 +2,7 @@ import {ajax} from 'hook/useApi';
 import {getAdminApiPrefix} from 'helpers/apiHost';
 import {convertToURL} from 'helpers/url';
 import {getAccessToken} from 'store/user/user.reducers';
-export type LibrarySound={video_id?:number;source_type?:'code'|'natural';code?:string;code_duration_sec?:number;code_seed?:number;id:string;file:string;title:string;duration_sec:number;category:string;license:string;source:string;generation?:{provider:string;model:string;prompt:string;requested_duration_sec:number;seed:number;single_event:boolean;created_at:string}};
+export type LibrarySound={video_id?:number;source_type?:'code'|'natural'|'bgm';preview_url?:string;code?:string;code_duration_sec?:number;code_seed?:number;id:string;file:string;title:string;duration_sec:number;category:string;license:string;source:string;generation?:{provider:string;model:string;prompt:string;requested_duration_sec:number;seed:number;single_event:boolean;created_at:string}};
 export type ModelAudioBinding={action:string;sound_ids:string[];sounds?:LibrarySound[];volume:number;phases:number[]};
 export type ModelAudioConfig={enabled:boolean;bindings:ModelAudioBinding[]};
 export const listLibrarySounds=()=>ajax({url:'plugin/vn4-e-learning/app-mobile/marketing/sound-library/list',method:'POST',loading:false,data:{}}) as Promise<{success:boolean;sounds:LibrarySound[];message?:string}>;

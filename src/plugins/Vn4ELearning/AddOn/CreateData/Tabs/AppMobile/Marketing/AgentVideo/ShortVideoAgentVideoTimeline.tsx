@@ -944,6 +944,7 @@ export default function ShortVideoAgentVideoTimeline({
 
     const voiceMix=useVoiceMix(shortVideoId);
     const timelineAudio=useTimelineAudio(shortVideoId,currentTimeSec,isPlaying && (beatDrivenRef.current ? beatSoundPlayingRef.current : customHtmlPreview),contentDurationSec,beatMap?.sections);
+    const bgmRows = React.useMemo(() => timelineAudio.bgmClips.length ? [{id:'bgm_row',actions:timelineAudio.bgmClips.map(clip=>({id:clip.id,start:clip.start_sec,end:clip.start_sec+clip.duration_sec,effectId:'bgm',movable:false,flexible:false}))}] : [], [timelineAudio.bgmClips]);
     const htmlBeatWorkflow = Boolean(agentState?.isHtmlBeatWorkflow);
     const audioSuggestionMarkers = React.useMemo(
         () => Object.entries(timelineAudio.suggestions).flatMap(([beatId, plan]) => (plan.status === 'completed' ? (plan.suggestions || []) : []).map((suggestion) => {
@@ -973,9 +974,9 @@ export default function ShortVideoAgentVideoTimeline({
         () => {
             const videoRows = buildAgentVideoTimelineRows(contentDurationSec);
             const voiceActions = voiceBeats.length ? voiceBeats.map(beat => ({id:beat.id,start:beat.start,end:beat.end,effectId:'voice',movable:false,flexible:false})) : [{id:'main_voice',start:0,end:contentDurationSec,effectId:'voice',movable:false,flexible:false}];
-            return [...videoRows, {id:'voice_row',actions:voiceActions}, ...audioSuggestionRows, ...timelineAudio.rows];
+            return [...videoRows, {id:'voice_row',actions:voiceActions}, ...bgmRows, ...audioSuggestionRows, ...timelineAudio.rows];
         },
-        [audioSuggestionRows,contentDurationSec,timelineAudio.rows,voiceBeats],
+        [audioSuggestionRows,bgmRows,contentDurationSec,timelineAudio.rows,voiceBeats],
     );
 
     const minScaleCount = Math.max(20, Math.ceil(timelineWorkspaceEndSec) + 2);
@@ -983,7 +984,7 @@ export default function ShortVideoAgentVideoTimeline({
         () => timeSecToTimelineLeftPx(minScaleCount, timelineLayout),
         [minScaleCount, timelineLayout],
     );
-    const tracksViewportHeight = TIMELINE_EDIT_AREA_TOP_GAP + AGENT_VIDEO_TRACK_ROW_HEIGHT * (2+audioSuggestionRows.length+Math.min(3,timelineAudio.rows.length));
+    const tracksViewportHeight = TIMELINE_EDIT_AREA_TOP_GAP + AGENT_VIDEO_TRACK_ROW_HEIGHT * (2+bgmRows.length+audioSuggestionRows.length+Math.min(3,timelineAudio.rows.length));
     const timelineContentHeight = TIMELINE_RULER_HEIGHT + tracksViewportHeight;
     const timelineTotalHeight = timelineContentHeight + HORIZONTAL_SCROLLBAR_HEIGHT + CURSOR_HEAD_OVERFLOW;
 
@@ -1562,7 +1563,7 @@ export default function ShortVideoAgentVideoTimeline({
                 <Typography variant="caption" sx={{ fontVariantNumeric: 'tabular-nums' }}>
                     {formatPlaybackClock(currentTimeSec)} / {formatPlaybackClock(contentDurationSec)}
                 </Typography>
-                {timelineAudio.controls}{timelineAudio.dialogs}<Box sx={{ flex: 1, minWidth: 8 }} />
+                {timelineAudio.controls}{timelineAudio.dialogs}{timelineAudio.bgmVolume.dirty&&<Typography variant="caption" color={timelineAudio.bgmVolume.error?'error':'text.secondary'}>{timelineAudio.bgmVolume.error||(timelineAudio.bgmVolume.busy?'Đang lưu BGM…':'Đang chờ lưu BGM…')}</Typography>}{timelineAudio.bgmVolume.error&&<Button size="small" onClick={timelineAudio.bgmVolume.retry}>Thử lưu BGM lại</Button>}<Box sx={{ flex: 1, minWidth: 8 }} />
                 {showWhiteboardRenderProgress && whiteboardRenderProgress ? (
                     <Tooltip
                         title={whiteboardRenderProgressLabel(whiteboardRenderProgress)}
@@ -1963,6 +1964,7 @@ export default function ShortVideoAgentVideoTimeline({
                             </Tooltip> : null}
                         </Box>
                         <Box sx={{height:AGENT_VIDEO_TRACK_ROW_HEIGHT,flexShrink:0,display:'flex',alignItems:'center',px:.5,color:'#cdb1eb',fontSize:12,fontWeight:600,gap:.5}}><IconButton size="small" aria-label={voiceMix.muted?'Bật Voice':'Tắt Voice'} aria-pressed={voiceMix.muted} title={voiceMix.muted?'Bật lời đọc':'Tắt lời đọc để nghe hiệu ứng'} onClick={voiceMix.toggle} sx={{p:.25,flexShrink:0,color:voiceMix.muted?'#a8a8a8':'#cdb1eb'}}>{voiceMix.muted?<VolumeOffIcon sx={{fontSize:16}}/>:<VolumeUpIcon sx={{fontSize:16}}/>}</IconButton>Voice<Box component="output" aria-label="Âm lượng Voice hiện tại" sx={{fontVariantNumeric:'tabular-nums',fontWeight:700,color:'#fff',bgcolor:'rgba(128,88,165,.4)',px:.25,borderRadius:.5}}>{Math.round(voiceMix.volume*100)}%</Box></Box>
+                        {bgmRows.length>0&&<Box sx={{height:AGENT_VIDEO_TRACK_ROW_HEIGHT,flexShrink:0,display:'flex',alignItems:'center',px:1,color:'#a9df9b',fontSize:12,fontWeight:600}}>BGM</Box>}
                         {audioSuggestionRows.length>0&&<Box sx={{height:AGENT_VIDEO_TRACK_ROW_HEIGHT*audioSuggestionRows.length,flexShrink:0,display:'flex',alignItems:'center',px:1,color:'#73d7e5',fontSize:11,fontWeight:600}}>Gợi ý âm thanh</Box>}
                         {timelineAudio.rows.length>0&&<Box sx={{px:1,pt:2,color:'#73d7e5',fontSize:12}}>Âm thanh</Box>}
                     </Box>
@@ -2033,7 +2035,7 @@ export default function ShortVideoAgentVideoTimeline({
                             key={timelineAudio.uiEpoch}
                             ref={timelineRef}
                             editorData={editorData}
-                            effects={{...AGENT_VIDEO_TIMELINE_EFFECTS,audio:{id:'audio',name:'Âm thanh'},voice:{id:'voice',name:'Voice'}}}
+                            effects={{...AGENT_VIDEO_TIMELINE_EFFECTS,bgm:{id:'bgm',name:'BGM'},audio:{id:'audio',name:'Âm thanh'},voice:{id:'voice',name:'Voice'}}}
                             scale={TIMELINE_SCALE}
                             scaleWidth={timelineScaleWidth}
                             scaleSplitCount={TIMELINE_SCALE_SPLIT_COUNT}
@@ -2055,9 +2057,9 @@ export default function ShortVideoAgentVideoTimeline({
                             onActionMoveStart={p=>{audioDragRef.current.id=p.action.effectId==='audio'?p.action.id:'';}}
                             onActionMoveEnd={()=>{audioDragRef.current.id='';setAudioDropLane(null);}}
                             onActionResizeStart={()=>{audioDragRef.current.id='';}}
-                            onClickActionOnly={(_,p)=>{if(p.action.effectId==='audio')timelineAudio.select(p.action.id);else if(p.action.effectId==='audio_suggestion')timelineAudio.openSuggestion(p.action.id);}}
+                            onClickActionOnly={(_,p)=>{if(p.action.effectId==='audio')timelineAudio.select(p.action.id);else if(p.action.effectId==='bgm')timelineAudio.select(p.action.id);else if(p.action.effectId==='audio_suggestion')timelineAudio.openSuggestion(p.action.id);}}
                             onContextMenuAction={(e,p)=>{if(p.action.effectId==='audio'){e.preventDefault();timelineAudio.contextMenu(p.action.id,e.clientX,e.clientY);}}}
-                            onActionResizing={p=>['audio_suggestion','voice'].includes(p.action.effectId)?false:timelineAudio.canResize(p.action.id,p.start,p.end)}
+                            onActionResizing={p=>['audio_suggestion','voice','bgm'].includes(p.action.effectId)?false:timelineAudio.canResize(p.action.id,p.start,p.end)}
                             onCursorDrag={handleCursorDrag}
                             onClickTimeArea={handleClickTimeArea}
                             getActionRender={(action) => {
@@ -2066,6 +2068,12 @@ export default function ShortVideoAgentVideoTimeline({
                                     const beat=voiceBeats.find(item=>item.id===action.id);
                                     const generationId=agentState?.workflowActive==='video-html-2d'?beat?.beatId:beat?.markId;
                                     return <TimelineVoiceClipView mix={voiceMix} duration={action.end-action.start} onVolume={voiceMix.setVolume} onToggle={voiceMix.toggle} missing={beat?.missing} beatId={beat?.beatId} generationBusy={Boolean(agentState?.generatingBeatAudio)||!agentState} generating={Boolean(generationId)&&agentState?.generatingBeatAudio===generationId} onGenerate={()=>{if(generationId)void agentState?.handleGenerateBeatAudio(generationId);}}/>;
+                                }
+                                if (action.effectId === 'bgm') {
+                                    const clip=timelineAudio.bgmClips.find(item=>item.id===action.id);
+                                    return clip ? <Box sx={commonHoverSx} onDoubleClick={()=>setBgmManualOpen(true)}>
+                                        <TimelineAudioClipView clip={clip} selected={timelineAudio.selected===clip.id} onSelect={()=>timelineAudio.select(clip.id)} onVolume={volume=>timelineAudio.bgmVolume.patch(clip,volume)} minVolume={.05} maxVolume={1.5} color="#356b35"/>
+                                    </Box> : null;
                                 }
                                 if (action.effectId === 'audio') {
                                     const clip = timelineAudio.clips.find(item => item.id === action.id);

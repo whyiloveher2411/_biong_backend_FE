@@ -1,4 +1,5 @@
 import React from 'react';
+import {isAgentWhiteboardMode} from './agentVideoVisualMode';
 import { Box, Button, Chip, CircularProgress, MenuItem, Stack, Tooltip, Typography } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
@@ -52,13 +53,13 @@ function resolvePipelineGroupToggleKey(groupKey: string): FullAutoStepToggleKey 
     return null;
 }
 
-/** bgm + animate ảnh beat mặc định tắt; các toggle khác mặc định bật khi thiếu giá trị. */
+/** BGM mặc định bật; chỉ animate ảnh beat mặc định tắt khi thiếu giá trị. */
 function resolveStepToggleChecked(
     toggles: FullAutoStepToggles | undefined,
     key: FullAutoStepToggleKey,
 ): boolean {
     const value = toggles?.[key];
-    if (key === 'bgm' || key === 'beat_video_animate') {
+    if (key === 'beat_video_animate') {
         return value === true;
     }
     return value !== false;
@@ -99,6 +100,11 @@ function resolveAiStepSet(aiSteps?: FullAutoPipelineStepKey[]): Set<string> {
     return new Set(source);
 }
 
+/** The visible render slot is the per-beat renderer in whiteboard/video_2s workflows. */
+export function resolvePipelineActionStep(key:FullAutoPipelineStepKey,mode?:string):FullAutoPipelineStepKey {
+    return key==='render'&&isAgentWhiteboardMode(mode)?'whiteboard_render':key;
+}
+
 /** Các bước được phép restart (API restartable_steps hoặc fallback theo tiến độ). */
 export function resolveRestartableSet(
     restartable?: string[] | null,
@@ -120,15 +126,15 @@ export function resolveRestartableSet(
         }
     });
     if (currentStep) {
-        const cur = FULL_AUTO_PIPELINE_STEP_ORDER.indexOf(
-            currentStep as FullAutoPipelineStepKey,
+        const cur = (FULL_AUTO_PIPELINE_STEP_ORDER as readonly string[]).indexOf(
+            currentStep,
         );
         if (cur > maxIdx) maxIdx = cur;
     }
     // Bước «Render ảnh resource» LUÔN tùy chọn — beat_division xong → bước kế
     // (beat_fill) active dù resource_image_render đang pending/running/failed.
     const optIdx = FULL_AUTO_PIPELINE_STEP_ORDER.indexOf(
-        'resource_image_render' as FullAutoPipelineStepKey,
+        'resource_image_render',
     );
     if (optIdx > 0) {
         const prevKey = FULL_AUTO_PIPELINE_STEP_ORDER[optIdx - 1];
@@ -550,11 +556,12 @@ export function PipelineGroupedMenuItems({
 
     const renderMenuStep = (stepKey: string, inLoop = false) => {
         const key = stepKey as FullAutoPipelineStepKey;
-        const enabled = restartableSet.has(key);
-        const stepInfo = steps?.[key];
+        const actionKey = resolvePipelineActionStep(key, agentVisualMode);
+        const enabled = restartableSet.has(actionKey);
+        const stepInfo = steps?.[actionKey];
         const status = String(stepInfo?.status || 'pending');
         const statusLabel = resolveStepStatusLabel(key, status, loopView);
-        const isCurrent = key === currentStep && String(pipelineStatus || '').toLowerCase() === 'running';
+        const isCurrent = actionKey === currentStep && String(pipelineStatus || '').toLowerCase() === 'running';
         const canRunSingle = Boolean(
             onRunSingleStep
             && enabled
@@ -567,7 +574,6 @@ export function PipelineGroupedMenuItems({
             : null;
         const showRowToggle = Boolean(
             rowToggleKey
-            && onStepToggleChange
             && (rowToggleKey === 'script_phonetic_normalize'
                 || rowToggleKey === 'beat_video_animate'),
         );
@@ -576,7 +582,7 @@ export function PipelineGroupedMenuItems({
             <MenuItem
                 key={key}
                 disabled={!enabled || disabled}
-                onClick={() => onSelectStep(key)}
+                onClick={() => onSelectStep(actionKey)}
                 sx={{
                     display: 'flex',
                     alignItems: 'center',
@@ -654,7 +660,7 @@ export function PipelineGroupedMenuItems({
                             disabled={!canRunSingle}
                             loading={runningSingleStep && isCurrent}
                             onClick={() => {
-                                onRunSingleStep(key);
+                                onRunSingleStep(actionKey);
                             }}
                         />
                     ) : null}
@@ -894,15 +900,15 @@ export function PipelineGroupedStepList({
 
     const renderDarkStep = (stepKey: string, inLoop = false) => {
         const key = stepKey as FullAutoPipelineStepKey;
-        const status = String(steps?.[key]?.status || 'pending');
-        const isCurrent = key === currentStep;
+        const actionKey = resolvePipelineActionStep(key, agentVisualMode);
+        const status = String(steps?.[actionKey]?.status || 'pending');
+        const isCurrent = actionKey === currentStep;
         const statusLabel = resolveStepStatusLabel(key, status, loopView);
         const rowToggleKey = !inLoop && !isScriptImproveQaLoopStep(key)
             ? fullAutoStepToggleKeyForStep(key)
             : null;
         const showRowToggle = Boolean(
             rowToggleKey
-            && onStepToggleChange
             && (rowToggleKey === 'script_phonetic_normalize'
                 || rowToggleKey === 'beat_video_animate'),
         );
@@ -1159,18 +1165,19 @@ export function PipelineGroupedWorkflowListV3({
         inLoop = false,
     ) => {
         const key = stepKey as FullAutoPipelineStepKey;
-        const status = String(steps?.[key]?.status || 'pending');
-        const isCurrent = key === currentStep
+        const actionKey = resolvePipelineActionStep(key, agentVisualMode);
+        const status = String(steps?.[actionKey]?.status || 'pending');
+        const isCurrent = actionKey === currentStep
             && String(pipelineStatus || '').trim().toLowerCase() === 'running';
         const statusLabel = resolveStepStatusLabel(key, status, loopView);
         const canRestart = Boolean(
             onSelectStep
-            && restartableSet?.has(key)
+            && restartableSet?.has(actionKey)
             && !selectStepDisabled,
         );
         const canRunSingle = Boolean(
             onRunSingleStep
-            && restartableSet?.has(key)
+            && restartableSet?.has(actionKey)
             && !runSingleStepDisabled,
         );
         const stepLabel = resolveFullAutoPipelineStepLabel(key, agentVisualMode);
@@ -1179,7 +1186,6 @@ export function PipelineGroupedWorkflowListV3({
             : null;
         const showRowToggle = Boolean(
             rowToggleKey
-            && onStepToggleChange
             && (rowToggleKey === 'script_phonetic_normalize'
                 || rowToggleKey === 'beat_video_animate'),
         );
@@ -1189,11 +1195,11 @@ export function PipelineGroupedWorkflowListV3({
                 key={key}
                 role={canRestart ? 'button' : undefined}
                 tabIndex={canRestart ? 0 : undefined}
-                onClick={canRestart ? () => onSelectStep?.(key) : undefined}
+                onClick={canRestart ? () => onSelectStep?.(actionKey) : undefined}
                 onKeyDown={canRestart ? (event) => {
                     if (event.key === 'Enter' || event.key === ' ') {
                         event.preventDefault();
-                        onSelectStep?.(key);
+                        onSelectStep?.(actionKey);
                     }
                 } : undefined}
                 title={canRestart ? `Chạy pipeline từ bước: ${stepLabel}` : undefined}
@@ -1260,7 +1266,7 @@ export function PipelineGroupedWorkflowListV3({
                             title={`Chỉ chạy bước này (các bước sau phải chạy lại): ${stepLabel}`}
                             disabled={!canRunSingle}
                             loading={runningSingleStep && isCurrent}
-                            onClick={() => onRunSingleStep(key)}
+                            onClick={() => onRunSingleStep(actionKey)}
                         />
                     ) : null}
                     {key === 'beat_division' && onManualBeatDivision ? (

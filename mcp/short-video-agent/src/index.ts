@@ -197,12 +197,12 @@ server.tool(
       }).describe('Chạy QC bắt buộc rồi lưu HTML khi đạt; trả qc/repair_prompt nếu chưa đạt. Không chuyển beat trước success + hash readback.'),
       z.object({ action: z.literal('title'), title: z.string().min(1).max(200) }),
       z.object({ action: z.literal('karaoke'), enabled: z.boolean() }),
-      z.object({ action: z.literal('timeline_audio') }),
+      z.object({ action: z.literal('timeline_audio') }).describe('Đọc clips SFX và bgm_clips riêng của track BGM cấp video; không copy bgm_clips vào save_timeline_audio.'),
       z.object({
         action: z.literal('save_timeline_audio'),
         revision: z.string().min(1),
         clips: z.array(z.record(z.unknown())),
-      }),
+      }).describe('Lưu clips SFX với revision; không chứa bgm_clips. BGM quản lý qua save_bgm.'),
       z.object({
         action: z.literal('save_sound_plan'),
         beat_id: z.string().min(1),
@@ -216,7 +216,7 @@ server.tool(
           download_url: z.string().url(), duration_sec: z.number().positive(),
           provider: z.literal('mixkit'), volume: z.number().min(0.05).max(1.5),
         })).min(1).max(50),
-      }),
+      }).describe('Lưu BGM cấp video, bật nhạc nền và trả bgm_clips + timeline_source để xác minh track timeline. Không thêm BGM vào clips SFX.'),
     ]),
   },
   async ({ short_video_id, step: { action, ...input } }) => video3dRequest(action, input, short_video_id)

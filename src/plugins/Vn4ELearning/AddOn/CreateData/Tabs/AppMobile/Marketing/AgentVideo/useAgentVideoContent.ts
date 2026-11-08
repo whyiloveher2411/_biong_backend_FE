@@ -1124,6 +1124,19 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [whisperStale, setWhisperStale] = React.useState(false);
     const [importHtmlReady, setImportHtmlReady] = React.useState(false);
     const [bgmSegments, setBgmSegments] = React.useState<ImportHtmlBgmSegment[]>([]);
+    React.useEffect(() => {
+        const saved = (event: Event) => {
+            const detail = (event as CustomEvent).detail;
+            if (detail?.videoId !== shortVideoId || !Array.isArray(detail.clips)) return;
+            setBgmSegments(segments => segments.map((segment, index) => {
+                const clip = detail.clips.find((item: {segment_index:number;segment_id:string;sound:{file:string};volume:number}) => item.segment_index === index && item.segment_id === segment.id && item.sound.file === segment.download_url);
+                return clip ? {...segment, volume:clip.volume} : segment;
+            }));
+        };
+        document.addEventListener('timeline-bgm-volume-saved', saved);
+        return () => document.removeEventListener('timeline-bgm-volume-saved', saved);
+    }, [shortVideoId]);
+
     const [sfxBeatTransition, setSfxBeatTransition] = React.useState(true);
     const [sfxHook, setSfxHook] = React.useState(false);
     const [composition, setComposition] = React.useState<ImportHtmlComposition | null>(null);
@@ -3118,6 +3131,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             if (res.import_html) {
                 applyImportHtmlSummary(res.import_html);
             }
+            document.dispatchEvent(new CustomEvent('timeline-audio-suggestions-updated',{detail:{videoId:shortVideoId}}));
             const savedBgmRaw = res.import_html?.assets?.bgm_segments;
             const savedBgmCount = Array.isArray(savedBgmRaw) ? savedBgmRaw.length : 0;
             if (nextBgm.length > 0 && savedBgmCount === 0) {
@@ -8209,6 +8223,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 const res = await fetchManualBeatMarks(shortVideoId);
                 if (!cancelled && res?.success) {
                     setManualBeatMarks(normalizeManualBeatMarks(res.manual_beat_marks));
+                    applyBeatAudioState(res);
                     if (res.beat_translations != null && typeof res.beat_translations === 'object') {
                         setBeatTranslationsState(normalizeBeatTranslationMap(res.beat_translations));
                     }
@@ -8256,6 +8271,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 return;
             }
             setManualBeatMarks(normalizeManualBeatMarks(res.manual_beat_marks));
+            applyBeatAudioState(res);
         } catch (e) {
             setManualBeatMarks(previous);
             showMessage(e instanceof Error ? e.message : String(e), 'error');
@@ -8279,6 +8295,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 return;
             }
             setManualBeatMarks(normalizeManualBeatMarks(res.manual_beat_marks));
+            applyBeatAudioState(res);
         } catch (e) {
             setManualBeatMarks(previous);
             showMessage(e instanceof Error ? e.message : String(e), 'error');
@@ -8304,6 +8321,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 return;
             }
             setManualBeatMarks(normalizeManualBeatMarks(res.manual_beat_marks));
+            applyBeatAudioState(res);
             showMessage(`Đã gộp ${ids.length} beat thành 1`, 'success');
         } catch (e) {
             setManualBeatMarks(previous);
@@ -8336,6 +8354,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 return;
             }
             setManualBeatMarks(normalizeManualBeatMarks(res.manual_beat_marks));
+            applyBeatAudioState(res);
             showMessage(`Đã chia thêm ${added.length} beat theo dấu "."`, 'success');
         } catch (e) {
             setManualBeatMarks(previous);
@@ -8391,6 +8410,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             const res = await fetchManualBeatMarks(shortVideoId);
             if (res?.success) {
                 setManualBeatMarks(normalizeManualBeatMarks(res.manual_beat_marks));
+                applyBeatAudioState(res);
                 if (res.beat_translations != null && typeof res.beat_translations === 'object') {
                     setBeatTranslationsState(normalizeBeatTranslationMap(res.beat_translations));
                 }
@@ -8494,6 +8514,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 return;
             }
             setManualBeatMarks(normalizeManualBeatMarks(res.manual_beat_marks));
+            applyBeatAudioState(res);
             if (res.full_auto_pipeline) {
                 setFullAutoPipeline(res.full_auto_pipeline);
             }
@@ -8530,6 +8551,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 return false;
             }
             setManualBeatMarks(normalizeManualBeatMarks(res.manual_beat_marks));
+            applyBeatAudioState(res);
             if (res.full_auto_pipeline) {
                 setFullAutoPipeline(res.full_auto_pipeline);
             }
@@ -8580,6 +8602,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 };
             }
             setManualBeatMarks(normalizeManualBeatMarks(res.manual_beat_marks));
+            applyBeatAudioState(res);
             if (res.full_auto_pipeline) {
                 setFullAutoPipeline(res.full_auto_pipeline);
             }
@@ -8633,6 +8656,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 return false;
             }
             setManualBeatMarks(normalizeManualBeatMarks(res.manual_beat_marks));
+            applyBeatAudioState(res);
             if (res.full_auto_pipeline) {
                 setFullAutoPipeline(res.full_auto_pipeline);
             }
@@ -8686,6 +8710,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 return false;
             }
             setManualBeatMarks(normalizeManualBeatMarks(res.manual_beat_marks));
+            applyBeatAudioState(res);
             loadRow();
             showMessage(parseApiMessage(res?.message) || 'Đã xác nhận timeline beat', 'success');
             return true;
@@ -8703,6 +8728,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             const fromMarks = buildBeatMapFromManualMarks(
                 manualBeatMarks,
                 Number(audioDurationSec || beatMap?.totalVideoSec || 0),
+                agentBeatAudio ? beatAudio?.items : undefined,
             );
             if (fromMarks?.sections?.length) {
                 return fromMarks;
@@ -8712,7 +8738,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             return beatMap;
         }
         return beatMap;
-    }, [audioDurationSec, beatMap, isVideo2sMode, manualBeatMarks]);
+    }, [audioDurationSec, beatMap, isVideo2sMode, manualBeatMarks, agentBeatAudio, beatAudio]);
 
     const beatMapReadyForUi = Boolean(
         beatMapReady

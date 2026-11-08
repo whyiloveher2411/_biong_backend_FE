@@ -1,5 +1,5 @@
 import type { CaptionAlignToken } from './agentVideoCaptionScriptAlign';
-import type { ManualBeatMarkPayload } from './agentVideoApi';
+import type { ManualBeatMarkPayload, AgentVideoBeatAudioItem } from './agentVideoApi';
 import type { BeatMap, BeatMapSection } from './agentVideoBeatMap';
 
 /** Beat thủ công clip video 2s — chỉ có content + timing, image_prompt điền sau. */
@@ -808,11 +808,35 @@ export function alignManualBeatMapTimings(beatMap: BeatMap): BeatMap {
     return { ...beatMap, sections };
 }
 
-/** Video 2s: đồng bộ beat thủ công → beat_map để timeline / edit beat hoạt động. */
+/** Audio metadata wins over initial estimates and any older full-audio Whisper. */
+export function applyManualBeatAudioTiming(marks:ManualBeatMark[],items:ReadonlyArray<AgentVideoBeatAudioItem>):ManualBeatMark[]{
+    if(!items.some(item=>item.status==='ready'&&Number.isFinite(item.duration_sec)&&item.duration_sec>0))return marks;
+    let seconds=0,words=0;
+    const count=(mark:ManualBeatMark)=>Math.max(1,mark.content.replace(/<[^>]*>/g,'').trim().split(/\s+/).filter(Boolean).length);
+    const audioFor=(mark:ManualBeatMark)=>items.find(item=>item.mark_id===mark.id);
+    marks.forEach(mark=>{const item=audioFor(mark);if(item?.status==='ready'&&Number.isFinite(item.duration_sec)&&item.duration_sec>0){seconds+=item.duration_sec;words+=count(mark);}});
+    const rate=words>0?Math.max(.15,Math.min(1.2,seconds/words)):.45;
+    let cursor=0;
+    return marks.map(mark=>{
+        const item=audioFor(mark);
+        const duration=item?.status==='ready'&&Number.isFinite(item.duration_sec)&&item.duration_sec>0?item.duration_sec:
+            Number.isFinite(mark.durationSec)&&mark.durationSec>.25?mark.durationSec:Math.max(.1,Math.round(count(mark)*rate*1000)/1000);
+        const startSec=round3(cursor);cursor+=duration;const endSec=round3(cursor);
+        return {...mark,startSec,endSec,durationSec:round3(endSec-startSec)};
+    });
+}
+
+/** Video 2s: provisional marks become an audio-derived timeline as each MP3 is ready. */
 export function buildBeatMapFromManualMarks(
     marks: ManualBeatMark[],
     totalVideoSec: number,
+    audioItems?: ReadonlyArray<AgentVideoBeatAudioItem>,
 ): BeatMap | null {
+    if (audioItems?.some(item=>item.status==='ready'&&Number.isFinite(item.duration_sec)&&item.duration_sec>0)) {
+        marks=applyManualBeatAudioTiming(marks,audioItems);
+        // A stale full MP3 duration must not stretch the last beat of a newer audio chain.
+        totalVideoSec=marks.length?marks[marks.length-1].endSec:0;
+    }
     if (!marks.length) {
         return null;
     }

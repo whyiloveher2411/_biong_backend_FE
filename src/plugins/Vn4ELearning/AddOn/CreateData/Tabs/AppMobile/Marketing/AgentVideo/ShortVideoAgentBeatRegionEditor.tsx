@@ -1,7 +1,7 @@
 import SceneAssetBeatSummary from './SceneAssetBeatSummary';
 import StoryV2BeatToolbar from './StoryV2BeatToolbar';
 import StoryV2Preview from './StoryV2Preview';
-import {beatTimeToVideo} from './timelinePlaybackSync';
+import {beatPreviewPlaybackUpdate} from './timelinePlaybackSync';
 import React from 'react';
 import { keyframes } from '@emotion/react';
 import {
@@ -1378,6 +1378,8 @@ export default function ShortVideoAgentBeatRegionEditor({
             }));
         }
 
+        // Missing per-beat Whisper is not permission to borrow timestamps from an older full MP3.
+        if (state.agentBeatAudio) return [];
         const all = Array.isArray(state.whisperWords)
             ? state.whisperWords.map((w, index) => ({ ...w, index }))
             : [];
@@ -1395,7 +1397,7 @@ export default function ShortVideoAgentBeatRegionEditor({
             const wordStart = Number(w.start);
             return wordStart >= start - 0.1 && wordStart < end - 0.05;
         });
-    }, [beatAudioItem, beatId, beatMapForUi?.sections, state.whisperWords]);
+    }, [beatAudioItem, beatId, beatMapForUi?.sections, state.whisperWords, state.agentBeatAudio]);
 
     // Thời lượng + mốc bắt đầu của beat (scene-relative) cho thanh thời gian render.
     // QUAN TRỌNG: beatDurationSec = ĐÚNG durationSec của beat (window audio script).
@@ -3931,6 +3933,12 @@ export default function ShortVideoAgentBeatRegionEditor({
         return Number.isFinite(start) ? start : beatTimeline.beatStartSec;
     }, [beatId, beatMapForUi?.sections, beatTimeline.beatStartSec]);
 
+    const mainTimelineBeatDurationSec = React.useMemo(() => {
+        const section=beatMapForUi?.sections?.find(item=>item.id===beatId);
+        const length=Number(section?.endSec)-Number(section?.startSec);
+        return length>0?length:beatTimeline.beatDurationSec;
+    },[beatMapForUi?.sections,beatId,beatTimeline.beatDurationSec]);
+
     // Beat render bằng HTML motion → preview seek theo playhead của thanh timeline
     // video (giống chế độ Motion HTML). Beat khác giữ nguyên playhead nội bộ editor.
     const htmlMotionPreviewSec = React.useMemo(() => {
@@ -5952,9 +5960,7 @@ export default function ShortVideoAgentBeatRegionEditor({
                     {/* Thanh thời gian render theo vùng (audio bar) — dưới box ảnh */}
                     {state.workflowActive === 'video-html-2d' ? <StoryV2Preview shortVideoId={shortVideoId} beatId={beatId} audioOnly revision={state.audioScript + JSON.stringify(state.beatHtml[beatId])} onTime={(sec, playing) => {setPreviewTimeSource('internal'); setPlayheadSec(sec); playheadRef.current = {sec, playing}; videoPreviewRef.current?.seekTo(sec, playing);}} /> : <WhiteboardRegionTimeline
                         regions={displayRegions}
-                        beatDurationSec={beatAudioPlayback
-                            ? beatAudioPlayback.durationSec
-                            : beatTimeline.beatDurationSec}
+                        beatDurationSec={Math.min(mainTimelineBeatDurationSec,beatAudioPlayback?.durationSec??beatTimeline.beatDurationSec)}
                         effectTimelineDurationSec={sceneBudgetSec}
                         beatStartSec={beatAudioPlayback ? 0 : beatTimeline.beatStartSec}
                         beatWords={beatWordsForTimeline}
@@ -5994,7 +6000,9 @@ export default function ShortVideoAgentBeatRegionEditor({
                         onCopyError={(msg) => notify(msg, 'error')}
                         timelineStartSec={mainTimelineBeatStartSec}
                         onPlayheadChange={(sec, isPlaying, origin) => {
-                            document.dispatchEvent(new CustomEvent('timeline-audio-playhead',{detail:{videoId:shortVideoId,time:beatTimeToVideo(mainTimelineBeatStartSec,sec),playing:isPlaying,soundPlaying:isPlaying && isHtmlMotionPreview,origin}}));
+                            const preview=beatPreviewPlaybackUpdate(mainTimelineBeatStartSec,mainTimelineBeatDurationSec,sec,isPlaying);
+                            sec=preview.local;isPlaying=preview.playing;
+                            document.dispatchEvent(new CustomEvent('timeline-audio-playhead',{detail:{videoId:shortVideoId,beatId,time:preview.time,playing:isPlaying,soundPlaying:isPlaying && isHtmlMotionPreview,origin}}));
                             setModelAudioPlaying(isPlaying);
                             setPlayheadSec(sec);
                             // Người dùng vừa kéo/play timeline audio → ưu tiên nguồn internal.

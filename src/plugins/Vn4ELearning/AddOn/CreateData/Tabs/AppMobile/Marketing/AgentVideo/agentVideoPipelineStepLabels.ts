@@ -47,7 +47,7 @@ export const FULL_AUTO_PIPELINE_THUMBNAIL_STEPS = [
 ] as const;
 
 /**
- * Bước BE phụ (không nằm trong STEP_ORDER BE hiển thị riêng) — ẩn khỏi list «Khác».
+ * Bước thực thi BE ẩn khỏi danh sách UI để không lặp dòng render.
  * whiteboard_render dùng slot `render` (label đổi) + nút Run nhóm Render;
  * whiteboard_mux («Final video») là bước riêng — Run độc lập KHÔNG render lại beat.
  */

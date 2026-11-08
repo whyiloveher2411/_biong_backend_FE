@@ -2076,6 +2076,7 @@ export const FULL_AUTO_PIPELINE_STEP_ORDER = [
     'beat_html',
     'bgm',
     'render',
+    'whiteboard_render',
     'whiteboard_mux',
     'upload',
     'thumbnail_idea',
@@ -2224,8 +2225,7 @@ export type ActiveFullAutoPipelineItem = {
 
 /**
  * Checkbox «Chạy» — sibling agent_video_json.full_auto_step_toggles.
- * Mặc định bật, riêng bgm (audio background) và animate ảnh beat mặc định TẮT
- * (bgm = không ghép audio nền; animate = bỏ qua animate ảnh, dùng video có sẵn để render).
+ * BGM mặc định bật; chỉ animate ảnh beat mặc định tắt (dùng video có sẵn để render).
  */
 export type FullAutoStepToggleKey =
     | 'script_improve'
@@ -2240,7 +2240,7 @@ export type FullAutoStepToggles = Record<FullAutoStepToggleKey, boolean>;
 export const DEFAULT_FULL_AUTO_STEP_TOGGLES: FullAutoStepToggles = {
     script_improve: true,
     script_phonetic_normalize: true,
-    bgm: false,
+    bgm: true,
     render: true,
     thumbnail: true,
     beat_video_animate: false,
@@ -2252,7 +2252,7 @@ export function normalizeFullAutoStepToggles(
     return {
         script_improve: raw?.script_improve !== false,
         script_phonetic_normalize: raw?.script_phonetic_normalize !== false,
-        bgm: raw?.bgm === true,
+        bgm: raw?.bgm !== false,
         render: raw?.render !== false,
         thumbnail: raw?.thumbnail !== false,
         beat_video_animate: raw?.beat_video_animate === true,
@@ -2283,6 +2283,7 @@ export function fullAutoStepToggleKeyForStep(stepKey: string): FullAutoStepToggl
 }
 
 export const FULL_AUTO_PIPELINE_STEP_LABELS: Record<FullAutoPipelineStepKey, string> = {
+    whiteboard_render: 'Render video từng beat',
     script_create: 'Tạo script',
     script_improve: 'Cải thiện script',
     script_improve_qa: 'Đánh giá script',
@@ -2347,7 +2348,7 @@ export const FULL_AUTO_PIPELINE_STEP_GROUPS = [
     {
         key: 'render',
         label: 'Render',
-        steps: ['render', 'whiteboard_mux', 'upload'],
+        steps: ['render', 'whiteboard_render', 'whiteboard_mux', 'upload'],
     },
     {
         key: 'thumbnail',
@@ -4119,6 +4120,7 @@ export type ManualBeatMarkPayload = {
 };
 
 type ManualBeatResponse = JsonResponse & {
+    beat_audio?: AgentVideoBeatAudioState;
     manual_beat_marks?: ManualBeatMarkPayload[];
     total?: number;
     all_prompts_filled?: boolean;

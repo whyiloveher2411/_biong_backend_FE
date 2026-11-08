@@ -2,21 +2,21 @@ import React from 'react';
 import {Box} from '@mui/material';
 import VolumeOffIcon from '@mui/icons-material/VolumeOff';
 import type {TimelineAudioClip} from 'helpers/timelineAudio';
-export default function TimelineAudioClipView({clip,selected,onSelect,onVolume,color}:{clip?:TimelineAudioClip;selected:boolean;onSelect:()=>void;onVolume:(volume:number)=>void;color?:string}){
+export default function TimelineAudioClipView({clip,selected,onSelect,onVolume,color,minVolume=0,maxVolume=2}:{clip?:TimelineAudioClip;selected:boolean;onSelect:()=>void;onVolume:(volume:number)=>void;color?:string;minVolume?:number;maxVolume?:number}){
  const drag=React.useRef<{top:number;height:number}|null>(null);
  if(!clip)return null;
  const isCodeAudio=clip.sound.source_type==='code';
- const percent=Math.round(clip.volume*100),levelPercent=Math.max(0,Math.min(100,percent/2));
+ const percent=Math.round(clip.volume*100),levelPercent=Math.max(0,Math.min(100,percent/(maxVolume||2)));
  return <Box title={`${clip.muted?'Đã tắt âm · ':''}${clip.sound.title} · ${percent}% · ${clip.speed||1}×`} sx={{position:'absolute',inset:0,width:'100%',height:'100%',bgcolor:isCodeAudio?'#fff':clip.muted?'#454b52':color|| (selected?'#287d91':'#226b78'),color:isCodeAudio?'#000':clip.muted?'#c0c5ca':'white',border:clip.muted?'1px dashed #a4abb3':0,backgroundImage:clip.muted?'repeating-linear-gradient(135deg, transparent, transparent 6px, rgba(255,255,255,.06) 6px, rgba(255,255,255,.06) 8px)':'none',boxShadow:`inset 0 0 0 ${selected?2:1}px ${isCodeAudio?(selected?'#287d91':'#a4abb3'):selected?'#fff':(color||'#73d7e5')}`,borderRadius:1,px:0,textIndent:8,overflow:'hidden',fontSize:12,lineHeight:'26px',whiteSpace:'nowrap',textOverflow:'ellipsis',minWidth:0,boxSizing:'border-box'}}>
   {clip.muted&&<VolumeOffIcon sx={{fontSize:14,verticalAlign:'middle',mr:.5}}/>}{clip.muted?'Tắt âm · ':''}{clip.sound.title}
   <Box sx={{position:'absolute',bottom:0,left:0,width:'100%',height:`${levelPercent}%`,bgcolor:clip.muted?'transparent':percent>100?'rgba(255,205,110,.3)':'rgba(185,245,255,.15)',pointerEvents:'none'}}/>
-  <Box role="slider" aria-label={`Âm lượng ${clip.sound.title}`} aria-valuemin={0} aria-valuemax={200} aria-valuenow={percent} tabIndex={0} title={`Âm lượng ${percent}% · Kéo lên/xuống`}
+  <Box role="slider" aria-label={`Âm lượng ${clip.sound.title}`} aria-valuemin={Math.round(minVolume*100)} aria-valuemax={Math.round(maxVolume*100)} aria-valuenow={percent} tabIndex={0} title={`Âm lượng ${percent}% · Kéo lên/xuống`}
    onMouseDown={e=>e.stopPropagation()} onClick={e=>e.stopPropagation()}
    onPointerDown={e=>{if(e.button!==0)return;e.stopPropagation();e.preventDefault();onSelect();const bounds=e.currentTarget.parentElement?.getBoundingClientRect();if(!bounds)return;drag.current={top:bounds.top,height:Math.max(1,bounds.height)};e.currentTarget.setPointerCapture(e.pointerId);}}
-   onPointerMove={e=>{if(!drag.current)return;e.stopPropagation();const position=Math.max(0,Math.min(1,(e.clientY-drag.current.top)/drag.current.height));onVolume((1-position)*2);}}
+   onPointerMove={e=>{if(!drag.current)return;e.stopPropagation();const position=Math.max(0,Math.min(1,(e.clientY-drag.current.top)/drag.current.height));onVolume(Math.max(minVolume,(1-position)*maxVolume));}}
    onPointerUp={e=>{e.stopPropagation();drag.current=null;e.currentTarget.releasePointerCapture(e.pointerId);}}
    onPointerCancel={()=>{drag.current=null;}}
-   onKeyDown={e=>{if(['ArrowUp','ArrowDown'].includes(e.key)){e.preventDefault();e.stopPropagation();onSelect();onVolume(Math.max(0,Math.min(2,clip.volume+(e.key==='ArrowUp'?.05:-.05))));}}}
+   onKeyDown={e=>{if(['ArrowUp','ArrowDown'].includes(e.key)){e.preventDefault();e.stopPropagation();onSelect();onVolume(Math.max(minVolume,Math.min(maxVolume,clip.volume+(e.key==='ArrowUp'?.05:-.05))));}}}
    sx={{position:'absolute',bottom:`clamp(0px, calc(${levelPercent}% - 4px), calc(100% - 8px))`,left:0,width:'100%',height:8,cursor:'ns-resize',textIndent:0,touchAction:'none','&:hover,&:focus-visible':{bgcolor:'rgba(185,245,255,.3)',outline:'1px solid #b9f5ff'},'&::after':{content:'""',position:'absolute',bottom:3,left:0,width:'100%',height:2,bgcolor:percent>100?'#ffcd6e':'#ecfeff',borderRadius:1}}}/>
  </Box>;
 }
