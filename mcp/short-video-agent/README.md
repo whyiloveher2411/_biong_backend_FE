@@ -128,3 +128,8 @@ Trong Claude Code, đăng ký server stdio với tên `biong-short-video` và la
 được cấp `BIONG_API_BASE_URL` và `BIONG_MCP_TOKEN`. Từ checkout backend, chạy
 `claude mcp list` để kiểm tra kết nối rồi gọi `/biong-video-html-3d`.
 Draft mới dùng object store mặc định của CMS. Claude tự viết HTML bằng `prepare_beat_html` và `save_beat_html`. Đọc style workflow qua `short_video_get_image_style` với `asset_mode` trước khi tạo draft.
+
+
+### Pre-save HTML QC (Cinecode integration)
+
+`short_video_3d_step` now supports `audit_beat_html` with the same `beat_id`, `revision`, `html` payload as `save_beat_html`. Audit does not save. Inspect `qc.issues` and `repair_prompt`; repair in the same session and retry at most twice. Do not advance after failure. Save independently enforces browser QC and returns the current HTML hash; `status` exposes `beat_qc`, `missing_qc` and `missing_or_stale_beat_qc`. Keep the prior approved HTML on failure. Reports are server-owned and bound to HTML hash, audio duration and aspect. Runtime/visual checks are sampled; inspect framing, 3D text and action manually too.

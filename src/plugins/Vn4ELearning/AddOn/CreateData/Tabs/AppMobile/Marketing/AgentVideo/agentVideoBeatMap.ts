@@ -34,7 +34,18 @@ export type BeatQaActionStatus = 'approved' | 'needs_html_refill' | 'needs_image
 
 export type BeatQaStatus = BeatQaActionStatus | '';
 
+export type BeatVisualQc = {
+    version: string;
+    passed: boolean;
+    status: string;
+    checked_at?: string;
+    html_sha256?: string;
+    issues?: {code: string; time: number; message: string}[];
+    metrics?: {sample_count: number; max_frozen_sec: number; opening_motion_mae: number};
+};
+
 export type BeatHtmlEntry = {
+    qc?: BeatVisualQc;
     html: string;
     updated_at?: string;
     /** Prompt sáng tạo / refine — user hoặc pipeline AI ghi để dùng lại. */
@@ -324,6 +335,7 @@ export function parseBeatHtmlEntry(entry: unknown): BeatHtmlEntry | null {
     const cookieId = Number(raw.cookie_id);
     return {
         html: String(raw.html || ''),
+        qc: raw.qc && typeof raw.qc === 'object' ? raw.qc as BeatVisualQc : undefined,
         updated_at: raw.updated_at ? String(raw.updated_at) : undefined,
         creative_prompt: creativePrompt !== undefined ? creativePrompt : undefined,
         chat_url: chatUrl || undefined,

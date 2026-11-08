@@ -200,12 +200,13 @@ export function extractBeatParts(html) {
       .trim();
   }
 
-  const scriptBlocks = [...raw.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi)].map(
-    (m) => m[1].trim(),
-  );
+  const scriptTags = [...raw.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)];
+  const scriptBlocks = scriptTags.filter(([,attrs]) => !/\bsrc\s*=/i.test(attrs) && !/\btype\s*=\s*["']application\/json["']/i.test(attrs)).map(([,attrs,code])=>code.trim());
   const scriptContent = scriptBlocks.join("\n\n");
-
-  return { styleContent, bodyContent, scriptContent };
+  // Sound manifests are inert data and must keep their ID for the authored controller.
+  // Keep approved scaffold dependencies; the CMS validates their source allowlist.
+  const dependencyScripts = scriptTags.filter(([,attrs]) => /\btype\s*=\s*["']application\/json["']/i.test(attrs) || (/\bsrc\s*=/i.test(attrs) && !/gsap(?:\.min)?\.js/i.test(attrs))).map(m=>m[0]).join("\n");
+  return { styleContent, bodyContent, scriptContent, dependencyScripts };
 }
 
 export function patchScaffoldHtml(html) {
@@ -792,7 +793,7 @@ export function normalizeBeatHtmlForRender(html, beatId, options = {}) {
   }
 
   const patches = [];
-  let { styleContent, bodyContent, scriptContent } = extractBeatParts(html);
+  let { styleContent, bodyContent, scriptContent, dependencyScripts } = extractBeatParts(html);
 
   if (!scriptContent || !/function\s+render\s*\(/i.test(scriptContent)) {
     return {
@@ -825,6 +826,7 @@ export function normalizeBeatHtmlForRender(html, beatId, options = {}) {
 ${styleContent}
 </style>
 ${bodyContent}
+${dependencyScripts}
 <script src="${GSAP_CDN}"></script>
 <script>
 ${script}

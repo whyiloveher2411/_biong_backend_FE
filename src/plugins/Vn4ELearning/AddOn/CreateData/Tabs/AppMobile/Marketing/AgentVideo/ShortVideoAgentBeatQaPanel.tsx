@@ -1,6 +1,7 @@
 import React from 'react';
 import type { SxProps, Theme } from '@mui/material/styles';
 import {
+    Alert,
     Box,
     Button,
     Chip,
@@ -623,6 +624,13 @@ export default function ShortVideoAgentBeatQaPanel({
                 overflow: 'hidden',
             }}
         >
+            {htmlBeatWorkflow && (
+                <Alert severity={beatHtml?.qc?.passed ? 'success' : 'info'} sx={{ m: 1, flexShrink: 0 }}>
+                    {beatHtml?.qc?.passed
+                        ? `QC lần lưu: đạt · ${beatHtml.qc.metrics?.sample_count ?? 0} mốc kiểm tra. Khi sửa HTML, CMS sẽ kiểm tra lại trước khi lưu.`
+                        : 'HTML beat cần đạt QC trước khi lưu. Candidate lỗi sẽ được trả chẩn đoán để sửa và kiểm tra lại.'}
+                </Alert>
+            )}
             <Box sx={{ px: 1.5, pt: 0.75, flexShrink: 0 }}>
                 <Tabs
                     value={tab}

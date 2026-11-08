@@ -88,7 +88,15 @@ async function main() {
   for (const file of beatFiles) {
     const name = path.basename(file);
     const beatId = beatIdFromFilename(name);
-    const html = fs.readFileSync(file, "utf8");
+    let html = fs.readFileSync(file, "utf8");
+    let localizedThree = false;
+    html = html.replace(/(<script\b[^>]*\bsrc\s*=\s*["'])(?:https?:\/\/[^/"']+)?\/?three\.min\.js\?v=0\.186\.1(["'][^>]*>\s*<\/script>)/gi, (_,before,after) => {
+      const target = path.join(projectDir, "assets", "three-r186.min.js");
+      fs.mkdirSync(path.dirname(target), {recursive:true});
+      fs.copyFileSync(fileURLToPath(new URL("../../../../public/three.min.js", import.meta.url)), target);
+      localizedThree = true;
+      return before + "assets/three-r186.min.js" + after;
+    });
     const seekBridge = resolveBeatSeekBridgeFromMap(sections, beatId);
     const result = normalizeBeatHtmlForRender(html, beatId, { seekBridge });
 
@@ -97,6 +105,7 @@ async function main() {
       process.exit(1);
     }
 
+    if (localizedThree) { result.changed = true; result.patches.push("freeze app Three.js r186 locally"); }
     if (result.changed) {
       fs.writeFileSync(file, result.html, "utf8");
       changedCount += 1;

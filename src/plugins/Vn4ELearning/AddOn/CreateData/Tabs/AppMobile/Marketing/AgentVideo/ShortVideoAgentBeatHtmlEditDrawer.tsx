@@ -233,7 +233,7 @@ export default function ShortVideoAgentBeatHtmlEditDrawer({
                             Sinh và lưu HTML · DeepSeek API (DeepThink)
                         </LoadingButton>
                         <Typography variant="caption" color="text.secondary" sx={{display: 'block', mt: 0.75}}>
-                            Gửi 1 prompt sinh HTML của beat đã lưu trên CMS. Tự cập nhật HTML sau khi kiểm tra thành công.
+                            Gửi 1 prompt sinh HTML của beat đã lưu trên CMS. QC chạy sau khi sinh HTML; tự sửa tối đa 2 lần nếu chưa đạt. Chỉ lưu và cập nhật HTML khi QC đạt.
                         </Typography>
                     </Box>
                 )}
@@ -249,7 +249,7 @@ export default function ShortVideoAgentBeatHtmlEditDrawer({
                     size="small"
                     disabled={busy}
                     placeholder="<!doctype html>…</html>"
-                    helperText="Dán toàn bộ tài liệu HTML của beat, sau đó bấm Lưu HTML beat để cập nhật."
+                    helperText="Lưu HTML sẽ chạy QC trước. Beat chưa đạt được giữ lại để sửa; HTML đã lưu trước đó chỉ được thay khi QC đạt."
                     inputProps={{ spellCheck: false }}
                     InputProps={{
                         sx: {

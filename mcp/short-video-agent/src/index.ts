@@ -184,11 +184,17 @@ server.tool(
         beat_id: z.string().min(1),
       }).describe('Lấy prompt và revision để Claude Code tự viết HTML'),
       z.object({
+        action: z.literal('audit_beat_html'),
+        beat_id: z.string().min(1),
+        revision: z.string().regex(/^[a-f0-9]{64}$/),
+        html: z.string().min(1).max(524288),
+      }).describe('QC candidate sau khi sinh HTML, không lưu. Nếu chưa đạt, sửa theo repair_prompt trong cùng phiên và kiểm tra lại tối đa hai lần; không chuyển beat khi còn lỗi.'),
+      z.object({
         action: z.literal('save_beat_html'),
         beat_id: z.string().min(1),
         revision: z.string().regex(/^[a-f0-9]{64}$/),
         html: z.string().min(1).max(524288),
-      }).describe('Audit và lưu HTML Claude Code đã viết qua CMS'),
+      }).describe('Chạy QC bắt buộc rồi lưu HTML khi đạt; trả qc/repair_prompt nếu chưa đạt. Không chuyển beat trước success + hash readback.'),
       z.object({ action: z.literal('title'), title: z.string().min(1).max(200) }),
       z.object({ action: z.literal('karaoke'), enabled: z.boolean() }),
       z.object({ action: z.literal('timeline_audio') }),

@@ -58,10 +58,10 @@ if (!hasAmbientRegistry) {
 const hasRepeat =
   /repeat\s*:\s*-1/i.test(bundle) ||
   /repeat\s*:\s*"-1"/i.test(bundle) ||
-  (/yoyo\s*:\s*true/i.test(bundle) && /repeat\s*:\s*[1-9]\d+/i.test(bundle));
+  (/yoyo\s*:\s*true/i.test(bundle) && /repeat\s*:\s*[1-9]\d*/i.test(bundle));
 
 if (!hasRepeat) {
-  errors.push("ambient timeline: thiếu repeat: -1 trên ambient tweens/timeline");
+  errors.push("ambient timeline: thiếu tween yoyo lặp hữu hạn hoặc chuyển động lặp");
 }
 
 const ambientPatterns = [

@@ -397,21 +397,21 @@ if (/right\s*:|bottom\s*:|left\s*:|top\s*:/i.test(rootBlock)) {
 
 const brandWrapBlock =
   watermarkHtml.match(/\.brand-wrap\s*\{[^}]+\}/i)?.[0] ?? "";
-if (!/left\s*:\s*2[0-9]px/i.test(brandWrapBlock)) {
-  errors.push(
-    "brand-watermark.html: .brand-wrap thiếu left:28px (góc trên trái)",
-  );
+// gen-brand-watermark scales the 28px portrait inset to the actual canvas width.
+const clipSpec = exists("assets/clip-render-spec.json") ? JSON.parse(read("assets/clip-render-spec.json")) : {width:1080,height:1920};
+const canvasWidth = Number(clipSpec.width) || 1080;
+const canvasHeight = Number(clipSpec.height) || 1920;
+const brandInset = Math.round(28 * canvasWidth / 1080);
+for (const side of ["left", "top"]) {
+  const value = Number(brandWrapBlock.match(new RegExp(`\\b${side}\\s*:\\s*([0-9.]+)px`, "i"))?.[1]);
+  if (!Number.isFinite(value) || Math.abs(value - brandInset) > 1) {
+    errors.push(`brand-watermark.html: .brand-wrap thiếu ${side}:${brandInset}px (canvas ${canvasWidth}×${canvasHeight})`);
+  }
 }
-if (!/top\s*:\s*2[0-9]px/i.test(brandWrapBlock)) {
-  errors.push(
-    "brand-watermark.html: .brand-wrap thiếu top:28px (góc trên trái)",
-  );
-}
-
-if (!/#root\s*\{[^}]*width\s*:\s*1080px/i.test(watermarkHtml)) {
-  warnings.push(
-    "brand-watermark.html: #root nên width:1080px; height:1920px (full canvas)",
-  );
+for (const [dimension, expected] of [["width",canvasWidth],["height",canvasHeight]]) {
+  if (!new RegExp(`\\b${dimension}\\s*:\\s*${expected}px`, "i").test(rootBlock)) {
+    warnings.push(`brand-watermark.html: #root nên ${dimension}:${expected}px (full canvas)`);
+  }
 }
 
 // --- Caption registry / timeline ---

@@ -3,6 +3,7 @@
  * Unit test: normalize import HTML beat → HyperFrames render format.
  */
 import assert from "assert";
+import vm from "node:vm";
 import {
   checkImportHtmlBeatFile,
   isBeatRenderReady,
@@ -335,3 +336,13 @@ assert.ok(
 );
 
 console.log("import-html-beat-render.test: OK");
+
+// The mandatory sound plan is data, not JavaScript. Keep the app runtime dependency too.
+const AUDIO_FIRST_BEAT = CHATBOT_BEAT.replace('</head>', '<script src="/three.min.js?v=0.186.1"></script></head>').replace('<body>', '<body><script type="application/json" id="beat-audio-events">{"version":1,"events":[]}</script>');
+const audioFirst = normalizeBeatHtmlForRender(AUDIO_FIRST_BEAT, 'beat_1').html;
+assert.match(audioFirst, /<script src="\/three\.min\.js\?v=0\.186\.1"><\/script>/);
+assert.match(audioFirst, /<script type="application\/json" id="beat-audio-events">{"version":1,"events":\[\]}<\/script>/);
+for (const [,attrs,code] of audioFirst.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)) {
+  if (!/src\s*=|application\/json/i.test(attrs)) assert.doesNotThrow(()=>new vm.Script(code));
+}
+console.log('PASS: audio-first manifest stays inert; Three.js loader survives normalization');

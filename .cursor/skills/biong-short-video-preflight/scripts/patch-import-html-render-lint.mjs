@@ -5,6 +5,7 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import { loadRenderSpecFromProject } from "../../../../scripts/lib/clip-render-spec.mjs";
 import { buildAmbientLayerHtml } from "../../../../scripts/lib/build-ambient-layer.mjs";
 import {
   beatIdFromFilename,
@@ -88,7 +89,7 @@ function main() {
   }
 
   const ambientPath = path.join(projectDir, "compositions/ambient-layer.html");
-  fs.writeFileSync(ambientPath, buildAmbientLayerHtml(totalVideoSec));
+  fs.writeFileSync(ambientPath, buildAmbientLayerHtml(totalVideoSec, loadRenderSpecFromProject(projectDir)));
   console.log(`[patch-render-lint] ambient-layer.html (${totalVideoSec}s)`);
 
   const compDir = path.join(projectDir, "compositions");
