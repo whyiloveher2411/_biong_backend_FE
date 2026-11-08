@@ -202,13 +202,13 @@ server.tool(
         action: z.literal('save_timeline_audio'),
         revision: z.string().min(1),
         clips: z.array(z.record(z.unknown())),
-      }).describe('Lưu clips SFX với revision; không chứa bgm_clips. BGM quản lý qua save_bgm.'),
+      }).describe('Lưu toàn bộ clips SFX với revision mới, giữ các clip khác và liên kết event; không chứa bgm_clips. offset_sec tính trong nguồn, start_sec tuyệt đối video, duration_sec độ dài phát. Căn start_sec+(source_peak_sec-offset_sec)/speed đúng visual peak, nghe lại onset/peak/tail và đọc lại trước HTML. BGM quản lý qua save_bgm.'),
       z.object({
         action: z.literal('save_sound_plan'),
         beat_id: z.string().min(1),
         events: z.array(z.record(z.unknown())).max(24),
-      }).describe('Lưu và tạo SFX trước HTML; events rỗng biểu thị beat không cần SFX'),
-      z.object({ action: z.literal('natural_sfx'), beat_id: z.string().min(1), event_id: z.string().min(1) }),
+      }).describe('Ưu tiên natural/Pixabay cho âm thực tế (xe máy, máy bay, động cơ, foley); code chỉ khi tái tạo thuyết phục như popup/UI. Không dùng synth thay tiếng thật vì tiện. Lưu SFX trước HTML; events rỗng nếu không cần.'),
+      z.object({ action: z.literal('natural_sfx'), beat_id: z.string().min(1), event_id: z.string().min(1) }).describe('Tìm bản thu Pixabay. Nghe đầu/onset/cao trào/đuôi file; sau tải dùng timeline_audio + save_timeline_audio chỉnh offset_sec/duration_sec/start_sec/fade, nghe và xem lại đồng bộ trước prepare_beat_html. Không ghép thô từ offset=0.'),
       z.object({
         action: z.literal('save_bgm'),
         segments: z.array(z.object({
