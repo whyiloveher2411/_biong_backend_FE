@@ -69,3 +69,12 @@ test('an already completed preview reloads external HTML updates even when facto
  expect(request.mock.calls.length).toBe(before+1);
  view.unmount();
 });
+
+
+test('environment preview displays the materialized document while retaining raw factory HTML',async()=>{
+ const room:SceneAsset={...child,id:'room',kind:'environment',name:'Room',has_html:true};
+ request.mockResolvedValueOnce({success:true,asset:{...room,html:'RAW FACTORY',preview_html:'PINNED PBR PREVIEW',environment_materials:{status:'ready',hash:'materials-v1'}}});
+ const view=render(<SceneAssetPreviewDialog shortVideoId={122} asset={room} onClose={jest.fn()}/>);
+ expect(await screen.findByText('Rendered: PINNED PBR PREVIEW')).toBeTruthy();
+ expect(screen.queryByText('Rendered: RAW FACTORY')).toBeNull();view.unmount();
+});

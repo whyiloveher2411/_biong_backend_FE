@@ -100,7 +100,7 @@ export function seekCustomHtmlIframe(iframe: HTMLIFrameElement | null, timeSec: 
 }
 
 /** All HTML previews share the exact application-owned r186 bundle used by export. */
-const EXTERNAL_THREE_SCRIPT_RE = /<script\b[^>]*\bsrc\s*=\s*["'][^"']*\/three(?:\.min)?\.js[^"']*["'][^>]*>\s*<\/script>/gi;
+const EXTERNAL_THREE_SCRIPT_RE = /<script\b[^>]*\bsrc\s*=\s*["'](?:[^"']*\/)?three(?:\.min)?\.js[^"']*["'][^>]*>\s*<\/script>/gi;
 export function localizeImportHtmlExternalScripts(html: string): string {
     return String(html || '').replace(EXTERNAL_THREE_SCRIPT_RE,
         '<script src="/three.min.js?v=0.186.1"></script>');
@@ -116,7 +116,7 @@ export function localizeImportHtmlAssetScripts(
     html: string,
     ctx: { shortVideoId?: number; beatId?: string; revision?: number; publicAssets?: { runtimeUrl: string; catalog: Record<string, unknown> } } = {},
 ): string {
-    const source = String(html || '');
+    const source = localizeImportHtmlExternalScripts(String(html || ''));
     if (!source || !source.includes('assets/') && !/\bAssets\s*\.\s*(?:start|person)\s*\(/.test(source)) {
         return source;
     }

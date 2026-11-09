@@ -104,6 +104,7 @@ export default function SceneAssetsPanel({shortVideoId}: Props) {
     const [preview, setPreview] = React.useState<SceneAsset | null>(null);
     const [profile, setProfile] = React.useState<SceneAsset | null>(null);
     const [profileHtml, setProfileHtml] = React.useState('');
+    const [profileMaterialPreview, setProfileMaterialPreview] = React.useState('');
     const [profileHtmlBase, setProfileHtmlBase] = React.useState('');
     const [profileHtmlState, setProfileHtmlState] = React.useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
     const [profileHtmlError, setProfileHtmlError] = React.useState('');
@@ -224,7 +225,7 @@ export default function SceneAssetsPanel({shortVideoId}: Props) {
             if (request !== profileHtmlRequest.current || !mounted.current) return;
             if (!res.success || !res.asset) throw new Error(sceneAssetMessage(res));
             const html = res.asset.html || '';
-            setProfileHtml(html); setProfileHtmlBase(html); setProfileHtmlState('ready');
+            setProfileHtml(html); setProfileHtmlBase(html); setProfileMaterialPreview(res.asset.preview_html || ''); setProfileHtmlState('ready');
             // Preview là bản mới nhất; lưu HTML phải dùng đúng hash này.
             profileSpecHash.current = res.asset.spec_hash || profileSpecHash.current;
         } catch (e) {
@@ -236,7 +237,7 @@ export default function SceneAssetsPanel({shortVideoId}: Props) {
     };
     const openProfile = (asset: SceneAsset) => {
         profileSpecHash.current = asset.spec_hash || '';
-        setProfile({...asset}); setProfileHtml(''); setProfileHtmlBase('');
+        setProfile({...asset}); setProfileMaterialPreview(''); setProfileHtml(''); setProfileHtmlBase('');
         setProfileHtmlError(''); setProfilePreview(false); setError('');
         setProfileHtmlState(asset.model_snapshot ? 'idle' : 'loading');
         if (!asset.model_snapshot) void loadProfileHtml(asset.id);
@@ -463,7 +464,7 @@ export default function SceneAssetsPanel({shortVideoId}: Props) {
                             inputProps={{'aria-label': 'HTML hồ sơ', spellCheck: false, style: {fontFamily: 'monospace', fontSize: 12, lineHeight: 1.45}}}/>
                         {profilePreview && profileHtml.trim() && <Box sx={{mt: 1.5}}>
                             {profileHtmlIssue ? <Alert severity="warning">Sửa lỗi cấu trúc ở trên trước khi xem trước.</Alert>
-                                : <SceneAssetHtmlPreview html={profileHtml} title={`Xem trước ${profile?.name || ''}`} kind={profile?.kind} height="45vh"/>}
+                                : <SceneAssetHtmlPreview html={profileHtml === profileHtmlBase && profileMaterialPreview ? profileMaterialPreview : profileHtml} title={`Xem trước ${profile?.name || ''}`} kind={profile?.kind} height="45vh"/>}
                         </Box>}
                     </Box>}
             </DialogContent>

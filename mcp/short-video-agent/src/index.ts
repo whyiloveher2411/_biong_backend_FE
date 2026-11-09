@@ -95,7 +95,7 @@ function formatJson(data: unknown): string {
 
 const server = new McpServer({
   name: 'biong-short-video',
-  version: '2.4.0',
+  version: '2.5.0',
 });
 
 const video3dId = z.number().int().positive();
@@ -164,10 +164,12 @@ server.tool(
       }),
       z.object({
         action: z.literal('scene_assets'),
-        operation: z.enum(['get', 'manifest', 'environment_prompt', 'save_environment', 'design_catalog', 'character_design', 'preview']).describe('Bối cảnh do agent tự viết từ environment_prompt và lưu qua save_environment.'),
+        operation: z.enum(['get', 'manifest', 'environment_prompt', 'save_environment', 'material_catalog', 'material_search', 'resolve_materials', 'design_catalog', 'character_design', 'preview']).describe('Shared environments: material_catalog lists valid ambientCG categories; material_search ranks within category. Declare material.name + userData.svMaterial in factory. save_environment automatically resolves/downloads/applies PBR once after generation. resolve_materials upgrades an existing annotated environment using both current hashes. Never search/download in beat HTML.'),
         text: z.string().optional(),
         expected_revision: z.string().optional(),
         asset_id: z.string().optional(),
+        category: z.string().optional(),
+        keywords: z.array(z.string()).max(8).optional(),
         expected_module_hash: z.string().optional(),
         expected_spec_hash: z.string().optional(),
         design: z.object({

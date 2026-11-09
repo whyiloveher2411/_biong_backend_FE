@@ -25,6 +25,13 @@ test('parent loads the pinned bundle and inlines it safely inside an opaque sand
     expect(frame.getAttribute('srcdoc')).not.toContain('src="http://localhost:8000');
 });
 
+test('bare relative environment loader is inlined before nested srcdoc can request HTML',async()=>{
+    render(<SceneAssetHtmlPreview html={html.replace('http://localhost:8000/three.min.js','three.min.js')} kind="environment" title="Relative loader"/>);
+    const frame=await screen.findByTitle('Relative loader');
+    expect(frame.getAttribute('srcdoc')).toContain('data-sv-three-version="0.186.1"');
+    expect(frame.getAttribute('srcdoc')).not.toContain('src="three.min.js');
+});
+
 test('asset HTML without a Three loader is preserved', async () => {
     global.fetch = jest.fn();
     render(<SceneAssetHtmlPreview html="<html>standalone</html>" title="Other asset"/>);

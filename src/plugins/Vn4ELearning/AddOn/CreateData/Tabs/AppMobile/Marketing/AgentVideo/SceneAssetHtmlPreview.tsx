@@ -3,7 +3,7 @@ import {characterPreviewDocument} from './sceneAssetCharacterPreview';
 import {Alert, Box, CircularProgress} from '@mui/material';
 
 const runtimeUrl = '/three.min.js?v=0.186.1';
-const loaderPattern = /<script\b[^>]*\bsrc\s*=\s*["'][^"']*\/three(?:\.min)?\.js[^"']*["'][^>]*>\s*<\/script>/gi;
+const loaderPattern = /<script\b[^>]*\bsrc\s*=\s*["'](?:[^"']*\/)?three(?:\.min)?\.js[^"']*["'][^>]*>\s*<\/script>/gi;
 let runtimeRequest: Promise<string> | null = null;
 function runtimeSource(): Promise<string> {
     if (!runtimeRequest) {

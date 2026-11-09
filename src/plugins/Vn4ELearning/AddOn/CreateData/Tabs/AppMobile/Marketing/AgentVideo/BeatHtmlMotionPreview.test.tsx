@@ -1,7 +1,7 @@
 import React from 'react';
 import {render,fireEvent} from '@testing-library/react';
 import BeatHtmlMotionPreview, {detectAuthoredSize} from './BeatHtmlMotionPreview';
-import {localizeImportHtmlExternalScripts} from './agentVideoCustomHtmlPreview';
+import {localizeImportHtmlExternalScripts, localizeImportHtmlAssetScripts} from './agentVideoCustomHtmlPreview';
 
 test('all preview paths use the exact pinned renderer used by export', () => {
     for (const url of [
@@ -9,6 +9,9 @@ test('all preview paths use the exact pinned renderer used by export', () => {
         'https://unpkg.com/three@0.147.0/build/three.js',
         'https://cdnjs.cloudflare.com/ajax/libs/three.js/r147/three.min.js',
         'https://example.com/three.min.js?version=147',
+        'three.min.js?v=0.186.1',
+        './three.min.js?v=0.186.1',
+        '/three.min.js?v=0.186.1',
     ]) {
         const html = `<script src="${url}"></script>`;
         expect(localizeImportHtmlExternalScripts(html)).toBe('<script src="/three.min.js?v=0.186.1"></script>');
@@ -39,4 +42,12 @@ test('loading an iframe while playing restores model audio and pause disables it
     dispatch.mockClear();view.rerender(<BeatHtmlMotionPreview {...props} playing={false}/>);
     expect(dispatch.mock.calls.some(([event])=>event.type==='hf-model-audio-playback'&&(event as CustomEvent).detail.playing===false)).toBe(true);
     view.unmount();global.ResizeObserver=previous;
+});
+
+
+test('asset-library preview also normalizes a bare renderer loader',()=>{
+ const html='<script src="three.min.js?v=0.186.1"></script><script>Assets.start([],init)</script>';
+ const output=localizeImportHtmlAssetScripts(html,{publicAssets:{runtimeUrl:'/assets/runtime.js',catalog:{}}});
+ expect(output).toContain('src="/three.min.js?v=0.186.1"');
+ expect(output).toContain('src="/assets/runtime.js"');
 });

@@ -7,7 +7,7 @@ import SceneAssetHtmlPreview from './SceneAssetHtmlPreview';
 
 type Props = {defaultProvider?: 'deepseek'|'claude';shortVideoId: number; asset: SceneAsset | null; onClose: () => void; onRegistryChange?: (registry: SceneAssetRegistry) => void; previewTitle?: string};
 function previewVersion(asset: SceneAsset): string {
-    return [asset.html_sha256||'',asset.module_hash||'',asset.updated_at||'',asset.has_html??Boolean(asset.html)].join(':');
+    return [asset.environment_materials?.hash||'',asset.html_sha256||'',asset.module_hash||'',asset.updated_at||'',asset.has_html??Boolean(asset.html)].join(':');
 }
 /** One preview/creation entry point for workflow rows and beat asset shortcuts. */
 export default function SceneAssetPreviewDialog({shortVideoId, asset, onClose, onRegistryChange, previewTitle, defaultProvider='deepseek'}: Props) {
@@ -96,7 +96,7 @@ export default function SceneAssetPreviewDialog({shortVideoId, asset, onClose, o
                 {running && <Alert severity="info">{current?.generation?.status === 'queued' ? 'Đang chờ queue tạo HTML' : 'Đang tạo và kiểm tra HTML'}{current?.generation?.job_id ? ` · Job ${current.generation.job_id}` : ''}</Alert>}
                 {current?.generation?.error && !running && <Alert severity="warning">{current.generation.error}</Alert>}
                 {visible?.html && visible.ready === false && !running && <Alert severity="warning">HTML hiện tại cần cập nhật theo hồ sơ mới. Bạn có thể tạo lại bằng queue bên dưới.</Alert>}
-                {!loading && (visible?.model_snapshot ? <Model3dPreview url={buildModel3dPreviewUrl(visible.model_snapshot.model_url)} character={visible.model_snapshot.character}/> : visible?.html ? <SceneAssetHtmlPreview kind={visible.kind} title={previewTitle || `Asset ${visible.id}`} html={visible.html}/> : <Alert severity="info">Chưa có HTML {visible?.kind === 'character' ? 'nhân vật' : 'bối cảnh'}. Bạn có thể tạo bằng queue hoặc mở DeepSeek / Claude bên dưới.</Alert>)}
+                {!loading && (visible?.model_snapshot ? <Model3dPreview url={buildModel3dPreviewUrl(visible.model_snapshot.model_url)} character={visible.model_snapshot.character}/> : visible?.html ? <SceneAssetHtmlPreview kind={visible.kind} title={previewTitle || `Asset ${visible.id}`} html={visible.preview_html || visible.html}/> : <Alert severity="info">Chưa có HTML {visible?.kind === 'character' ? 'nhân vật' : 'bối cảnh'}. Bạn có thể tạo bằng queue hoặc mở DeepSeek / Claude bên dưới.</Alert>)}
                 {visible?.spec && !visible.html && <Typography variant="body2" sx={{whiteSpace:'pre-wrap'}}>{visible.spec}</Typography>}
             </Stack>
         </DialogContent>

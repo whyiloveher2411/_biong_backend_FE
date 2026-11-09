@@ -3,7 +3,7 @@ import { ajax } from 'hook/useApi';
 
 export type SceneAsset = {
     id: string; kind: 'character' | 'environment'; name: string; spec: string;
-    spec_hash: string; html_sha256?: string; updated_at?: string; has_html?: boolean; html?: string; ready?: boolean; module_hash?: string;
+    spec_hash: string; html_sha256?: string; updated_at?: string; has_html?: boolean; html?: string; preview_html?: string; environment_materials?: {hash: string; status: string; sources?: Record<string, unknown>}; ready?: boolean; module_hash?: string;
     model_snapshot?: ShortVideoModel3d;
     character_design?: CharacterDesignConfig;
     has_html_backup?: boolean; html_backup_ready?: boolean;
