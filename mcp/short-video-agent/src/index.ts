@@ -182,7 +182,7 @@ server.tool(
       z.object({
         action: z.literal('prepare_beat_html'),
         beat_id: z.string().min(1),
-      }).describe('Lấy prompt và revision để Claude Code tự viết HTML'),
+      }).describe('Lấy prompt và revision để tự viết HTML. Nhân vật phải dùng action/actionTime + IK; đọc scene_assets/design_catalog actions và ik_contract. Chọn hành động có sẵn; nếu thiếu, thiết kế hành động riêng beat bằng ikTargets, kiểm tra contact/grip/foot lock và reverse seek.'),
       z.object({
         action: z.literal('audit_beat_html'),
         beat_id: z.string().min(1),

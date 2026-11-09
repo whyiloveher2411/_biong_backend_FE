@@ -30,7 +30,7 @@ const extraColors = ['#F5F5F5','#9E9E9E','#424242','#9670CF','#982BFA','#5623A7'
     '#0A0A0A','#D9C4A2','#3A2418','#397B77','#9B4248','#1FA88A','#315B87','#2B3A5C','#EDDFC2','#E8A020','#B85868','#7968A8'];
 const previewMenuProps = {PaperProps:{sx:{bgcolor:'#25283e',color:'#fff','& .MuiMenuItem-root':{color:'#fff'},'& .MuiMenuItem-root.Mui-selected':{bgcolor:'#504967'}}}};
 const emotions = ['neutral','happy','sad','angry','surprised','worried','smug','thinking','crying','laughing'];
-const poses = ['idle','stand','sit','kneel','cover_ears','hold_paw','lift_with_helper','carry_cup','carry_bowl'];
+const poses = ['idle','walk','wave','reach','stand','sit','kneel','cover_ears','hold_paw','lift_with_helper','carry_cup','carry_bowl'];
 
 /** A self-contained snapshot, shared by preview and the server-side canonical factory. */
 export function characterDesignPreview(template: string, config: CharacterDesignConfig, view: string, pose: string, emotion: string): string {
@@ -90,6 +90,7 @@ export default function CharacterDesignDialog({shortVideoId,asset,busy,onClose,o
     const [view,setView]=React.useState('reset');
     const [focusNonce,setFocusNonce]=React.useState(0);
     const [pose,setPose]=React.useState('idle');
+    const [showRig,setShowRig]=React.useState(false);
     const [emotion,setEmotion]=React.useState('neutral');
     React.useEffect(()=>{
         let active=true;
@@ -103,7 +104,7 @@ export default function CharacterDesignDialog({shortVideoId,asset,busy,onClose,o
     },[shortVideoId,asset.id,attempt]);
     // The iframe document never changes when choosing parts. Its existing scene receives the design.
     const html=React.useMemo(()=>catalog?characterDesignPreview(catalog.template_html,catalog.config,'reset','idle','neutral'):'',[catalog]);
-    const previewMessage=React.useMemo(()=>({type:'sv-design-preview',design:config,colors:config?.colors,view,pose,emotion,focusNonce}),[config,view,pose,emotion,focusNonce]);
+    const previewMessage=React.useMemo(()=>({type:'sv-design-preview',design:config,colors:config?.colors,view,pose,emotion,showRig,focusNonce}),[config,view,pose,emotion,showRig,focusNonce]);
     const accessorySlots=catalog?.catalog.filter(category=>category.accessoryArea)||[];
     const activeAccessory=accessorySlots.find(category=>category.id===accessorySlot)||accessorySlots[0];
     const editingSlot=slot==='accessory'&&activeAccessory?activeAccessory.id:slot;
@@ -150,7 +151,7 @@ export default function CharacterDesignDialog({shortVideoId,asset,busy,onClose,o
             {!catalog||!config?<Box sx={{height:'60vh',display:'grid',placeItems:'center'}}><CircularProgress aria-label="Đang tải bộ thiết kế"/></Box>:<Box>
                 <Box sx={{position:'relative',bgcolor:'#151a28',minWidth:0,'& iframe':{height:{xs:'32vh !important',md:'43vh !important'},minHeight:220}}}>
                     <Stack direction="row" gap={1} sx={{position:'absolute',top:14,left:16,right:{xs:16,sm:'auto'},zIndex:1,bgcolor:'rgba(24,27,44,.92)',p:1.25,borderRadius:2,color:'#fff','& .MuiInputBase-root':{color:'#fff',fontSize:13},'& .MuiSelect-select':{color:'#fff'},'& .MuiInputLabel-root':{color:'#fff'},'& .MuiOutlinedInput-notchedOutline':{borderColor:'#626980'},'& .MuiSvgIcon-root':{color:'#fff'}}}>
-                        <FormControl size="small" sx={{minWidth:0,width:{xs:'50%',sm:155}}}><InputLabel>Tư thế xem thử</InputLabel><Select MenuProps={previewMenuProps} label="Tư thế xem thử" value={pose} onChange={e=>setPose(e.target.value)}>{poses.map(p=><MenuItem key={p} value={p}>{p}</MenuItem>)}</Select></FormControl>
+                        <FormControl size="small" sx={{minWidth:0,width:{xs:'50%',sm:155}}}><InputLabel>Động tác lặp (IK)</InputLabel><Select MenuProps={previewMenuProps} label="Động tác lặp (IK)" value={pose} onChange={e=>setPose(e.target.value)}>{poses.map(p=><MenuItem key={p} value={p}>{p}</MenuItem>)}</Select></FormControl>
                         <TextField select SelectProps={{MenuProps:previewMenuProps}} size="small" sx={{minWidth:0,width:{xs:'50%',sm:155}}} label="Biểu cảm xem thử" value={emotion} onChange={e=>setEmotion(e.target.value)}>{emotions.map(e=><MenuItem key={e} value={e}>{e}</MenuItem>)}</TextField>
                     </Stack>
                     <SceneAssetHtmlPreview html={html} previewMessage={previewMessage} title={`Thiết kế ${asset.name}`} height="43vh"/>
@@ -159,6 +160,7 @@ export default function CharacterDesignDialog({shortVideoId,asset,busy,onClose,o
                             {(catalog.catalog.find(category=>category.id==='gender')?.items||[]).map(item=><Button key={item.id} size="small" disabled={disabled} aria-pressed={gender===item.id} onClick={()=>chooseGender(item.id)} sx={{minWidth:54,color:'white',borderRadius:1.5,bgcolor:gender===item.id?'#6f64d9':'transparent','&:hover':{bgcolor:'#6258b4'}}}>{item.name}</Button>)}
                         </Stack>
                         <Stack data-horizontal-options direction="row" gap={.5} sx={{minWidth:0,overflowX:'auto',overscrollBehaviorX:'contain',justifyContent:{xs:'flex-start',sm:'flex-end'}}}>
+                        <Button size="small" aria-pressed={showRig} onClick={()=>setShowRig(value=>!value)} sx={{flexShrink:0,color:'white',bgcolor:showRig?'#318458':'rgba(34,37,58,.85)'}}>Hiện khớp & đường nối</Button>
                         {[['reset','Toàn thân'],['front','Trước'],['side','Nghiêng'],['back','Sau'],['face','Cận mặt']].map(([id,label])=><Button key={id} size="small" aria-pressed={view===id} sx={{flexShrink:0,minWidth:0,px:1.25,color:'white',textTransform:'none',borderRadius:2,bgcolor:view===id?'#6f64d9':'rgba(34,37,58,.85)','&:hover':{bgcolor:'#6258b4'}}} onClick={()=>setView(id)}>{label}</Button>)}
                         </Stack>
                     </Stack>
