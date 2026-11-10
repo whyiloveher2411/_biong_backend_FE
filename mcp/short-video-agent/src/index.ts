@@ -95,7 +95,7 @@ function formatJson(data: unknown): string {
 
 const server = new McpServer({
   name: 'biong-short-video',
-  version: '2.5.0',
+  version: '2.7.0',
 });
 
 const video3dId = z.number().int().positive();
@@ -103,7 +103,15 @@ const video3dId = z.number().int().positive();
 async function video3dRequest(action: string, input: object = {}, shortVideoId?: number) {
   const body: Record<string, string | number> = { action, input: JSON.stringify(input) };
   if (shortVideoId !== undefined) body.short_video_id = shortVideoId;
-  const result = await apiRequest('video-html-3d', { body });
+  const raw = await apiRequest('video-html-3d', { body });
+  const boundary = ['beat_list','beat_map','translations','visual_prompt'].includes(action)
+    || (action === 'scene_assets' && ['manifest','save_environment','character_design'].includes(String((input as Record<string, unknown>).operation)));
+  const result = typeof raw === 'object' && raw !== null ? { ...raw,
+    interaction_policy: { stop_after_each_stage: true, one_beat_at_a_time: true,
+      natural_sfx: 'suggestions_only_user_selects', code_sfx: 'automatic_mp3',
+      next_beat_requires_explicit_user_confirmation: true },
+    ...(boundary && 'success' in raw && raw.success === true ? {stop_required:true,next_action:'await_user_review'} : {}),
+  } : raw;
   return {
     isError: typeof result === 'object' && result !== null && 'success' in result && result.success === false,
     content: [{ type: 'text' as const, text: formatJson(result) }],
@@ -129,14 +137,14 @@ server.tool(
 
 server.tool(
   'short_video_3d_status',
-  'Đọc checkpoint gọn của CMS: narration, Whisper, beat audio, HTML còn thiếu, pipeline, upload và URL video. Kiểm tra trạng thái trước khi retry.',
+  'Đọc checkpoint gọn của CMS: narration, Whisper, beat audio, HTML còn thiếu, pipeline, upload và URL video. Có agent_review và pending natural SFX. Đọc trước khi retry; status/QC ready không cho phép tự sang bước hoặc beat khác.',
   { short_video_id: video3dId },
   async ({ short_video_id }) => video3dRequest('status', {}, short_video_id)
 );
 
 server.tool(
   'short_video_3d_step',
-  'Thực hiện đúng một công đoạn CMS của video HTML 3D. Draft mới dùng beat_list, TTS/Whisper từng mark ngay trước HTML beat đó; hoàn thiện SFX, BGM Mixkit và kiểm tra dữ liệu rồi dừng. Luồng narration/Whisper có các bước riêng. Với shared, lưu manifest và chờ factory hiện hành. Dùng status để theo dõi.',
+  'Làm từng công đoạn và dừng cho user kiểm tra sau mỗi công đoạn. Ở giai đoạn HTML, mỗi lượt chỉ một beat: TTS/Whisper, visual, gợi ý natural SFX + tự tạo MP3 code SFX, HTML, QC và lưu rồi STOP. Natural SFX chỉ là gợi ý để user tự tìm/chọn, không mở browser hoặc tải tự động. Không tự làm tất cả beat. Chỉ gọi continue_beat sau khi user nói rõ sang beat tiếp theo; trích nguyên văn xác nhận, không tự tạo xác nhận. Technical ready/QC pass không có nghĩa user đã duyệt.',
   {
     short_video_id: video3dId,
     step: z.discriminatedUnion('action', [
@@ -196,7 +204,7 @@ server.tool(
         beat_id: z.string().min(1),
         revision: z.string().regex(/^[a-f0-9]{64}$/),
         html: z.string().min(1).max(524288),
-      }).describe('Chạy QC bắt buộc rồi lưu HTML khi đạt; trả qc/repair_prompt nếu chưa đạt. Không chuyển beat trước success + hash readback.'),
+      }).describe('Chạy QC bắt buộc rồi lưu HTML khi đạt; trả qc/repair_prompt nếu chưa đạt. Sau success + hash readback vẫn phải STOP cho user review. Chỉ continue_beat sau xác nhận user rõ ràng; natural pending vẫn giữ để user chọn.'),
       z.object({ action: z.literal('title'), title: z.string().min(1).max(200) }),
       z.object({ action: z.literal('karaoke'), enabled: z.boolean() }),
       z.object({ action: z.literal('timeline_audio') }).describe('Đọc clips SFX và bgm_clips riêng của track BGM cấp video; không copy bgm_clips vào save_timeline_audio.'),
@@ -209,8 +217,9 @@ server.tool(
         action: z.literal('save_sound_plan'),
         beat_id: z.string().min(1),
         events: z.array(z.record(z.unknown())).max(24),
-      }).describe('Ưu tiên natural/Pixabay cho âm thực tế (xe máy, máy bay, động cơ, foley); code chỉ khi tái tạo thuyết phục như popup/UI. Không dùng synth thay tiếng thật vì tiện. Lưu SFX trước HTML; events rỗng nếu không cần.'),
-      z.object({ action: z.literal('natural_sfx'), beat_id: z.string().min(1), event_id: z.string().min(1) }).describe('Tìm bản thu Pixabay. Nghe đầu/onset/cao trào/đuôi file; sau tải dùng timeline_audio + save_timeline_audio chỉnh offset_sec/duration_sec/start_sec/fade, nghe và xem lại đồng bộ trước prepare_beat_html. Không ghép thô từ offset=0.'),
+      }).describe('AI đề xuất phối hợp natural recordings và code accents cho beat này. CMS tự render code thành MP3; natural giữ là gợi ý để user tự tìm và bấm chọn. Không mở Pixabay/tải thay user, không bỏ một nhóm vì tiện. Giữ natural pending trong HTML review; cảnh không cần SFX có thể events rỗng với lý do rõ.'),
+      z.object({ action: z.literal('natural_sfx'), beat_id: z.string().min(1), event_id: z.string().optional() }).describe('Read natural-sound suggestions/search URLs only. Does not open any browser or download audio. The user clicks the CMS cue to find/listen/select natural recordings. Keep pending suggestions in HTML, combine natural recordings with meaningful code accents; never drop either group merely for convenience.'),
+      z.object({action:z.literal('continue_beat'),beat_id:z.string().regex(/^beat_[1-9][0-9]*$/),reviewed_beat_id:z.string().regex(/^beat_[1-9][0-9]*$/),reviewed_html_sha256:z.string().regex(/^[a-f0-9]{64}$/),user_confirmation:z.string().trim().min(1).max(4000)}).describe('ONLY after an explicit user message approving review and requesting the next beat. Quote that actual message verbatim; never invent/assume approval. Binds approval to the saved HTML hash and unlocks one requested beat only. For feedback, stay on the same beat without calling this action.'),
       z.object({
         action: z.literal('save_bgm'),
         segments: z.array(z.object({

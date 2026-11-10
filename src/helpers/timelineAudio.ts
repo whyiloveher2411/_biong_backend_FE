@@ -30,7 +30,7 @@ export function packTimelineAudio(clips:TimelineAudioClip[]):TimelineAudioClip[]
 }
 
 export function openVideoPixabayAudio(videoId:number,beatId:string,eventId:string){
- return ajax({url:'plugin/vn4-e-learning/app-mobile/marketing/short-video/timeline-audio/pixabay-open',method:'POST',loading:false,data:{short_video_id:videoId,beat_id:beatId,event_id:eventId}}) as Promise<{success:boolean;message?:string;session_id?:string}>;
+ return ajax({url:'plugin/vn4-e-learning/app-mobile/marketing/short-video/timeline-audio/pixabay-open',method:'POST',loading:false,data:{short_video_id:videoId,beat_id:beatId,event_id:eventId,user_initiated:true}}) as Promise<{success:boolean;message?:string;session_id?:string}>;
 }
 
 export type TimelineAudioBeat={id:string;startSec:number;endSec:number};
