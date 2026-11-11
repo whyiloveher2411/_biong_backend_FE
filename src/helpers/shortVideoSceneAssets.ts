@@ -19,7 +19,24 @@ export type SceneAssetBeat = {
 export type SceneAssetRegistry = {
     schema_version?: string; storyboard_version?: 'causal_3d_v1'; revision?: string; assets?: Record<string, SceneAsset>; beats?: Record<string, SceneAssetBeat>;
 };
+export type PhotoFaceEye = {x:number; y:number; width:number; height:number; angle:number; placementScale?:number; contour?:{x:number;y:number}[]};
+export type PhotoFaceMouth = PhotoFaceEye & {lineLeft:number;lineCenter:number;lineRight:number;teeth:boolean};
+export type PhotoFaceConfig = {
+    mode?:'full_face'|'features';
+    nose?:PhotoFaceEye;
+    browLeft?:PhotoFaceEye;
+    browRight?:PhotoFaceEye;
+    image:{width:number; height:number; pixels:string};
+    x:number; y:number; scale:number; rotation:number; width:number; height:number; feather:number;
+    blinkInterval:number; blinkDuration:number;
+    eyes:{left:PhotoFaceEye; right:PhotoFaceEye};
+    mouth?:PhotoFaceMouth;
+    sideMargin?:number;
+    contour?:{x:number;y:number}[];
+    warp?:{x:number;y:number}[];
+};
 export type CharacterDesignConfig = {
+    photoFace?: PhotoFaceConfig;
     template: 'mai_v1'; selections: Record<string, string>; colors: Record<string, string>; parameters?: Record<string, number>;
 };
 export type CharacterDesignCatalog = {

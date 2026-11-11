@@ -75,3 +75,29 @@ test('updating the inspector template refreshes srcDoc even with unchanged asset
         expect((await screen.findByTitle('Updated inspector')).getAttribute('srcdoc')).toContain('new-template-version');
     } finally {builder.mockRestore();}
 });
+
+test('clipboard bridge accepts images only from its own preview and preserves srcDoc across callback changes',async()=>{
+ const onPaste=jest.fn(),source='<html><body>preview</body></html>';
+ const view=render(<SceneAssetHtmlPreview html={source} title="Paste preview" onPasteImage={onPaste}/>);
+ const frame=await screen.findByTitle('Paste preview') as HTMLIFrameElement;
+ const src=frame.getAttribute('srcdoc');expect(src).toContain('sv-design-photo-paste');
+ const file=new File(['photo'],'clipboard.png',{type:'image/png'});
+ window.dispatchEvent(new MessageEvent('message',{source:window,data:{type:'sv-design-photo-paste',file}}));
+ expect(onPaste).not.toHaveBeenCalled();
+ window.dispatchEvent(new MessageEvent('message',{source:frame.contentWindow,data:{type:'sv-design-photo-paste',file}}));
+ expect(onPaste).toHaveBeenCalledWith(file);
+ const text=new File(['text'],'text.txt',{type:'text/plain'});
+ window.dispatchEvent(new MessageEvent('message',{source:frame.contentWindow,data:{type:'sv-design-photo-paste',file:text}}));
+ expect(onPaste).toHaveBeenCalledTimes(1);
+ view.rerender(<SceneAssetHtmlPreview html={source} title="Paste preview" onPasteImage={jest.fn()}/>);
+ expect((await screen.findByTitle('Paste preview')).getAttribute('srcdoc')).toBe(src);
+});
+
+test('head-outline layer accepts only finite point lists from its own 3D preview',async()=>{
+ const outline=jest.fn();render(<SceneAssetHtmlPreview html="<html><body>preview</body></html>" title="Outline preview" onPhotoOutline={outline}/>);
+ const frame=await screen.findByTitle('Outline preview') as HTMLIFrameElement;
+ const points=[[.1,.2],[.9,.2],[.5,.95]];
+ window.dispatchEvent(new MessageEvent('message',{source:window,data:{type:'sv-design-face-outline',points}}));expect(outline).not.toHaveBeenCalled();
+ window.dispatchEvent(new MessageEvent('message',{source:frame.contentWindow,data:{type:'sv-design-face-outline',points}}));expect(outline).toHaveBeenCalledWith(points);
+ window.dispatchEvent(new MessageEvent('message',{source:frame.contentWindow,data:{type:'sv-design-face-outline',points:[[NaN,0]]}}));expect(outline).toHaveBeenCalledTimes(1);
+});

@@ -4,6 +4,7 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import {CharacterDesignCatalog, CharacterDesignConfig, SceneAsset, sceneAssetMessage, sceneAssetsRequest} from 'helpers/shortVideoSceneAssets';
 import SceneAssetHtmlPreview from './SceneAssetHtmlPreview';
+import PhotoFaceEditor,{PhotoFaceEditorHandle} from './PhotoFaceEditor';
 
 const accessoryAreas = [
     {id:'head',name:'Đầu, tóc & mặt'}, {id:'neck',name:'Cổ & vai'}, {id:'arms',name:'Tay & cổ tay'},
@@ -82,19 +83,30 @@ export default function CharacterDesignDialog({shortVideoId,asset,busy,onClose,o
         return ()=>root.removeEventListener('wheel',wheel);
     },[catalog]);
     const [config,setConfig]=React.useState<CharacterDesignConfig|null>(null);
+    const [previewConfig,setPreviewConfig]=React.useState<CharacterDesignConfig|null>(null);
+    React.useEffect(()=>{
+        setPreviewConfig(config);
+    },[config]);
     const [slot,setSlot]=React.useState('skin');
     const [accessorySlot,setAccessorySlot]=React.useState('hat');
     const [error,setError]=React.useState('');
+    const [uploading,setUploading]=React.useState(false);
     const [saving,setSaving]=React.useState(false);
     const [attempt,setAttempt]=React.useState(0);
     const [view,setView]=React.useState('reset');
     const [focusNonce,setFocusNonce]=React.useState(0);
     const [pose,setPose]=React.useState('idle');
     const [showRig,setShowRig]=React.useState(false);
+    const photoEditor=React.useRef<PhotoFaceEditorHandle>(null);
+    const [photoEditorOpen,setPhotoEditorOpen]=React.useState(false);
+    const [drawingContour,setDrawingContour]=React.useState(false);
+    const [photoOutline,setPhotoOutline]=React.useState<number[][]>([]);
+    const [photoSpeaking,setPhotoSpeaking]=React.useState(false);
+    const [photoBlink,setPhotoBlink]=React.useState<number|'loop'|undefined>();
     const [emotion,setEmotion]=React.useState('neutral');
     React.useEffect(()=>{
         let active=true;
-        setError(''); setCatalog(null); setConfig(null);
+        setError(''); setCatalog(null); setConfig(null);setDrawingContour(false);
         void sceneAssetsRequest(shortVideoId,'design_catalog',{asset_id:asset.id}).then(res=>{
             if(!active)return;
             if(!res.success||!res.designer)throw new Error(sceneAssetMessage(res));
@@ -104,7 +116,7 @@ export default function CharacterDesignDialog({shortVideoId,asset,busy,onClose,o
     },[shortVideoId,asset.id,attempt]);
     // The iframe document never changes when choosing parts. Its existing scene receives the design.
     const html=React.useMemo(()=>catalog?characterDesignPreview(catalog.template_html,catalog.config,'reset','idle','neutral'):'',[catalog]);
-    const previewMessage=React.useMemo(()=>({type:'sv-design-preview',design:config,colors:config?.colors,view,pose,emotion,showRig,focusNonce}),[config,view,pose,emotion,showRig,focusNonce]);
+    const previewMessage=React.useMemo(()=>({type:'sv-design-preview',design:previewConfig,colors:config?.colors,view,pose,emotion,showRig,focusNonce,photoBlink,speaking:photoSpeaking}),[previewConfig,config?.colors,view,pose,emotion,showRig,focusNonce,photoBlink,photoSpeaking]);
     const accessorySlots=catalog?.catalog.filter(category=>category.accessoryArea)||[];
     const activeAccessory=accessorySlots.find(category=>category.id===accessorySlot)||accessorySlots[0];
     const editingSlot=slot==='accessory'&&activeAccessory?activeAccessory.id:slot;
@@ -127,9 +139,9 @@ export default function CharacterDesignDialog({shortVideoId,asset,busy,onClose,o
         setConfig({...config,selections:{...config.selections,[editingSlot]:itemId},...(item?.parameters?{parameters:{...config.parameters,...item.parameters}}:{})});
         if(slot==='accessory'&&activeAccessory) setFocusNonce(n=>n+1);
     };
-    const disabled=busy||saving;
+    const disabled=busy||saving||uploading;
     const save=async()=>{
-        if(!config||!catalog||disabled)return;
+        if(!config||!catalog||disabled||drawingContour)return;
         setSaving(true); setError('');
         try {
             if(await onSave({asset_id:asset.id,expected_module_hash:catalog.expected_module_hash,expected_spec_hash:catalog.expected_spec_hash,design:config}))onClose();
@@ -143,18 +155,21 @@ export default function CharacterDesignDialog({shortVideoId,asset,busy,onClose,o
             <Stack direction="row" gap={1} sx={{ml:'auto'}}>
                 <Button size="small" startIcon={<RestartAltIcon/>} disabled={!catalog||disabled} onClick={()=>{if(catalog)setConfig(catalog.config);}}>Đặt lại</Button>
                 <Button size="small" disabled={disabled} onClick={onClose}>Hủy</Button>
-                <Button size="small" variant="contained" disabled={!config||disabled} onClick={()=>void save()}>{saving?'Đang lưu…':'Lưu nhân vật'}</Button>
+                <Button size="small" variant="contained" disabled={!config||disabled||drawingContour} onClick={()=>void save()}>{saving?'Đang lưu…':'Lưu nhân vật'}</Button>
             </Stack>
         </DialogTitle>
         <DialogContent ref={scrollRoot} sx={{p:0,'&:first-of-type':{pt:0}}}>
             {error&&<Alert severity="error" action={!catalog?<Button onClick={()=>setAttempt(n=>n+1)}>Thử lại</Button>:undefined}>{error}</Alert>}
             {!catalog||!config?<Box sx={{height:'60vh',display:'grid',placeItems:'center'}}><CircularProgress aria-label="Đang tải bộ thiết kế"/></Box>:<Box>
-                <Box sx={{position:'relative',bgcolor:'#151a28',minWidth:0,'& iframe':{height:{xs:'32vh !important',md:'43vh !important'},minHeight:220}}}>
-                    <Stack direction="row" gap={1} sx={{position:'absolute',top:14,left:16,right:{xs:16,sm:'auto'},zIndex:1,bgcolor:'rgba(24,27,44,.92)',p:1.25,borderRadius:2,color:'#fff','& .MuiInputBase-root':{color:'#fff',fontSize:13},'& .MuiSelect-select':{color:'#fff'},'& .MuiInputLabel-root':{color:'#fff'},'& .MuiOutlinedInput-notchedOutline':{borderColor:'#626980'},'& .MuiSvgIcon-root':{color:'#fff'}}}>
+                <Box sx={{position:config.photoFace?'sticky':'relative',top:0,zIndex:2,bgcolor:'#151a28',minWidth:0,'& iframe':{height:{xs:'32vh !important',md:'43vh !important'},minHeight:photoEditorOpen?{xs:500,sm:610,md:650}:220}}}>
+                    <Stack direction="row" gap={1} sx={{position:'absolute',top:14,left:16,right:{xs:178,sm:'auto'},zIndex:1,bgcolor:'rgba(24,27,44,.92)',p:1.25,borderRadius:2,color:'#fff','& .MuiInputBase-root':{color:'#fff',fontSize:13},'& .MuiSelect-select':{color:'#fff'},'& .MuiInputLabel-root':{color:'#fff'},'& .MuiOutlinedInput-notchedOutline':{borderColor:'#626980'},'& .MuiSvgIcon-root':{color:'#fff'}}}>
                         <FormControl size="small" sx={{minWidth:0,width:{xs:'50%',sm:155}}}><InputLabel>Động tác lặp (IK)</InputLabel><Select MenuProps={previewMenuProps} label="Động tác lặp (IK)" value={pose} onChange={e=>setPose(e.target.value)}>{poses.map(p=><MenuItem key={p} value={p}>{p}</MenuItem>)}</Select></FormControl>
                         <TextField select SelectProps={{MenuProps:previewMenuProps}} size="small" sx={{minWidth:0,width:{xs:'50%',sm:155}}} label="Biểu cảm xem thử" value={emotion} onChange={e=>setEmotion(e.target.value)}>{emotions.map(e=><MenuItem key={e} value={e}>{e}</MenuItem>)}</TextField>
                     </Stack>
-                    <SceneAssetHtmlPreview html={html} previewMessage={previewMessage} title={`Thiết kế ${asset.name}`} height="43vh"/>
+                    <Box data-character-viewport sx={{mr:photoEditorOpen?{xs:'calc(46% + 32px)',sm:'352px',md:'392px'}:0}}>
+                        <SceneAssetHtmlPreview html={html} previewMessage={previewMessage} title={`Thiết kế ${asset.name}`} height="43vh" onPhotoOutline={setPhotoOutline} onPasteImage={file=>photoEditor.current?.upload(file)}/>
+                    </Box>
+                    <PhotoFaceEditor onContourDraftChange={setDrawingContour} skinColor={config.colors.skin} onSkinColor={skin=>setConfig(current=>current?{...current,colors:{...current.colors,skin}}:current)} outline={photoOutline} ref={photoEditor} value={config.photoFace} disabled={disabled} onSpeaking={setPhotoSpeaking} onOpenChange={setPhotoEditorOpen} onBusyChange={setUploading} onBlink={setPhotoBlink} onChange={photoFace=>{setConfig(current=>current?{...current,photoFace}:current);setView('face');}}/>
                     <Stack direction={{xs:'column',sm:'row'}} gap={1} sx={{position:'absolute',bottom:12,left:16,right:16,alignItems:{xs:'stretch',sm:'center'},justifyContent:'space-between'}}>
                         <Stack direction="row" role="group" aria-label="Giới tính" gap={.5} sx={{alignSelf:'flex-start',bgcolor:'rgba(34,37,58,.92)',borderRadius:2,p:.5}}>
                             {(catalog.catalog.find(category=>category.id==='gender')?.items||[]).map(item=><Button key={item.id} size="small" disabled={disabled} aria-pressed={gender===item.id} onClick={()=>chooseGender(item.id)} sx={{minWidth:54,color:'white',borderRadius:1.5,bgcolor:gender===item.id?'#6f64d9':'transparent','&:hover':{bgcolor:'#6258b4'}}}>{item.name}</Button>)}
