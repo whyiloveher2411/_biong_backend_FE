@@ -34,6 +34,10 @@ export type PhotoFaceConfig = {
     sideMargin?:number;
     contour?:{x:number;y:number}[];
     warp?:{x:number;y:number}[];
+    /** Landmark fit: Gaussian RBF centres (source UV) and displacement weights, solved in the editor. */
+    fitWarp?:{x:number;y:number;wx:number;wy:number}[];
+    /** Photo-driven head sculpt: Gaussian RBF centres (head-local metres) and displacements. */
+    sculpt?:{x:number;y:number;dx:number;dy:number}[];
 };
 export type CharacterDesignConfig = {
     photoFace?: PhotoFaceConfig;

@@ -17,35 +17,71 @@ import CloseIcon from '@mui/icons-material/Close';
 import ColorizeIcon from '@mui/icons-material/Colorize';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import GridOnIcon from '@mui/icons-material/GridOn';
+import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
 import {resizePhotoFaceRegion} from './photoFaceRegion';
 import {validFaceContour,simplifyFaceStroke,MAX_FACE_CONTOUR_POINTS} from './photoFaceContour';
 import type {PhotoFaceConfig,PhotoFaceEye,PhotoFaceMouth} from 'helpers/shortVideoSceneAssets';
+import {CROP_HEIGHT,CROP_WIDTH,detectFaceLandmarks,drawFaceCrop,estimateFeatureParameters,estimateHeadShape,faceCropBox,fitPhotoFace,mapLandmarksToCrop,photoOffset,sampleSkinColor} from './photoFaceLandmarks';
+import type {DesignChange,FaceLandmark,PhotoFaceTargets} from './photoFaceLandmarks';
 
 export const defaultPhotoFace = (image:PhotoFaceConfig['image']):PhotoFaceConfig => ({
     image,x:0,y:0,scale:1,rotation:0,width:.18,height:.24,feather:.12,blinkInterval:3.8,blinkDuration:.24,
     eyes:{left:{x:.35,y:.4,width:.18,height:.08,angle:0},right:{x:.65,y:.4,width:.18,height:.08,angle:0}},
 });
 
-export async function readPhotoFace(file:File):Promise<PhotoFaceConfig> {
+async function loadPhotoFile(file:File):Promise<{image:HTMLImageElement;release:()=>void}> {
     if(!['image/jpeg','image/png','image/webp'].includes(file.type))throw new Error('Chọn ảnh JPG, PNG hoặc WebP.');
     if(file.size>15*1024*1024)throw new Error('Ảnh tối đa 15 MB.');
-    const url=URL.createObjectURL(file);
+    const url=URL.createObjectURL(file),release=()=>URL.revokeObjectURL(url);
     try {
         const image=new Image();image.src=url;
         try{await image.decode();}catch{throw new Error('Không đọc được ảnh. Hãy chọn ảnh JPG, PNG hoặc WebP hợp lệ.');}
         if(image.naturalWidth<16||image.naturalHeight<16)throw new Error('Ảnh quá nhỏ.');
-        const ratio=Math.min(1,384/Math.max(image.naturalWidth,image.naturalHeight));
-        const canvas=document.createElement('canvas');
-        canvas.width=Math.max(16,Math.round(image.naturalWidth*ratio));canvas.height=Math.max(16,Math.round(image.naturalHeight*ratio));
-        const ctx=canvas.getContext('2d');if(!ctx)throw new Error('Không đọc được ảnh trên trình duyệt này.');
-        ctx.fillStyle='#E0A97C';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(image,0,0,canvas.width,canvas.height);
-        const rgba=ctx.getImageData(0,0,canvas.width,canvas.height).data;
-        const chunks:string[]=[];
-        for(let start=0;start<rgba.length;start+=4096*4){
-            let chunk='';for(let i=start;i<Math.min(start+4096*4,rgba.length);i+=4)chunk+=String.fromCharCode(rgba[i],rgba[i+1],rgba[i+2]);chunks.push(chunk);
-        }
-        return defaultPhotoFace({width:canvas.width,height:canvas.height,pixels:btoa(chunks.join(''))});
-    } finally {URL.revokeObjectURL(url);}
+        return {image,release};
+    } catch(e) {release();throw e;}
+}
+const canvasContext=(canvas:HTMLCanvasElement)=>{const ctx=canvas.getContext('2d');if(!ctx)throw new Error('Không đọc được ảnh trên trình duyệt này.');return ctx;};
+function scaledCanvas(image:CanvasImageSource&{naturalWidth:number;naturalHeight:number},maxSide:number):HTMLCanvasElement {
+    const ratio=Math.min(1,maxSide/Math.max(image.naturalWidth,image.naturalHeight));
+    const canvas=document.createElement('canvas');
+    canvas.width=Math.max(16,Math.round(image.naturalWidth*ratio));canvas.height=Math.max(16,Math.round(image.naturalHeight*ratio));
+    const ctx=canvasContext(canvas);ctx.fillStyle='#E0A97C';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(image,0,0,canvas.width,canvas.height);
+    return canvas;
+}
+function encodePhoto(canvas:HTMLCanvasElement):PhotoFaceConfig {
+    const rgba=canvasContext(canvas).getImageData(0,0,canvas.width,canvas.height).data;
+    const chunks:string[]=[];
+    for(let start=0;start<rgba.length;start+=4096*4){
+        let chunk='';for(let i=start;i<Math.min(start+4096*4,rgba.length);i+=4)chunk+=String.fromCharCode(rgba[i],rgba[i+1],rgba[i+2]);chunks.push(chunk);
+    }
+    return defaultPhotoFace({width:canvas.width,height:canvas.height,pixels:btoa(chunks.join(''))});
+}
+export async function readPhotoFace(file:File):Promise<PhotoFaceConfig> {
+    const {image,release}=await loadPhotoFile(file);
+    try {return encodePhoto(scaledCanvas(image,384));} finally {release();}
+}
+/** Landmark detection never blocks an upload: any failure falls back to manual calibration. */
+async function safeDetect(canvas:HTMLCanvasElement):Promise<FaceLandmark[]|null> {
+    try {return await detectFaceLandmarks(canvas);} catch {return null;}
+}
+/**
+ * Detects the face and crops a level 384×512 portrait around it (the photo layer's 3:4 aspect), so the
+ * face keeps its proportions on the head and uses the whole texture resolution.
+ */
+export async function readPhotoFaceWithLandmarks(file:File):Promise<{photo:PhotoFaceConfig;landmarks:FaceLandmark[]|null;skin:string}> {
+    const {image,release}=await loadPhotoFile(file);
+    try {
+        const full=scaledCanvas(image,2048),landmarks=await safeDetect(full);
+        if(!landmarks)return {photo:encodePhoto(scaledCanvas(image,384)),landmarks:null,skin:''};
+        const box=faceCropBox(landmarks,full.width,full.height),crop=document.createElement('canvas');
+        crop.width=CROP_WIDTH;crop.height=CROP_HEIGHT;
+        const ctx=canvasContext(crop),cropped=mapLandmarksToCrop(landmarks,box,full.width,full.height);
+        drawFaceCrop(ctx,full,box);
+        const skin=sampleSkinColor(ctx.getImageData(0,0,CROP_WIDTH,CROP_HEIGHT).data,CROP_WIDTH,CROP_HEIGHT,cropped);
+        // Areas outside the original photo are filled with the face's own skin tone.
+        ctx.fillStyle=skin||'#E0A97C';ctx.fillRect(0,0,CROP_WIDTH,CROP_HEIGHT);drawFaceCrop(ctx,full,box);
+        return {photo:encodePhoto(crop),landmarks:cropped,skin};
+    } finally {release();}
 }
 
 const IconButton=({title,disabled,...props}:React.ComponentProps<typeof MuiIconButton>)=><Tooltip title={title||props['aria-label']||''} arrow><span style={{display:'inline-flex'}}><MuiIconButton {...props} title={title} disabled={disabled}/></span></Tooltip>;
@@ -55,6 +91,7 @@ const extraRegions = {nose:{label:'Mũi',x:.5,y:.57,width:.16,height:.20,angle:0
 const setRegion=(photo:PhotoFaceConfig,side:Side,next:PhotoFaceEye):PhotoFaceConfig=>side==='left'||side==='right'?{...photo,eyes:{...photo.eyes,[side]:next}}:{...photo,[side]:next};
 const region = (photo:PhotoFaceConfig,side:Side)=>side==='left'||side==='right'?photo.eyes[side]:photo[side];
 type Point = {x:number;y:number};
+type FitStage='shape'|'features'|'sculpt';
 type Gesture = {kind:'photo'|'move'|'resize'|'rotate'|'line'|'sculpt';side:Side;line:'lineLeft'|'lineCenter'|'lineRight';corner:Point;start:Point;initial:PhotoFaceConfig};
 const colorPickerCursor=`url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Cpath d='M15 3l6 6-3 3-2-2-9 9-4 1 1-4 9-9-2-2z' fill='white' stroke='%23151a28' stroke-width='2'/%3E%3C/svg%3E") 3 21, crosshair`;
 const clamp=(n:number,min:number,max:number)=>Math.max(min,Math.min(max,n));
@@ -64,8 +101,8 @@ const imagePoint=(point:Point,photo:PhotoFaceConfig):Point=>{
     return {x:p.x+.5,y:p.y+.5};
 };
 export type PhotoFaceEditorHandle = {upload:(file:File)=>void};
-type Props = {value?:PhotoFaceConfig;disabled:boolean;onChange:(next:PhotoFaceConfig|undefined)=>void;onBlink:(value:number|'loop'|undefined)=>void;onBusyChange?:(busy:boolean)=>void;onOpenChange?:(open:boolean)=>void;onSpeaking?:(speaking:boolean)=>void;outline?:number[][];skinColor?:string;onSkinColor?:(color:string)=>void;onContourDraftChange?:(drawing:boolean)=>void};
-const PhotoFaceEditor=React.forwardRef<PhotoFaceEditorHandle,Props>(function PhotoFaceEditor({value,disabled,onChange,onBlink,onBusyChange,onOpenChange,onSpeaking,outline=[],skinColor='#E0A97C',onSkinColor,onContourDraftChange},ref) {
+type Props = {targets?:PhotoFaceTargets;onDesignChange?:(change:DesignChange)=>void;value?:PhotoFaceConfig;disabled:boolean;onChange:(next:PhotoFaceConfig|undefined)=>void;onBlink:(value:number|'loop'|undefined)=>void;onBusyChange?:(busy:boolean)=>void;onOpenChange?:(open:boolean)=>void;onSpeaking?:(speaking:boolean)=>void;outline?:number[][];skinColor?:string;onSkinColor?:(color:string)=>void;onContourDraftChange?:(drawing:boolean)=>void};
+const PhotoFaceEditor=React.forwardRef<PhotoFaceEditorHandle,Props>(function PhotoFaceEditor({targets,onDesignChange,value,disabled,onChange,onBlink,onBusyChange,onOpenChange,onSpeaking,outline=[],skinColor='#E0A97C',onSkinColor,onContourDraftChange},ref) {
     const [error,setError]=React.useState(''),[loading,setLoading]=React.useState(false),[open,setOpen]=React.useState(true);
     const [visibleEyes,setVisibleEyes]=React.useState({left:false,right:false});
     const [visibleExtras,setVisibleExtras]=React.useState({nose:false,browLeft:false,browRight:false});
@@ -87,15 +124,24 @@ const PhotoFaceEditor=React.forwardRef<PhotoFaceEditorHandle,Props>(function Pho
     latest.current={value,disabled,loading};
     React.useEffect(()=>()=>{uploadVersion.current++;},[]);
     React.useEffect(()=>{onOpenChange?.(hasPhoto&&open);},[hasPhoto,open,onOpenChange]);
+    // Detected landmarks belong to one exact image; a different image never reuses them.
+    const detected=React.useRef<{pixels:string;landmarks:FaceLandmark[]}|null>(null);
+    const [fit,setFit]=React.useState<{stage:FitStage;expect:DesignChange}|null>(null);
+    const [notice,setNotice]=React.useState('');
     const upload=React.useCallback(async(file:File)=>{
         if(latest.current.disabled||latest.current.loading||latest.current.value)return;
-        const version=++uploadVersion.current;latest.current.loading=true;setLoading(true);onBusyChange?.(true);setError('');
+        const version=++uploadVersion.current;latest.current.loading=true;setLoading(true);onBusyChange?.(true);setError('');setNotice('');
         try{
-            const next=await readPhotoFace(file);
-            if(version===uploadVersion.current){onChange(next);setOpen(true);setVisibleEyes({left:false,right:false});setBlink(undefined);onBlink(undefined);}
+            const {photo:next,landmarks,skin}=await readPhotoFaceWithLandmarks(file);
+            if(version===uploadVersion.current){
+                onChange(next);setOpen(true);setVisibleEyes({left:false,right:false});setBlink(undefined);onBlink(undefined);
+                detected.current=landmarks?{pixels:next.image.pixels,landmarks}:null;
+                if(landmarks){if(skin)onSkinColor?.(skin);setFit({stage:'shape',expect:{}});}
+                else setNotice('Không nhận diện được khuôn mặt trong ảnh. Hãy căn ảnh, mắt và miệng thủ công.');
+            }
         }catch(e){if(version===uploadVersion.current)setError(e instanceof Error?e.message:'Không đọc được ảnh.');}
         finally{if(version===uploadVersion.current){latest.current.loading=false;setLoading(false);onBusyChange?.(false);}}
-    },[onChange,onBlink,onBusyChange]);
+    },[onChange,onBlink,onBusyChange,onSkinColor]);
     React.useImperativeHandle(ref,()=>({upload:file=>{void upload(file);}}),[upload]);
     React.useEffect(()=>{
         const paste=(event:ClipboardEvent)=>{
@@ -116,15 +162,13 @@ const PhotoFaceEditor=React.forwardRef<PhotoFaceEditorHandle,Props>(function Pho
         ctx.putImageData(data,0,0);return result;
     },[value?.image]);
     const warpedSource=React.useMemo(()=>{
-        if(!source||!value?.warp)return source;
+        if(!source||(!value?.warp&&!value?.fitWarp?.length))return source;
         const width=source.width,height=source.height,ctx=source.getContext('2d');if(!ctx)return source;
         const pixels=ctx.getImageData(0,0,width,height).data,result=document.createElement('canvas');result.width=width;result.height=height;
         const dest=result.getContext('2d');if(!dest)return source;
-        const data=dest.createImageData(width,height),grid=value.warp;
+        const data=dest.createImageData(width,height),offsets={warp:value.warp,fitWarp:value.fitWarp};
         for(let y=0;y<height;y++)for(let x=0;x<width;x++){
-            const u=(x+.5)/width,v=(y+.5)/height,gx=u*6,gy=v*6,ix=Math.min(5,Math.floor(gx)),iy=Math.min(5,Math.floor(gy)),fx=gx-ix,fy=gy-iy;
-            const a=grid[iy*7+ix],b=grid[iy*7+ix+1],c=grid[iy*7+ix+7],d=grid[iy*7+ix+8];
-            const dx=(a.x*(1-fx)+b.x*fx)*(1-fy)+(c.x*(1-fx)+d.x*fx)*fy,dy=(a.y*(1-fx)+b.y*fx)*(1-fy)+(c.y*(1-fx)+d.y*fx)*fy;
+            const u=(x+.5)/width,v=(y+.5)/height,{x:dx,y:dy}=photoOffset(offsets,{x:u,y:v});
             const px=clamp((u+dx)*width-.5,0,width-1),py=clamp((v+dy)*height-.5,0,height-1),x0=Math.floor(px),y0=Math.floor(py),tx=px-x0,ty=py-y0;
             for(let channel=0;channel<3;channel++){
                 const at=(xx:number,yy:number)=>pixels[(yy*width+xx)*4+channel];
@@ -133,7 +177,41 @@ const PhotoFaceEditor=React.forwardRef<PhotoFaceEditorHandle,Props>(function Pho
             data.data[(y*width+x)*4+3]=255;
         }
         dest.putImageData(data,0,0);return result;
-    },[source,value?.warp]);
+    },[source,value?.warp,value?.fitWarp]);
+    const [detecting,setDetecting]=React.useState(false);
+    const autoFit=async()=>{
+        if(!value||!source)return;
+        setError('');setNotice('');
+        if(detected.current?.pixels!==value.image.pixels){
+            setDetecting(true);
+            const landmarks=await safeDetect(source);
+            setDetecting(false);
+            if(!landmarks){detected.current=null;setError('Không nhận diện được khuôn mặt trong ảnh. Hãy dùng ảnh chụp thẳng, rõ mặt.');return;}
+            detected.current={pixels:value.image.pixels,landmarks};
+        }
+        setFit({stage:'shape',expect:{}});
+    };
+    // The photo is only placed rigidly; the 3D head follows it. Each step changes the design, then waits
+    // until the preview reports targets built from that design before the next step runs.
+    React.useEffect(()=>{
+        if(!fit||!value||!targets)return;
+        const face=detected.current;
+        if(!face||face.pixels!==value.image.pixels){setFit(null);return;}
+        const applied=(change:DesignChange)=>Object.entries(change.parameters||{}).every(([key,n])=>Math.abs((targets.parameters[key]??NaN)-n)<1e-6)
+            &&(!change.selections?.head||change.selections.head===targets.head);
+        if(!applied(fit.expect))return;
+        const {width,height}=value.image;
+        if(fit.stage!=='sculpt'){
+            const change:DesignChange=fit.stage==='shape'?estimateHeadShape(face.landmarks,width,height,targets):estimateFeatureParameters(face.landmarks,width,height,targets);
+            const next:FitStage=fit.stage==='shape'?'features':'sculpt';
+            if(applied(change)||!onDesignChange)setFit({stage:next,expect:{}});
+            else{onDesignChange(change);setFit({stage:next,expect:change});}
+            return;
+        }
+        setFit(null);
+        onChange(fitPhotoFace(value,face.landmarks,targets));
+        setNotice('Đã dựng khối mặt 3D theo ảnh (kiểu đầu, tỷ lệ, mắt, mũi, miệng, viền hàm). Ảnh giữ nguyên, không bị bóp méo.');
+    },[fit,targets,value,onChange,onDesignChange]);
     React.useEffect(()=>{
         const ctx=canvas.current?.getContext('2d');if(!ctx||!value||!warpedSource)return;
         ctx.clearRect(0,0,384,384);ctx.fillStyle='#30374d';ctx.fillRect(0,0,384,384);
@@ -280,6 +358,7 @@ const PhotoFaceEditor=React.forwardRef<PhotoFaceEditorHandle,Props>(function Pho
             sx={{position:'absolute',top:14,right:16,zIndex:4,textTransform:'none',whiteSpace:'nowrap'}}>{loading?'Đang tải…':'Cập nhật gương mặt'}</Button>
         <input ref={input} hidden type="file" accept="image/jpeg,image/png,image/webp" aria-label="Tải ảnh mặt" disabled={disabled||loading||!!value} onChange={event=>{const file=event.target.files?.[0];event.target.value='';if(file)void upload(file);}}/>
         {error&&<Alert severity="error" onClose={()=>setError('')} sx={{position:'absolute',right:16,top:56,zIndex:5,maxWidth:300}}>{error}</Alert>}
+        {!error&&notice&&<Alert severity="info" onClose={()=>setNotice('')} sx={{position:'absolute',right:16,top:56,zIndex:5,maxWidth:300}}>{notice}</Alert>}
         {value&&open&&<Box role="region" aria-label="Chỉnh gương mặt" sx={{position:'absolute',right:16,top:58,bottom:60,width:{xs:'46%',sm:320,md:360},boxSizing:'border-box',zIndex:3,bgcolor:'rgba(31,35,53,.97)',border:'1px solid #505670',borderRadius:2,boxShadow:'0 8px 28px #0006',p:1,display:'flex',flexDirection:'column',gap:.5,overflowY:'auto','& .MuiIconButton-root':{color:'#e0e5f7'},'& .MuiButton-root':{textTransform:'none'}}}>
             <Stack direction="row" gap={.5} flexShrink={0}>
                 {(['full_face','features'] as const).map(mode=><Button key={mode} aria-label={mode==='features'?'Ghép từng chi tiết':'Ghép toàn mặt'} aria-pressed={(value.mode||'full_face')===mode} size="small" title={mode==='features'?'Chỉ ghép mắt, mũi, miệng và chân mày lên đầu 3D':'Ghép toàn bộ ảnh gương mặt'} disabled={disabled} variant={(value.mode||'full_face')===mode?'contained':'text'} onClick={()=>onChange({...value,mode})}>{mode==='features'?'Ghép từng chi tiết':'Ghép toàn mặt'}</Button>)}
@@ -290,7 +369,7 @@ const PhotoFaceEditor=React.forwardRef<PhotoFaceEditorHandle,Props>(function Pho
                     <Button size="small" aria-label="Miệng" title="Hiện/ẩn khung và đường giữa miệng" aria-pressed={selectedRegion==='mouth'&&showMouth} disabled={disabled} onClick={()=>{selectRegion('mouth');if(!value.mouth)onChange({...value,mouth:defaultPhotoMouth()});setShowMouth(current=>selectedRegion==='mouth'?!current:true);}} sx={{minWidth:0,px:.5,color:showMouth?'#ffaac6':'#adb5ce',bgcolor:showMouth?'#553444':'transparent',fontSize:{xs:10,sm:11},whiteSpace:'nowrap'}}>Miệng</Button>
                     {(Object.keys(extraRegions) as (keyof typeof extraRegions)[]).map(key=><Button key={key} aria-label={extraRegions[key].label} size="small" title={`Hiện/ẩn khung ${extraRegions[key].label.toLowerCase()}`} aria-pressed={selectedRegion===key&&visibleExtras[key]} disabled={disabled} onClick={()=>{selectRegion(key);if(!value[key]){const {...bounds}=extraRegions[key];onChange({...value,[key]:bounds});}setVisibleExtras(current=>({...current,[key]:selectedRegion===key?!current[key]:true}));}} sx={{minWidth:0,px:.5,fontSize:11,color:visibleExtras[key]?'#b6b7ff':'#adb5ce'}}>{extraRegions[key].label}</Button>)}
                 </Stack>
-                <IconButton size="small" aria-label="Bỏ ảnh mặt" title="Bỏ ảnh mặt" disabled={disabled} onClick={()=>{onChange(undefined);previewBlink(undefined);setSpeaking(false);onSpeaking?.(false);setShowMouth(false);cancelContour();setContourMode(null);setOpen(false);}}><DeleteOutlineIcon fontSize="small"/></IconButton>
+                <IconButton size="small" aria-label="Bỏ ảnh mặt" title="Bỏ ảnh mặt" disabled={disabled} onClick={()=>{detected.current=null;setFit(null);setNotice('');onChange(undefined);previewBlink(undefined);setSpeaking(false);onSpeaking?.(false);setShowMouth(false);cancelContour();setContourMode(null);setOpen(false);}}><DeleteOutlineIcon fontSize="small"/></IconButton>
             </Stack>
             <Box sx={{position:'relative',width:'100%',maxWidth:290,alignSelf:'center',flexShrink:0,aspectRatio:'1',bgcolor:'#30374d',borderRadius:1,overflow:'hidden'}}>
                 <canvas ref={canvas} width={384} height={384} aria-label="Ảnh gương mặt" style={{display:'block',width:'100%',height:'100%'}}/>
@@ -351,6 +430,7 @@ const PhotoFaceEditor=React.forwardRef<PhotoFaceEditorHandle,Props>(function Pho
                 </svg>
             </Box>
             <Stack direction="row" gap={.25} alignItems="center" flexWrap="wrap" flexShrink={0}>
+                <IconButton size="small" aria-label="Tự khớp khuôn mặt" title="Nhận diện điểm mốc trên ảnh rồi dựng khối mặt 3D theo ảnh: kiểu đầu, tỷ lệ, mắt, mũi, miệng, chân mày, viền hàm và cằm" disabled={disabled||detecting||!!fit} onClick={()=>void autoFit()} sx={{bgcolor:fit||detecting?'#31555f':'transparent'}}><AutoFixHighIcon fontSize="small"/></IconButton>
                 <IconButton size="small" aria-label="Thu nhỏ ảnh" title="Thu nhỏ ảnh" disabled={disabled||value.scale<=.4} onClick={()=>update({scale:clamp(value.scale/1.1,.4,3)})}><ZoomOutIcon fontSize="small"/></IconButton>
                 <IconButton size="small" aria-label="Phóng to ảnh" title="Phóng to ảnh" disabled={disabled||value.scale>=3} onClick={()=>update({scale:clamp(value.scale*1.1,.4,3)})}><ZoomInIcon fontSize="small"/></IconButton>
                 <IconButton size="small" aria-label="Kéo méo gương mặt" title="Kéo méo gương mặt" aria-pressed={warpMode} disabled={disabled} onClick={()=>{cancelContour();setContourMode(null);setWarpMode(!warpMode);setPickingColor(false);setBrush(null);}} sx={{bgcolor:warpMode?'#31555f':'transparent'}}><GestureIcon fontSize="small"/></IconButton>

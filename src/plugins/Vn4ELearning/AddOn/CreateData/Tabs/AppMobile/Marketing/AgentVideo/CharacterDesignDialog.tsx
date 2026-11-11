@@ -5,6 +5,7 @@ import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import {CharacterDesignCatalog, CharacterDesignConfig, SceneAsset, sceneAssetMessage, sceneAssetsRequest} from 'helpers/shortVideoSceneAssets';
 import SceneAssetHtmlPreview from './SceneAssetHtmlPreview';
 import PhotoFaceEditor,{PhotoFaceEditorHandle} from './PhotoFaceEditor';
+import type {PhotoFaceTargets} from './photoFaceLandmarks';
 
 const accessoryAreas = [
     {id:'head',name:'Đầu, tóc & mặt'}, {id:'neck',name:'Cổ & vai'}, {id:'arms',name:'Tay & cổ tay'},
@@ -101,6 +102,7 @@ export default function CharacterDesignDialog({shortVideoId,asset,busy,onClose,o
     const [photoEditorOpen,setPhotoEditorOpen]=React.useState(false);
     const [drawingContour,setDrawingContour]=React.useState(false);
     const [photoOutline,setPhotoOutline]=React.useState<number[][]>([]);
+    const [photoTargets,setPhotoTargets]=React.useState<PhotoFaceTargets|undefined>();
     const [photoSpeaking,setPhotoSpeaking]=React.useState(false);
     const [photoBlink,setPhotoBlink]=React.useState<number|'loop'|undefined>();
     const [emotion,setEmotion]=React.useState('neutral');
@@ -167,9 +169,9 @@ export default function CharacterDesignDialog({shortVideoId,asset,busy,onClose,o
                         <TextField select SelectProps={{MenuProps:previewMenuProps}} size="small" sx={{minWidth:0,width:{xs:'50%',sm:155}}} label="Biểu cảm xem thử" value={emotion} onChange={e=>setEmotion(e.target.value)}>{emotions.map(e=><MenuItem key={e} value={e}>{e}</MenuItem>)}</TextField>
                     </Stack>
                     <Box data-character-viewport sx={{mr:photoEditorOpen?{xs:'calc(46% + 32px)',sm:'352px',md:'392px'}:0}}>
-                        <SceneAssetHtmlPreview html={html} previewMessage={previewMessage} title={`Thiết kế ${asset.name}`} height="43vh" onPhotoOutline={setPhotoOutline} onPasteImage={file=>photoEditor.current?.upload(file)}/>
+                        <SceneAssetHtmlPreview html={html} previewMessage={previewMessage} title={`Thiết kế ${asset.name}`} height="43vh" onPhotoOutline={setPhotoOutline} onPhotoTargets={setPhotoTargets} onPasteImage={file=>photoEditor.current?.upload(file)}/>
                     </Box>
-                    <PhotoFaceEditor onContourDraftChange={setDrawingContour} skinColor={config.colors.skin} onSkinColor={skin=>setConfig(current=>current?{...current,colors:{...current.colors,skin}}:current)} outline={photoOutline} ref={photoEditor} value={config.photoFace} disabled={disabled} onSpeaking={setPhotoSpeaking} onOpenChange={setPhotoEditorOpen} onBusyChange={setUploading} onBlink={setPhotoBlink} onChange={photoFace=>{setConfig(current=>current?{...current,photoFace}:current);setView('face');}}/>
+                    <PhotoFaceEditor onContourDraftChange={setDrawingContour} skinColor={config.colors.skin} onSkinColor={skin=>setConfig(current=>current?{...current,colors:{...current.colors,skin}}:current)} outline={photoOutline} targets={photoTargets} onDesignChange={change=>setConfig(current=>{if(!current)return current;const head=change.selections?.head;const allowed=!head||!!catalog?.catalog.find(c=>c.id==='head')?.items.some(item=>item.id===head);return {...current,selections:{...current.selections,...(allowed?change.selections:{})},parameters:{...current.parameters,...change.parameters}};})} ref={photoEditor} value={config.photoFace} disabled={disabled} onSpeaking={setPhotoSpeaking} onOpenChange={setPhotoEditorOpen} onBusyChange={setUploading} onBlink={setPhotoBlink} onChange={photoFace=>{setConfig(current=>current?{...current,photoFace}:current);setView('face');}}/>
                     <Stack direction={{xs:'column',sm:'row'}} gap={1} sx={{position:'absolute',bottom:12,left:16,right:16,alignItems:{xs:'stretch',sm:'center'},justifyContent:'space-between'}}>
                         <Stack direction="row" role="group" aria-label="Giới tính" gap={.5} sx={{alignSelf:'flex-start',bgcolor:'rgba(34,37,58,.92)',borderRadius:2,p:.5}}>
                             {(catalog.catalog.find(category=>category.id==='gender')?.items||[]).map(item=><Button key={item.id} size="small" disabled={disabled} aria-pressed={gender===item.id} onClick={()=>chooseGender(item.id)} sx={{minWidth:54,color:'white',borderRadius:1.5,bgcolor:gender===item.id?'#6f64d9':'transparent','&:hover':{bgcolor:'#6258b4'}}}>{item.name}</Button>)}
@@ -203,8 +205,15 @@ export default function CharacterDesignDialog({shortVideoId,asset,busy,onClose,o
                                 {accessorySlots.filter(category=>category.accessoryArea===activeAccessory.accessoryArea).map(category=><Button key={category.id} size="small" aria-pressed={editingSlot===category.id} onClick={()=>selectAccessory(category.id)} sx={{color:'#fff',flexShrink:0,textTransform:'none',bgcolor:editingSlot===category.id?'#6258b4':'transparent'}}>{category.accessoryName}</Button>)}
                             </Box>
                         </Stack>}
-                        {(slot==='brows'||slot==='eyes'||slot==='nose')&&<Stack direction={{xs:'column',md:'row'}} gap={3} sx={{px:1,mb:2,flexWrap:slot==='nose'?'wrap':'nowrap'}}>
-                            {(slot==='nose'?[
+                        {(slot==='brows'||slot==='eyes'||slot==='nose'||slot==='hair'||slot==='top'||slot==='bottom')&&<Stack direction={{xs:'column',md:'row'}} gap={3} sx={{px:1,mb:2,flexWrap:slot==='nose'?'wrap':'nowrap'}}>
+                            {(slot==='hair'?[
+                                {key:'hairStrands',label:'Độ tơi sợi tóc',id:'hair-strands-label',min:0,max:1,step:.01,value:.7,left:'Khối trơn',right:'Nhiều sợi'},
+                                {key:'hairWind',label:'Độ bay của tóc khi có gió',id:'hair-wind-label',min:0,max:1.5,step:.01,value:.5,left:'Đứng yên',right:'Bay nhiều'},
+                            ]:slot==='top'||slot==='bottom'?[
+                                {key:'clothWrinkle',label:'Nếp nhăn vải (áo và quần)',id:'cloth-wrinkle-label',min:0,max:1,step:.01,value:.6,left:'Phẳng',right:'Nhiều nếp'},
+                                {key:'clothLoose',label:'Độ rủ / loe gấu vải',id:'cloth-loose-label',min:0,max:1,step:.01,value:.5,left:'Ôm',right:'Rủ, bay'},
+                                {key:'fabricWeave',label:'Vân dệt của vải',id:'fabric-weave-label',min:0,max:1,step:.01,value:.6,left:'Trơn',right:'Rõ vân'},
+                            ]:slot==='nose'?[
                                 {key:'noseBridgeLength',label:'Độ dài sống mũi',id:'nose-bridge-length-label',min:.4,max:1.75,step:.01,value:1,left:'Ngắn',right:'Dài'},
                                 {key:'noseAlarWidth',label:'Độ rộng cánh mũi',id:'nose-alar-width-label',min:.5,max:1.75,step:.01,value:1,left:'Hẹp',right:'Rộng'},
                                 {key:'noseTipVolume',label:'Độ đầy và tròn của đầu mũi',id:'nose-tip-volume-label',min:.45,max:1.85,step:.01,value:1,left:'Thon',right:'Tròn đầy'},
