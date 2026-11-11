@@ -31,7 +31,7 @@ const extraColors = ['#F5F5F5','#9E9E9E','#424242','#9670CF','#982BFA','#5623A7'
     '#0A0A0A','#D9C4A2','#3A2418','#397B77','#9B4248','#1FA88A','#315B87','#2B3A5C','#EDDFC2','#E8A020','#B85868','#7968A8'];
 const previewMenuProps = {PaperProps:{sx:{bgcolor:'#25283e',color:'#fff','& .MuiMenuItem-root':{color:'#fff'},'& .MuiMenuItem-root.Mui-selected':{bgcolor:'#504967'}}}};
 const emotions = ['neutral','happy','sad','angry','surprised','worried','smug','thinking','crying','laughing'];
-const poses = ['idle','walk','wave','reach','stand','sit','kneel','cover_ears','hold_paw','lift_with_helper','carry_cup','carry_bowl'];
+const poses = ['idle','walk','run','wave','reach','point','talk','think','phone_call','look_phone','type','arms_crossed','hands_on_hips','shrug','nod','shake_head','clap','cheer','facepalm','bow','pick_up','push','stand','sit','kneel','cover_ears','hold_paw','lift_with_helper','carry_cup','carry_bowl'];
 
 /** A self-contained snapshot, shared by preview and the server-side canonical factory. */
 export function characterDesignPreview(template: string, config: CharacterDesignConfig, view: string, pose: string, emotion: string): string {
