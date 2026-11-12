@@ -381,3 +381,27 @@ test('design button belongs only to characters and saves the selected HTML defau
  await waitFor(()=>expect(request).toHaveBeenCalledWith(expect.objectContaining({data:expect.objectContaining({short_video_id:42,operation:'character_design',asset_id:'wife',expected_module_hash:'fresh-module',expected_spec_hash:'wife-spec',design:expect.objectContaining({colors:{skin:'#ad7351'}})})})));
  await waitFor(()=>expect(screen.queryByRole('dialog',{name:/Thiết kế nhân vật/})).toBeNull());view.unmount();
 });
+
+test('series cast: links a role, shows a newer cast design and syncs it on demand', async()=>{
+ const designed={...registry.assets.wife,module_hash:'m1',character_design:{template:'mai_v1',selections:{},colors:{}}};
+ const linked={...designed,series_cast:{id:'lan',name:'Lan',design_revision:'r1',latest_design_revision:'r2',latest_name:'Lan',exists:true,stale:true}};
+ let current:ANY={...registry,assets:{...registry.assets,wife:designed}};
+ request.mockImplementation(({url,data})=>{
+  if(String(url).endsWith('series-cast')) return Promise.resolve({success:true,cast:[{id:'lan',name:'Lan',profile:{role:'Em gái'},design:{selections:{gender:'female'}},design_revision:'r2',revision:'v2',status:'active',sort:0}]});
+  if(data.operation==='series_cast_link'){current={...current,assets:{...current.assets,wife:linked}};}
+  if(data.operation==='series_cast_sync'){current={...current,assets:{...current.assets,wife:{...linked,series_cast:{...linked.series_cast,design_revision:'r2',stale:false}}}};}
+  return Promise.resolve({success:true,registry:current});
+ });
+ const view=render(<SceneAssetsPanel shortVideoId={42}/>);
+ await screen.findAllByText('Người vợ');
+ expect(within(screen.getByTestId('scene-asset-dinner')).queryByRole('button',{name:'Dàn cố định'})).toBeNull();
+ fireEvent.click(within(screen.getByTestId('scene-asset-wife')).getByRole('button',{name:'Dàn cố định'}));
+ fireEvent.click(await screen.findByRole('button',{name:/Lan · lan/}));
+ await waitFor(()=>expect(request).toHaveBeenCalledWith(expect.objectContaining({data:expect.objectContaining({operation:'series_cast_link',asset_id:'wife',cast_id:'lan',expected_module_hash:'m1',expected_spec_hash:'wife-spec'})})));
+ expect(await screen.findByText('Có bản thiết kế mới')).toBeTruthy();
+ await waitFor(()=>expect(screen.queryByRole('dialog',{name:/Gắn dàn nhân vật cố định/})).toBeNull());
+ fireEvent.click(within(screen.getByTestId('scene-asset-wife')).getByRole('button',{name:'Đồng bộ'}));
+ await waitFor(()=>expect(request).toHaveBeenCalledWith(expect.objectContaining({data:expect.objectContaining({operation:'series_cast_sync',asset_id:'wife'})})));
+ await waitFor(()=>expect(screen.queryByText('Có bản thiết kế mới')).toBeNull());
+ view.unmount();
+});

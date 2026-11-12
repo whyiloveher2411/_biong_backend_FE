@@ -172,12 +172,13 @@ server.tool(
       }),
       z.object({
         action: z.literal('scene_assets'),
-        operation: z.enum(['get', 'manifest', 'environment_prompt', 'save_environment', 'material_catalog', 'material_search', 'resolve_materials', 'design_catalog', 'character_design', 'preview']).describe('Shared environments: material_catalog lists valid ambientCG categories; material_search ranks within category. Declare material.name + userData.svMaterial in factory. save_environment automatically resolves/downloads/applies PBR once after generation. resolve_materials upgrades an existing annotated environment using both current hashes. Never search/download in beat HTML.'),
+        operation: z.enum(['get', 'manifest', 'environment_prompt', 'save_environment', 'material_catalog', 'material_search', 'resolve_materials', 'design_catalog', 'character_design', 'preview', 'series_cast_list', 'series_cast_link', 'series_cast_sync']).describe('Shared environments: material_catalog lists valid ambientCG categories; material_search ranks within category. Declare material.name + userData.svMaterial in factory. save_environment automatically resolves/downloads/applies PBR once after generation. resolve_materials upgrades an existing annotated environment using both current hashes. Never search/download in beat HTML. Series cast (dàn nhân vật cố định): series_cast_list lists recurring members; series_cast_link applies member cast_id design to character asset_id (needs expected_module_hash + expected_spec_hash from get); series_cast_sync re-applies the member latest design when the asset shows series_cast.stale.'),
         text: z.string().optional(),
         expected_revision: z.string().optional(),
         asset_id: z.string().optional(),
         category: z.string().optional(),
         keywords: z.array(z.string()).max(8).optional(),
+        cast_id: z.string().optional(),
         expected_module_hash: z.string().optional(),
         expected_spec_hash: z.string().optional(),
         design: z.object({

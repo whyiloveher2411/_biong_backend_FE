@@ -64,8 +64,10 @@ function PartAdjustmentSlider({value,disabled,onCommit,labelId,label,min,max,ste
     </Box>;
 }
 
-type Props = {shortVideoId:number; asset:SceneAsset; busy:boolean; onClose:()=>void; onSave:(data:Record<string,unknown>)=>Promise<boolean>};
-export default function CharacterDesignDialog({shortVideoId,asset,busy,onClose,onSave}: Props) {
+type Props = {shortVideoId:number; asset:Pick<SceneAsset,'id'|'name'>; busy:boolean; onClose:()=>void; onSave:(data:Record<string,unknown>)=>Promise<boolean>;
+    /** Series cast and other non-video owners load the designer themselves. */
+    loadDesigner?:()=>Promise<CharacterDesignCatalog>; title?:string; replacingNote?:string};
+export default function CharacterDesignDialog({shortVideoId,asset,busy,onClose,onSave,loadDesigner,title='Thiết kế nhân vật',replacingNote}: Props) {
     const [catalog,setCatalog]=React.useState<CharacterDesignCatalog|null>(null);
     const scrollRoot=React.useRef<HTMLDivElement>(null);
     React.useEffect(()=>{
@@ -112,10 +114,13 @@ export default function CharacterDesignDialog({shortVideoId,asset,busy,onClose,o
     React.useEffect(()=>{
         let active=true;
         setError(''); setCatalog(null); setConfig(null);setDrawingContour(false);
-        void sceneAssetsRequest(shortVideoId,'design_catalog',{asset_id:asset.id}).then(res=>{
-            if(!active)return;
+        const request=loadDesigner?loadDesigner():sceneAssetsRequest(shortVideoId,'design_catalog',{asset_id:asset.id}).then(res=>{
             if(!res.success||!res.designer)throw new Error(sceneAssetMessage(res));
-            setCatalog(res.designer);setConfig(res.designer.config);setSlot(res.designer.catalog.find(category=>category.id!=='gender')?.id||'skin');
+            return res.designer;
+        });
+        void request.then(designer=>{
+            if(!active)return;
+            setCatalog(designer);setConfig(designer.config);setSlot(designer.catalog.find(category=>category.id!=='gender')?.id||'skin');
         }).catch(e=>{if(active)setError(e instanceof Error?e.message:'Không tải được bộ thiết kế.');});
         return ()=>{active=false;};
     },[shortVideoId,asset.id,attempt]);
@@ -159,7 +164,7 @@ export default function CharacterDesignDialog({shortVideoId,asset,busy,onClose,o
     };
     return <Dialog open fullWidth maxWidth="xl" onClose={()=>{if(!disabled)onClose();}} aria-labelledby="character-design-title" PaperProps={{sx:{borderRadius:3,overflow:'hidden',bgcolor:'#25283e',color:'#fff',maxHeight:'96vh','& .MuiTypography-root':{color:'#fff'},'& .MuiInputLabel-root':{color:'#fff'},'& .MuiButton-root':{color:'#fff'},'& .MuiButton-root.Mui-disabled':{color:'rgba(255,255,255,.45)'},m:{xs:1,sm:2},width:{xs:'calc(100% - 16px)',sm:'calc(100% - 32px)'}}}}>
         <DialogTitle id="character-design-title" sx={{display:'flex',alignItems:'center',flexWrap:'wrap',gap:1,fontSize:{xs:16,sm:20},py:1.25}}>
-            Thiết kế nhân vật <Typography component="span" sx={{color:'#fff'}}>· {asset.name}</Typography>
+            {title} <Typography component="span" sx={{color:'#fff'}}>· {asset.name}</Typography>
             <Stack direction="row" gap={1} sx={{ml:'auto'}}>
                 <Button size="small" startIcon={<RestartAltIcon/>} disabled={!catalog||disabled} onClick={()=>{if(catalog)setConfig(catalog.config);}}>Đặt lại</Button>
                 <Button size="small" disabled={disabled} onClick={onClose}>Hủy</Button>
@@ -252,7 +257,7 @@ export default function CharacterDesignDialog({shortVideoId,asset,busy,onClose,o
                     </Box>
                 </Box>
             </Box>}
-            {catalog?.replacing&&<Alert severity="info" sx={{borderRadius:0}}>Lưu sẽ thay ngoại hình hiện tại của vai này bằng nhân vật default đã phối. Các beat dùng vai này cần dựng lại để cập nhật.</Alert>}
+            {replacingNote?<Alert severity="info" sx={{borderRadius:0}}>{replacingNote}</Alert>:catalog?.replacing&&<Alert severity="info" sx={{borderRadius:0}}>Lưu sẽ thay ngoại hình hiện tại của vai này bằng nhân vật default đã phối. Các beat dùng vai này cần dựng lại để cập nhật.</Alert>}
         </DialogContent>
 
     </Dialog>;

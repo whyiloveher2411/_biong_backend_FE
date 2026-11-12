@@ -6,7 +6,6 @@ import {
     Alert,
     Box,
     Button,
-    ButtonGroup,
     Chip,
     CircularProgress,
     Dialog,
@@ -19,6 +18,8 @@ import {
     Tab,
     Tabs,
     TextField,
+    ToggleButton,
+    ToggleButtonGroup,
     Tooltip,
     Typography,
 } from '@mui/material';
@@ -797,6 +798,22 @@ export default function MarketingWorkflowDrawer({
      * Key có định nghĩa keyword (biến inputPrompt + key đặc biệt) nhưng KHÔNG xuất hiện trong
      * prompt nào của workflow → keyword dư, không được dùng.
      */
+    /** Free mode hides the asset-profile step; "Quy tắc…" sections are guidance, not numbered steps. */
+    const isHiddenStep = React.useCallback((index: number) => (
+        workflow?.key === 'video-html' && effectiveChoiceValues['asset-mode'] === 'free' && index === 2
+    ), [workflow, effectiveChoiceValues]);
+    const isGuideStep = (title: string) => !/^(?:bước|step)\s*\d+/i.test(String(title || '').trim());
+    const visibleStepNumbers = React.useMemo(() => {
+        const out: Record<number, number> = {};
+        let next = 0;
+        (workflow?.steps || []).forEach((step, index) => {
+            if (!isHiddenStep(index) && !isGuideStep(step.title)) out[index] = ++next;
+        });
+        return out;
+    }, [workflow, isHiddenStep]);
+    const numberedStepCount = Object.keys(visibleStepNumbers).length;
+    const guideStepCount = (workflow?.steps || []).filter((step, index) => !isHiddenStep(index) && isGuideStep(step.title)).length;
+
     const unusedDefinedKeys = React.useMemo(() => (
         Array.from(promptKeywordDefinitions)
             .filter((key) => !usedPromptKeywords.has(key))
@@ -1411,23 +1428,23 @@ export default function MarketingWorkflowDrawer({
                                 {workflow.title}
                             </Typography>
                             <Typography variant="caption" sx={{ color: accentText, opacity: 0.85, display: 'block', mt: 0.25 }}>
-                                {workflow.steps.length} bước · Copy prompt tự thay [topic], [AUDIO-SCRIPT], [AUDIO-SCRIPT-BEATS] và các key output đã lưu
+                                {numberedStepCount} bước{guideStepCount > 0 ? ` + ${guideStepCount} quy tắc` : ''} · Nút Copy tự điền chủ đề, kịch bản và dữ liệu đã lưu vào prompt
                             </Typography>
                         </Box>
                     )}
 
                     {workflow.key === 'video-html' && (
-                        <Box sx={{mb: 1.5}}>
-                            <Typography variant="subtitle2" sx={{mb: 0.75}}>Chế độ asset</Typography>
-                            <Stack direction="row" spacing={1}>
-                                {([{value: 'shared', label: 'Quản lý asset chung'}, {value: 'free', label: 'Asset tự do'}]).map((mode) => (
-                                    <Button key={mode.value} size="small"
-                                        variant={(effectiveChoiceValues['asset-mode'] || 'shared') === mode.value ? 'contained' : 'outlined'}
-                                        disabled={Boolean(savingChoice)}
-                                        onClick={() => { void handleSelectChoice('asset-mode', mode.value); }}>
-                                        {mode.label}
-                                    </Button>
-                                ))}
+                        <Box sx={{mb: 1.5, p: 1.25, border: '1px solid', borderColor: 'divider', borderRadius: 2}}>
+                            <Stack direction={{xs: 'column', sm: 'row'}} alignItems={{xs: 'flex-start', sm: 'center'}} gap={1}>
+                                <Typography variant="subtitle2" sx={{minWidth: 96}}>Chế độ asset</Typography>
+                                <ToggleButtonGroup exclusive size="small" color="primary"
+                                    value={effectiveChoiceValues['asset-mode'] || 'shared'}
+                                    onChange={(_, value) => { if (value) void handleSelectChoice('asset-mode', value); }}
+                                    disabled={Boolean(savingChoice)} aria-label="Chế độ asset"
+                                    sx={{'& .MuiToggleButton-root': {textTransform: 'none', fontWeight: 600, px: 1.5, py: 0.5}}}>
+                                    <ToggleButton value="shared">Asset chung</ToggleButton>
+                                    <ToggleButton value="free">Asset tự do</ToggleButton>
+                                </ToggleButtonGroup>
                             </Stack>
                             <Typography variant="caption" sx={{display: 'block', mt: 0.75, color: 'text.secondary'}}>
                                 {effectiveChoiceValues['asset-mode'] === 'free'
@@ -1475,7 +1492,20 @@ export default function MarketingWorkflowDrawer({
                         </Box>
                     ) : null}
 
-                    {effectiveConfigItems.map((item) => (
+                    {effectiveConfigItems.some((item) => item.configured) && (
+                        <Stack direction="row" alignItems="center" gap={0.75} flexWrap="wrap" sx={{ mb: 1.5 }}>
+                            <Typography variant="caption" color="text.secondary" sx={{ mr: 0.25 }}>Đã cấu hình:</Typography>
+                            {effectiveConfigItems.filter((item) => item.configured).map((item) => (
+                                <Tooltip key={item.key} title={onConfigureConfig ? `Mở cấu hình ${item.label}` : ''} placement="top">
+                                    <Chip size="small" color="success" variant="outlined" icon={<CheckIcon />}
+                                        label={item.label.charAt(0).toUpperCase() + item.label.slice(1)}
+                                        onClick={onConfigureConfig ? () => onConfigureConfig(item.key) : undefined}
+                                        sx={{ fontWeight: 600 }} />
+                                </Tooltip>
+                            ))}
+                        </Stack>
+                    )}
+                    {effectiveConfigItems.filter((item) => !item.configured).map((item) => (
                         <Alert
                             key={item.key}
                             severity={item.configured ? 'success' : item.severity}
@@ -1498,33 +1528,15 @@ export default function MarketingWorkflowDrawer({
                     ))}
 
                     {unusedDefinedKeys.length > 0 && (
-                        <Box sx={{ mb: 1.5 }}>
-                            <Typography
-                                variant="caption"
-                                sx={{ color: 'text.secondary', display: 'block', mb: 0.5 }}
-                            >
-                                Keyword có định nghĩa trong code nhưng không xuất hiện trong prompt nào (dư):
+                        <Box component="details" sx={{ mb: 1.5, color: 'text.secondary', '& summary': { cursor: 'pointer', fontSize: 12 } }}>
+                            <summary>Chẩn đoán prompt (dành cho dev) · {unusedDefinedKeys.length} placeholder không thấy trong prompt</summary>
+                            <Typography variant="caption" sx={{ display: 'block', my: 0.5 }}>
+                                Placeholder FE hỗ trợ nhưng không xuất hiện trong prompt đã tải của workflow này. Không ảnh hưởng việc copy prompt; một số key được server thay sẵn nên có thể không hiện ở đây.
                             </Typography>
                             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
                                 {unusedDefinedKeys.map((key) => (
-                                    <Tooltip
-                                        key={key}
-                                        title="Có định nghĩa nhưng không dùng trong prompt nào"
-                                        placement="top"
-                                    >
-                                        <Chip
-                                            size="small"
-                                            variant="filled"
-                                            label={`[${key}]`}
-                                            sx={{
-                                                height: 20,
-                                                fontSize: 10.5,
-                                                bgcolor: '#7b1fa2',
-                                                color: '#fff',
-                                                '& .MuiChip-label': { px: 0.75 },
-                                            }}
-                                        />
-                                    </Tooltip>
+                                    <Chip key={key} size="small" variant="outlined" label={`[${key}]`}
+                                        sx={{ height: 20, fontSize: 10.5, '& .MuiChip-label': { px: 0.75 } }} />
                                 ))}
                             </Box>
                         </Box>
@@ -1536,8 +1548,10 @@ export default function MarketingWorkflowDrawer({
 
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
                         {workflow.steps.map((step, index) => {
-                            if (workflow.key === 'video-html' && effectiveChoiceValues['asset-mode'] === 'free' && index === 2) return null;
-                            const { number, label } = splitWorkflowStepTitle(step.title, index + 1);
+                            if (isHiddenStep(index)) return null;
+                            const isGuide = isGuideStep(step.title);
+                            const { label } = splitWorkflowStepTitle(step.title, index + 1);
+                            const number = visibleStepNumbers[index];
                             const stepKey = String(index);
                             const isCopying = copyingStep === stepKey;
                             const isCopied = copiedStep === stepKey;
@@ -1571,8 +1585,9 @@ export default function MarketingWorkflowDrawer({
                                         p: 1.5,
                                         border: '1px solid',
                                         borderColor: 'divider',
+                                        borderStyle: isGuide ? 'dashed' : 'solid',
                                         borderRadius: 2,
-                                        bgcolor: 'background.paper',
+                                        bgcolor: isGuide ? 'action.hover' : 'background.paper',
                                     }}
                                 >
                                     <Box
@@ -1590,7 +1605,7 @@ export default function MarketingWorkflowDrawer({
                                             fontSize: 13,
                                         }}
                                     >
-                                        {number}
+                                        {isGuide ? <TipsAndUpdatesOutlinedIcon sx={{ fontSize: 16 }} /> : number}
                                     </Box>
 
                                     <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -1758,20 +1773,24 @@ export default function MarketingWorkflowDrawer({
                                                             >
                                                                 {promptItem.choiceLabel || 'Chọn loại'}
                                                             </Typography>
-                                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                                                <ButtonGroup size="small" variant="outlined" disabled={Boolean(savingChoice)}>
-                                                                    {promptItem.choiceOptions.map((option) => (
-                                                                        <Button
+                                                            <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 0.75, minWidth: 0 }} role="radiogroup" aria-label={promptItem.choiceLabel || 'Chọn loại'}>
+                                                                {promptItem.choiceOptions.map((option) => {
+                                                                    const selected = option.label === selectedChoiceLabel;
+                                                                    return (
+                                                                        <Chip
                                                                             key={option.label}
-                                                                            variant={option.label === selectedChoiceLabel ? 'contained' : 'outlined'}
-                                                                            disabled={!option.exists}
+                                                                            role="radio"
+                                                                            aria-checked={selected}
+                                                                            label={option.label}
+                                                                            color={selected ? 'primary' : 'default'}
+                                                                            variant={selected ? 'filled' : 'outlined'}
+                                                                            icon={selected ? <CheckIcon /> : undefined}
+                                                                            disabled={!option.exists || Boolean(savingChoice)}
                                                                             onClick={() => { void handleSelectChoice(promptItem.choice, option.label); }}
-                                                                            sx={{ textTransform: 'none' }}
-                                                                        >
-                                                                            {option.label}
-                                                                        </Button>
-                                                                    ))}
-                                                                </ButtonGroup>
+                                                                            sx={{ fontWeight: selected ? 700 : 500, maxWidth: '100%' }}
+                                                                        />
+                                                                    );
+                                                                })}
                                                                 {savingChoice === promptItem.choice ? (
                                                                     <CircularProgress size={12} />
                                                                 ) : null}

@@ -17,6 +17,7 @@ import { Alert, Box, Button, Chip, CircularProgress, Dialog, DialogActions, Dial
 import { SceneAsset, SceneAssetRegistry, SceneAssetResponse, sceneAssetMessage, sceneAssetsManifest, sceneAssetsRequest } from 'helpers/shortVideoSceneAssets';
 import SceneAssetHtmlPreview from './SceneAssetHtmlPreview';
 import CharacterDesignDialog from './CharacterDesignDialog';
+import { SeriesCastMember, seriesCastMessage, seriesCastRequest, seriesCastSuggestId } from 'helpers/shortVideoSeriesCast';
 
 type Props = { shortVideoId: number };
 type AssetProvider = 'deepseek' | 'claude';
@@ -73,6 +74,9 @@ const startTransition: (callback: () => void) => void = (
 /** One row per reusable asset. Background polling observes saves made in the headless overlay. */
 export default function SceneAssetsPanel({shortVideoId}: Props) {
     const [designAsset, setDesignAsset] = React.useState<SceneAsset | null>(null);
+    const [castPick, setCastPick] = React.useState<SceneAsset | null>(null);
+    const [castList, setCastList] = React.useState<SeriesCastMember[] | null>(null);
+    const [promote, setPromote] = React.useState<{asset: SceneAsset; id: string; name: string} | null>(null);
     const [wardrobeAsset,setWardrobeAsset]=React.useState<SceneAsset | null>(null);
     const [wardrobeConfig,setWardrobeConfig]=React.useState<CharacterConfig>({});
     const [switchHtml,setSwitchHtml]=React.useState<SceneAsset | null>(null);
@@ -180,7 +184,7 @@ export default function SceneAssetsPanel({shortVideoId}: Props) {
                 pending = false;
             }
         };
-        setDesignAsset(null); setRegistry({}); setLoading(true); setError(''); setDraft(null); setProfile(null); setPreview(null); setImportOpen(false);
+        setDesignAsset(null); setCastPick(null); setPromote(null); setRegistry({}); setLoading(true); setError(''); setDraft(null); setProfile(null); setPreview(null); setImportOpen(false);
         setBusy(''); setNotice(''); setMappingOpen(false); setMappingCount(BEAT_RENDER_BATCH); ++profileHtmlRequest.current;
         void load();
         const timer = setInterval(load, REGISTRY_POLL_MS);
@@ -209,7 +213,7 @@ export default function SceneAssetsPanel({shortVideoId}: Props) {
             if (res.registry) applyRegistry(res.registry);
             // Character source changes alter the asset-config consumed by every
             // saved beat that still references its prior library GLB.
-            if (operation === 'unbind_model' || operation === 'character_design') dispatchBeatAssetChanged(shortVideoId, '');
+            if (operation === 'unbind_model' || operation === 'character_design' || operation === 'series_cast_link' || operation === 'series_cast_sync') dispatchBeatAssetChanged(shortVideoId, '');
             setNotice(operation === 'open' ? `Đã mở ${data.provider === 'claude' ? 'Claude' : 'DeepSeek'}. Lưu HTML trong overlay sau khi tạo xong.` : operation === 'enqueue' || operation === 'html' || operation === 'repair' ? sceneAssetMessage(res) : 'Đã lưu.');
             return res;
         } catch (e) { if (mounted.current) setError('Không kết nối được CMS.'); return null; }
@@ -307,6 +311,36 @@ export default function SceneAssetsPanel({shortVideoId}: Props) {
     const characters = assets.filter(a => a.kind === 'character');
     const working = draft || registry;
     const locked = Boolean(busy) || loading;
+    const openCastPick = async (asset: SceneAsset) => {
+        setError(''); setCastPick(asset); setCastList(null);
+        try {
+            const res = await seriesCastRequest('list');
+            if (!res.success) throw new Error(seriesCastMessage(res));
+            setCastList(res.cast || []);
+        } catch (e) { setCastPick(null); setError(e instanceof Error ? e.message : 'Không tải được dàn nhân vật cố định.'); }
+    };
+    const promoteToCast = async () => {
+        if (!promote || busy) return;
+        setBusy('promote:' + promote.asset.id); setError(''); setNotice('');
+        try {
+            const res = await seriesCastRequest('promote', {short_video_id: shortVideoId, asset_id: promote.asset.id, id: promote.id, name: promote.name});
+            if (!res.success) throw new Error(seriesCastMessage(res));
+            const registry = (res as {registry?: SceneAssetRegistry}).registry;
+            if (registry) applyRegistry(registry);
+            setNotice(`Đã thêm ${promote.name} vào dàn nhân vật cố định và gắn vai này.`); setPromote(null);
+        } catch (e) { setError(e instanceof Error ? e.message : 'Không lưu được vào dàn cố định.'); }
+        finally { setBusy(''); }
+    };
+    /** Linked roles are edited on the cast member, then this video syncs to the new design. */
+    const saveCastDesign = async (asset: SceneAsset, design: unknown): Promise<boolean> => {
+        const castId = asset.series_cast?.id || '';
+        const got = await seriesCastRequest('get', {id: castId});
+        if (!got.success || !got.member) { setError(seriesCastMessage(got)); return false; }
+        const m = got.member;
+        const saved = await seriesCastRequest('save', {id: m.id, name: m.name, profile: m.profile, sort: m.sort, expected_revision: m.revision, design});
+        if (!saved.success) { setError(seriesCastMessage(saved)); return false; }
+        return !!(await run('cast-sync:' + asset.id, 'series_cast_sync', {asset_id: asset.id, expected_module_hash: asset.module_hash || '', expected_spec_hash: asset.spec_hash}));
+    };
     const patchBeat = (id: string, patch: Record<string, unknown>) => setDraft(prev => {
         const base = prev || registry;
         const current = base.beats?.[id];
@@ -370,10 +404,19 @@ export default function SceneAssetsPanel({shortVideoId}: Props) {
                                 <Box sx={{minWidth:0,gridColumn:2,gridRow:1}}>
                                     <Stack direction="row" alignItems="center" gap={.75} flexWrap="wrap">
                                         {asset.chat_url?<Button size="small" variant="text" disabled={locked||running} onClick={()=>void run('chat:'+asset.id,'open',{asset_id:asset.id,mode:'reopen',provider:asset.chat_url?.includes('claude.ai')?'claude':'deepseek'})} sx={{minWidth:0,p:0,color:'primary.main',fontSize:14,fontWeight:700,textAlign:'left',textTransform:'none',overflowWrap:'anywhere'}}>{asset.name}</Button>:<Typography variant="body2" fontWeight={700} sx={{overflowWrap:'anywhere'}}>{asset.name}</Typography>}
-                                        {isCharacter&&<Button size="small" sx={compactButtonSx} variant="contained" disabled={locked||running} onClick={()=>void pickCharacter(asset)}>Thư viện</Button>}
-                                        {isCharacter&&<Button size="small" sx={compactButtonSx} variant="outlined" disabled={locked||running} onClick={()=>setDesignAsset(asset)}>Thiết kế</Button>}
+                                        <Typography variant="caption" color="text.secondary" sx={{fontFamily:'monospace'}}>{asset.id}{generation?.job_id ? ` · Job #${generation.job_id}` : ''}</Typography>
                                     </Stack>
-                                    <Typography variant="caption" color="text.secondary">{asset.id}{generation?.job_id ? ` · Job #${generation.job_id}` : ''}</Typography>
+                                    {isCharacter&&<Stack direction="row" gap={.75} flexWrap="wrap" alignItems="center" sx={{mt:.75}}>
+                                        <Tooltip describeChild title={asset.series_cast?'Sửa nhân vật cố định (áp dụng cho mọi video đã gắn)':'Phối ngoại hình bằng bộ Thiết kế'}><span><Button size="small" sx={compactButtonSx} variant="contained" disabled={locked||running} onClick={()=>setDesignAsset(asset)}>Thiết kế</Button></span></Tooltip>
+                                        {!asset.model_snapshot&&<Tooltip describeChild title="Gắn hoặc lưu vào dàn nhân vật dùng lại qua nhiều video"><span><Button size="small" sx={compactButtonSx} variant="outlined" disabled={locked||running} onClick={()=>void openCastPick(asset)}>Dàn cố định</Button></span></Tooltip>}
+                                        <Tooltip describeChild title="Dùng nhân vật GLB từ thư viện 3D"><span><Button size="small" sx={compactButtonSx} variant="text" disabled={locked||running} onClick={()=>void pickCharacter(asset)}>GLB</Button></span></Tooltip>
+                                    </Stack>}
+                                    {asset.series_cast&&<Stack direction="row" gap={.75} alignItems="center" flexWrap="wrap" sx={{mt:.5}}>
+                                        <Chip size="small" color="secondary" variant="outlined" label={`Dàn cố định: ${asset.series_cast.latest_name||asset.series_cast.name}`}/>
+                                        {asset.series_cast.exists===false&&<Chip size="small" color="error" label="Nhân vật cố định đã bị xoá"/>}
+                                        {asset.series_cast.stale&&<><Chip size="small" color="warning" label="Có bản thiết kế mới"/>
+                                            <Button size="small" sx={compactButtonSx} variant="contained" color="warning" disabled={locked||running} onClick={()=>void run('cast-sync:'+asset.id,'series_cast_sync',{asset_id:asset.id,expected_module_hash:asset.module_hash||'',expected_spec_hash:asset.spec_hash})}>Đồng bộ</Button></>}
+                                    </Stack>}
                                     {!asset.model_snapshot&&!asset.character_design&&<Stack direction="row" gap={.75} flexWrap="wrap" alignItems="center" sx={{mt:1}}>
                                         {(['deepseek','claude'] as const).map(target=><Button key={target} size="small" sx={compactButtonSx} variant="outlined" startIcon={<img src={`${process.env.PUBLIC_URL||''}/images/workflow/${target}.svg`} width={18} height={18} alt=""/>} disabled={locked||running} onClick={()=>void run(asset.id,'open',{asset_id:asset.id,provider:target})}>{target==='claude'?'Claude':'DeepSeek'}</Button>)}
                                     </Stack>}
@@ -473,8 +516,44 @@ export default function SceneAssetsPanel({shortVideoId}: Props) {
                 <Button variant="contained" disabled={Boolean(busy) || profileHtmlState === 'loading' || !profile?.name.trim() || !profile?.spec.trim() || Boolean(profileHtmlIssue)} onClick={() => void saveProfile()}>Lưu hồ sơ</Button>
             </DialogActions>
         </Dialog>
-        {designAsset && <CharacterDesignDialog key={`${shortVideoId}:${designAsset.id}`} shortVideoId={shortVideoId} asset={designAsset} busy={!!busy}
-            onClose={()=>setDesignAsset(null)} onSave={async data=>!!(await run('design:'+designAsset.id, 'character_design', data))}/>}
+        {designAsset && (designAsset.series_cast?.exists !== false && designAsset.series_cast
+            ? <CharacterDesignDialog key={`cast:${shortVideoId}:${designAsset.id}`} shortVideoId={shortVideoId} asset={{id: designAsset.id, name: designAsset.series_cast.latest_name || designAsset.series_cast.name}} busy={!!busy}
+                title="Thiết kế nhân vật cố định"
+                replacingNote="Vai này thuộc dàn nhân vật cố định: lưu sẽ cập nhật nhân vật cho mọi video và đồng bộ ngay video này. Video khác sẽ báo “Có bản thiết kế mới”. Muốn chỉ đổi riêng video này, bấm “Dàn cố định” → Bỏ gắn rồi Thiết kế."
+                loadDesigner={async()=>{const res=await seriesCastRequest('designer',{id:designAsset.series_cast?.id});if(!res.success||!res.designer)throw new Error(seriesCastMessage(res));return res.designer;}}
+                onClose={()=>setDesignAsset(null)} onSave={async data=>saveCastDesign(designAsset, data.design)}/>
+            : <CharacterDesignDialog key={`${shortVideoId}:${designAsset.id}`} shortVideoId={shortVideoId} asset={designAsset} busy={!!busy}
+                onClose={()=>setDesignAsset(null)} onSave={async data=>!!(await run('design:'+designAsset.id, 'character_design', data))}/>)}
+        <Dialog open={!!castPick} onClose={()=>!busy&&setCastPick(null)} fullWidth maxWidth="sm">
+            <DialogTitle>Gắn dàn nhân vật cố định · {castPick?.name}</DialogTitle>
+            <DialogContent>
+                {castPick?.character_design&&!castPick.series_cast&&<Alert severity="success" sx={{mb:2}} action={<Button color="inherit" size="small" disabled={!!busy} onClick={()=>{const asset=castPick;setCastPick(null);setPromote({asset,id:seriesCastSuggestId(asset.name)||asset.id,name:asset.name});}}>Lưu vai này</Button>}>Vai này đã có thiết kế đẹp? Lưu thành nhân vật cố định để dùng lại ở video sau.</Alert>}
+                <Typography variant="body2" sx={{mb:1.5}}>Hoặc chọn một nhân vật cố định cho vai này. Khi nhân vật cố định được sửa, video sẽ báo “Có bản thiết kế mới” để đồng bộ; beat đã dựng dùng vai này cần dựng lại.</Typography>
+                {castList===null?<Box sx={{display:'grid',placeItems:'center',py:4}}><CircularProgress size={24}/></Box>
+                    :castList.length===0?<Alert severity="info">Chưa có nhân vật cố định nào. Tạo mới ở nút “Dàn nhân vật cố định” trên trang Short Video{castPick?.character_design&&!castPick.series_cast?', hoặc bấm “Lưu vai này” ở trên':''}.</Alert>
+                    :<Stack spacing={1}>{castList.map(member=><Button key={member.id} variant={castPick?.series_cast?.id===member.id?'contained':'outlined'} disabled={!!busy}
+                        sx={{justifyContent:'flex-start',textTransform:'none',textAlign:'left'}}
+                        onClick={async()=>{if(castPick&&await run('cast:'+castPick.id,'series_cast_link',{asset_id:castPick.id,cast_id:member.id,expected_module_hash:castPick.module_hash||'',expected_spec_hash:castPick.spec_hash}))setCastPick(null);}}>
+                        <Box><Typography variant="body2" fontWeight={700}>{member.name} <Typography component="span" variant="caption">· {member.id} · {member.design?.selections?.gender==='male'?'Nam':'Nữ'}</Typography></Typography>
+                        {member.profile.role&&<Typography variant="caption" component="div">{member.profile.role}</Typography>}</Box>
+                    </Button>)}</Stack>}
+            </DialogContent>
+            <DialogActions>
+                {castPick?.series_cast&&<Button color="warning" disabled={!!busy} onClick={async()=>{if(castPick&&await run('cast-unlink:'+castPick.id,'series_cast_unlink',{asset_id:castPick.id}))setCastPick(null);}}>Bỏ gắn (giữ ngoại hình hiện tại)</Button>}
+                <Button disabled={!!busy} onClick={()=>setCastPick(null)}>Đóng</Button>
+            </DialogActions>
+        </Dialog>
+        <Dialog open={!!promote} onClose={()=>!busy&&setPromote(null)} fullWidth maxWidth="xs">
+            <DialogTitle>Lưu vào dàn nhân vật cố định</DialogTitle>
+            <DialogContent>
+                <Typography variant="body2" sx={{mb:2}}>Thiết kế hiện tại của vai này trở thành nhân vật cố định dùng cho video sau. Chỉ lưu nhân vật đã đẹp và đã kiểm tra toàn thân, cận mặt, biểu cảm.</Typography>
+                {promote&&<Stack spacing={2}>
+                    <TextField size="small" label="Tên nhân vật" value={promote.name} onChange={e=>setPromote({...promote,name:e.target.value})}/>
+                    <TextField size="small" label="ID" helperText="Chữ thường, số, gạch dưới; dùng làm asset id ở video sau." value={promote.id} onChange={e=>setPromote({...promote,id:e.target.value.toLowerCase()})}/>
+                </Stack>}
+            </DialogContent>
+            <DialogActions><Button disabled={!!busy} onClick={()=>setPromote(null)}>Hủy</Button><Button variant="contained" disabled={!!busy||!promote?.name.trim()||!/^[a-z][a-z0-9_]{1,40}$/.test(promote?.id||'')} onClick={()=>void promoteToCast()}>{busy.startsWith('promote:')?'Đang lưu…':'Lưu'}</Button></DialogActions>
+        </Dialog>
         <SceneAssetPreviewDialog shortVideoId={shortVideoId} asset={preview} defaultProvider={provider} onClose={() => setPreview(null)} onRegistryChange={applyRegistry} previewTitle={`Preview ${preview?.name || ''}`}/>
     </Stack>;
 }

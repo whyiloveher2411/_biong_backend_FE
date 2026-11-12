@@ -6,6 +6,8 @@ export type SceneAsset = {
     spec_hash: string; html_sha256?: string; updated_at?: string; has_html?: boolean; html?: string; preview_html?: string; environment_materials?: {hash: string; status: string; sources?: Record<string, unknown>}; ready?: boolean; module_hash?: string;
     model_snapshot?: ShortVideoModel3d;
     character_design?: CharacterDesignConfig;
+    /** Linked recurring series cast member (Dàn nhân vật cố định); stale = the cast has a newer design. */
+    series_cast?: {id: string; name: string; design_revision: string; latest_design_revision?: string; latest_name?: string; exists?: boolean; stale?: boolean};
     has_html_backup?: boolean; html_backup_ready?: boolean;
     chat_url?: string;
     generation?: {provider?: 'deepseek'|'claude'; status: 'queued' | 'processing' | 'completed' | 'failed' | 'superseded' | 'cancelled'; job_id?: number; error?: string; continue_clicks?: number; phase?: string; repair_attempt?: number; preview_checked?: boolean};

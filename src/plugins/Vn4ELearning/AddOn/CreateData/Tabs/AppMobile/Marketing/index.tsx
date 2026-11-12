@@ -57,6 +57,7 @@ import MarketingSourcesDrawer from './MarketingSourcesDrawer';
 import MarketingRelationshipDrawer from './MarketingRelationshipDrawer';
 import MarketingNewsPushConfigDrawer from './MarketingNewsPushConfigDrawer';
 import MarketingGithubTrendingDrawer from './MarketingGithubTrendingDrawer';
+import SeriesCastDrawer from './SeriesCastDrawer';
 import ShortVideoModel3dManageDrawer from './ShortVideoModel3dManageDrawer';
 import MarketingShortVideoAvatarDrawer from './MarketingShortVideoAvatarDrawer';
 import MarketingGetScriptDrawer from './MarketingGetScriptDrawer';
@@ -491,6 +492,7 @@ export default function Marketing({ data }: { data: CreatePostTypeData }) {
     const [openNewsPushConfigDrawer, setOpenNewsPushConfigDrawer] = useState(false);
     const [openGithubTrendingDrawer, setOpenGithubTrendingDrawer] = useState(false);
     const [openCharacterLibrary, setOpenCharacterLibrary] = useState(false);
+    const [openSeriesCast, setOpenSeriesCast] = useState(false);
     const [openAvatarDrawer, setOpenAvatarDrawer] = useState(false);
     const [openGetScriptDrawer, setOpenGetScriptDrawer] = useState(false);
     const [openCheckMailDrawer, setOpenCheckMailDrawer] = useState(false);
@@ -924,6 +926,7 @@ export default function Marketing({ data }: { data: CreatePostTypeData }) {
                                     Quản lý avatar
                                 </Button>
                                 <Button size="small" variant="outlined" onClick={()=>setOpenCharacterLibrary(true)} sx={{textTransform:'none',flexShrink:0}}>Nhân vật 3D & tủ đồ</Button>
+                                <Button size="small" variant="outlined" onClick={()=>setOpenSeriesCast(true)} sx={{textTransform:'none',flexShrink:0}}>Dàn nhân vật cố định</Button>
                                 <Button
                                     size="small"
                                     variant="outlined"
@@ -1242,6 +1245,7 @@ export default function Marketing({ data }: { data: CreatePostTypeData }) {
             />
 
             <ShortVideoModel3dManageDrawer open={openCharacterLibrary} onClose={()=>setOpenCharacterLibrary(false)}/>
+            <SeriesCastDrawer open={openSeriesCast} onClose={()=>setOpenSeriesCast(false)}/>
             <MarketingShortVideoAvatarDrawer
                 open={openAvatarDrawer}
                 onClose={() => setOpenAvatarDrawer(false)}
