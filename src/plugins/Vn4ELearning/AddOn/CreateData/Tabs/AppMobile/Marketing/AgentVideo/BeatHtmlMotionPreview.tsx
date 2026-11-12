@@ -135,7 +135,10 @@ export default function BeatHtmlMotionPreview({ html, timeSec, durationSec, beat
 
     // Đổi beat / đổi nội dung HTML → đổi key để React tạo iframe MỚI (buộc reload
     // srcDoc). Không có key, trình duyệt có thể giữ document cũ → preview dính beat trước.
-    const iframeKey = `${beatId || 'beat'}:${assetRevision}:${quickHash(srcDoc)}`;
+    // useMemo: srcDoc có thể vài chục MB (PBR pack inline) — hash mỗi render (mỗi frame
+    // playhead) tốn ~25ms/beat và làm preview giật.
+    const srcDocHash = React.useMemo(() => quickHash(srcDoc), [srcDoc]);
+    const iframeKey = `${beatId || 'beat'}:${assetRevision}:${srcDocHash}`;
 
     React.useEffect(() => {
         const container = containerRef.current;

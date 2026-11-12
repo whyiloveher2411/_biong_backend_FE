@@ -168,3 +168,19 @@ test('accessory areas save several independent accessory choices', async()=>{
   design:expect.objectContaining({selections:expect.objectContaining({hat:'cap',glasses:'round',body_bag:'backpack'})}),
  })));
 });
+
+test('comic traits share one "Dấu ấn hài" tab with sub-groups and save their picks',async()=>{
+ const onSave=jest.fn().mockResolvedValue(true);
+ const comic=[{id:'mole',name:'Nốt ruồi',colors:[],comicGroup:true,items:[{id:'none',name:'Không',badge:'Default'},{id:'lip_hair',name:'Nốt ruồi mép có lông',badge:'HTML'}]},
+  {id:'teeth_quirk',name:'Răng',colors:[],comicGroup:true,items:[{id:'none',name:'Không',badge:'Default'},{id:'gap',name:'Răng sún',badge:'HTML'}]}];
+ (sceneAssetsRequest as jest.Mock).mockResolvedValue({success:true,designer:{...designer,config:{...config,selections:{...config.selections,mole:'none',teeth_quirk:'none'}},catalog:[...designer.catalog,...comic]}});
+ render(<CharacterDesignDialog shortVideoId={42} asset={asset} busy={false} onSave={onSave} onClose={jest.fn()}/>);
+ fireEvent.click(await screen.findByRole('tab',{name:'Dấu ấn hài'}));
+ expect(screen.queryByRole('tab',{name:'Răng'})).toBeNull();
+ fireEvent.click(screen.getByRole('button',{name:'Răng'}));
+ fireEvent.click(screen.getByRole('button',{name:'Răng sún'}));
+ expect(screen.getByRole('button',{name:'Răng •'}).getAttribute('aria-pressed')).toBe('true');
+ expect(screen.getByRole('tab',{name:'Dấu ấn hài'}).getAttribute('aria-selected')).toBe('true');
+ fireEvent.click(screen.getByRole('button',{name:'Lưu nhân vật'}));
+ await waitFor(()=>expect(onSave).toHaveBeenCalledWith(expect.objectContaining({design:expect.objectContaining({selections:expect.objectContaining({teeth_quirk:'gap',mole:'none'})})})));
+});

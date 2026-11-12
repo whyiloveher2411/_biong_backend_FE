@@ -15,7 +15,10 @@ export type SceneAssetBeat = {
     status?: 'missing' | 'stale' | 'ready'; duration_sec?: number;
     continuity_from?: string; continuity_error?: string; transition?: 'continue' | 'cut'; title_card?: boolean;
     scene_id?: string; story_function?: string; start_state?: string; action?: string; end_state?: string; new_information?: string; camera?: string;
+    gags?: SceneAssetGag[];
 };
+/** Planned punchline: a character reaction/manga FX peaking on verbatim narration words. */
+export type SceneAssetGag = {character_id: string; reaction?: string; fx?: string[]; cue: string; hold?: number; sfx?: string};
 export type SceneAssetRegistry = {
     schema_version?: string; storyboard_version?: 'causal_3d_v1'; revision?: string; assets?: Record<string, SceneAsset>; beats?: Record<string, SceneAssetBeat>;
 };
@@ -44,7 +47,7 @@ export type CharacterDesignConfig = {
     template: 'mai_v1'; selections: Record<string, string>; colors: Record<string, string>; parameters?: Record<string, number>;
 };
 export type CharacterDesignCatalog = {
-    catalog: {id: string; name: string; colors: string[]; accessoryArea?: string; accessoryName?: string; items: {id: string; name: string; badge: string; thumbnail?: string; genders?: string[]; parameters?: Record<string,number>}[]}[];
+    catalog: {id: string; name: string; colors: string[]; accessoryArea?: string; accessoryName?: string; comicGroup?: boolean; items: {id: string; name: string; badge: string; thumbnail?: string; genders?: string[]; parameters?: Record<string,number>}[]}[];
     template_html: string; config: CharacterDesignConfig;
     genders?: Record<string,{label:string;defaults:Record<string,string>}>;
     expected_module_hash: string; expected_spec_hash: string; replacing: boolean;
@@ -61,7 +64,7 @@ export function sceneAssetsManifest(registry: SceneAssetRegistry): string {
     return JSON.stringify({schema_version: 'threejs_scene_assets_v1',
         ...(registry.storyboard_version ? {storyboard_version: registry.storyboard_version} : {}),
         assets: Object.values(registry.assets || {}).map(({id, kind, name, spec}) => ({id, kind, name, spec})),
-        beats: Object.values(registry.beats || {}).map(({id, environment_id, additional_environment_ids, character_ids, continuity, scene_id, story_function, start_state, action, end_state, new_information, camera, transition, title_card}) => ({id, environment_id, additional_environment_ids, character_ids, continuity, scene_id, story_function, start_state, action, end_state, new_information, camera, transition, title_card})),
+        beats: Object.values(registry.beats || {}).map(({id, environment_id, additional_environment_ids, character_ids, continuity, scene_id, story_function, start_state, action, end_state, new_information, camera, transition, title_card, gags}) => ({id, environment_id, additional_environment_ids, character_ids, continuity, scene_id, story_function, start_state, action, end_state, new_information, camera, transition, title_card, gags})),
     }, null, 2);
 }
 export function sceneAssetMessage(res: SceneAssetResponse): string {

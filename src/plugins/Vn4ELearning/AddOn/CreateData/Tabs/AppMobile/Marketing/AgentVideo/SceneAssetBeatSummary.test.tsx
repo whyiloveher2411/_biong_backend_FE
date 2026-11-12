@@ -85,3 +85,15 @@ test('missing environment shortcut opens creation popup instead of being disable
     await screen.findByText(/Đang chờ queue tạo HTML.*Job 99/);
     expect(request).toHaveBeenCalledWith(66,'enqueue',{asset_id:'dinner',force:true});
 });
+
+test('lists the planned comic gags with their cue words and sound', async () => {
+    request.mockResolvedValueOnce({success: true, registry: {
+        assets: {tom: {id: 'tom', kind: 'character', name: 'Tom', ready: true, has_html: true}},
+        beats: {beat_1: {id: 'beat_1', environment_id: '', character_ids: ['tom'], continuity: '', action: 'Tom khoe chiến tích.',
+            gags: [{character_id: 'tom', reaction: 'doyagao', fx: ['sparkle'], cue: 'nhất lớp', sfx: 'bright sparkle chime'}, {character_id: 'tom', reaction: 'blank', cue: 'điểm không', sfx: ''}]}},
+    }});
+    render(<SceneAssetBeatSummary shortVideoId={66} beatId="beat_1"/>);
+    expect(await screen.findByText('Điểm gây cười')).toBeTruthy();
+    expect(screen.getByText(/Mặt tự mãn \+ Lấp lánh khi đọc “nhất lớp” · âm thanh: bright sparkle chime/)).toBeTruthy();
+    expect(screen.getByText(/Cạn lời khi đọc “điểm không” · không âm thanh/)).toBeTruthy();
+});

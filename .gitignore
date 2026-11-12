@@ -40,3 +40,6 @@ yarn-error.log*
 .media/
 .hyperframes/cache/
 .hyperframes/render-cache/
+
+# Generated PBR pack scripts (symlink to _biong_backend/public/sv-material-packs)
+/public/sv-material-packs

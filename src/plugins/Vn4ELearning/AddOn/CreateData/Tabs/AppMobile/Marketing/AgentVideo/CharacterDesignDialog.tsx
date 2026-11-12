@@ -31,7 +31,9 @@ const extraColors = ['#F5F5F5','#9E9E9E','#424242','#9670CF','#982BFA','#5623A7'
     '#FF1744','#C62828','#F50087','#AD1457','#E0A97C','#F4D4B5','#AD7351','#754B35','#2B1B14','#000000',
     '#0A0A0A','#D9C4A2','#3A2418','#397B77','#9B4248','#1FA88A','#315B87','#2B3A5C','#EDDFC2','#E8A020','#B85868','#7968A8'];
 const previewMenuProps = {PaperProps:{sx:{bgcolor:'#25283e',color:'#fff','& .MuiMenuItem-root':{color:'#fff'},'& .MuiMenuItem-root.Mui-selected':{bgcolor:'#504967'}}}};
-const emotions = ['neutral','happy','sad','angry','surprised','worried','smug','thinking','crying','laughing'];
+const emotions = ['neutral','happy','sad','angry','surprised','worried','smug','thinking','crying','laughing','doyagao','blank'];
+// Preview-only comic extras: the wild take gag and the manga FX marks (beats pick them per moment).
+const comics: [string,string][] = [['','Không'],['wild_take','Wild take (sốc bùng nổ)'],['vein','Gân xanh'],['sweat_drop','Giọt mồ hôi'],['gloom','Vạch u ám'],['spiral_eyes','Mắt xoáy'],['heart_eyes','Mắt tim'],['star_eyes','Mắt sao'],['soul','Hồn lìa khỏi xác'],['sparkle','Lấp lánh'],['blush_lines','Ngượng đỏ mặt'],['impact','Vạch va chạm']];
 const poses = ['idle','walk','run','wave','reach','point','talk','think','phone_call','look_phone','type','arms_crossed','hands_on_hips','shrug','nod','shake_head','clap','cheer','facepalm','bow','pick_up','push','stand','sit','kneel','cover_ears','hold_paw','lift_with_helper','carry_cup','carry_bowl'];
 
 /** A self-contained snapshot, shared by preview and the server-side canonical factory. */
@@ -106,6 +108,7 @@ export default function CharacterDesignDialog({shortVideoId,asset,busy,onClose,o
     const [photoSpeaking,setPhotoSpeaking]=React.useState(false);
     const [photoBlink,setPhotoBlink]=React.useState<number|'loop'|undefined>();
     const [emotion,setEmotion]=React.useState('neutral');
+    const [comic,setComic]=React.useState('');
     React.useEffect(()=>{
         let active=true;
         setError(''); setCatalog(null); setConfig(null);setDrawingContour(false);
@@ -118,8 +121,11 @@ export default function CharacterDesignDialog({shortVideoId,asset,busy,onClose,o
     },[shortVideoId,asset.id,attempt]);
     // The iframe document never changes when choosing parts. Its existing scene receives the design.
     const html=React.useMemo(()=>catalog?characterDesignPreview(catalog.template_html,catalog.config,'reset','idle','neutral'):'',[catalog]);
-    const previewMessage=React.useMemo(()=>({type:'sv-design-preview',design:previewConfig,colors:config?.colors,view,pose,emotion,showRig,focusNonce,photoBlink,speaking:photoSpeaking}),[previewConfig,config?.colors,view,pose,emotion,showRig,focusNonce,photoBlink,photoSpeaking]);
+    const previewMessage=React.useMemo(()=>({type:'sv-design-preview',design:previewConfig,colors:config?.colors,view,pose,emotion,comic,showRig,focusNonce,photoBlink,speaking:photoSpeaking}),[previewConfig,config?.colors,view,pose,emotion,comic,showRig,focusNonce,photoBlink,photoSpeaking]);
     const accessorySlots=catalog?.catalog.filter(category=>category.accessoryArea)||[];
+    // "Dấu ấn hài": comic trait slots share one main tab with a row of sub-groups.
+    const comicSlots=catalog?.catalog.filter(category=>category.comicGroup)||[];
+    const comicActive=comicSlots.some(category=>category.id===slot);
     const activeAccessory=accessorySlots.find(category=>category.id===accessorySlot)||accessorySlots[0];
     const editingSlot=slot==='accessory'&&activeAccessory?activeAccessory.id:slot;
     const current=catalog?.catalog.find(c=>c.id===editingSlot);
@@ -164,9 +170,10 @@ export default function CharacterDesignDialog({shortVideoId,asset,busy,onClose,o
             {error&&<Alert severity="error" action={!catalog?<Button onClick={()=>setAttempt(n=>n+1)}>Thử lại</Button>:undefined}>{error}</Alert>}
             {!catalog||!config?<Box sx={{height:'60vh',display:'grid',placeItems:'center'}}><CircularProgress aria-label="Đang tải bộ thiết kế"/></Box>:<Box>
                 <Box sx={{position:config.photoFace?'sticky':'relative',top:0,zIndex:2,bgcolor:'#151a28',minWidth:0,'& iframe':{height:{xs:'32vh !important',md:'43vh !important'},minHeight:photoEditorOpen?{xs:500,sm:610,md:650}:220}}}>
-                    <Stack direction="row" gap={1} sx={{position:'absolute',top:14,left:16,right:{xs:178,sm:'auto'},zIndex:1,bgcolor:'rgba(24,27,44,.92)',p:1.25,borderRadius:2,color:'#fff','& .MuiInputBase-root':{color:'#fff',fontSize:13},'& .MuiSelect-select':{color:'#fff'},'& .MuiInputLabel-root':{color:'#fff'},'& .MuiOutlinedInput-notchedOutline':{borderColor:'#626980'},'& .MuiSvgIcon-root':{color:'#fff'}}}>
+                    <Stack direction="row" gap={1} sx={{flexWrap:'wrap',position:'absolute',top:14,left:16,right:{xs:178,sm:'auto'},zIndex:1,bgcolor:'rgba(24,27,44,.92)',p:1.25,borderRadius:2,color:'#fff','& .MuiInputBase-root':{color:'#fff',fontSize:13},'& .MuiSelect-select':{color:'#fff'},'& .MuiInputLabel-root':{color:'#fff'},'& .MuiOutlinedInput-notchedOutline':{borderColor:'#626980'},'& .MuiSvgIcon-root':{color:'#fff'}}}>
                         <FormControl size="small" sx={{minWidth:0,width:{xs:'50%',sm:155}}}><InputLabel>Động tác lặp (IK)</InputLabel><Select MenuProps={previewMenuProps} label="Động tác lặp (IK)" value={pose} onChange={e=>setPose(e.target.value)}>{poses.map(p=><MenuItem key={p} value={p}>{p}</MenuItem>)}</Select></FormControl>
                         <TextField select SelectProps={{MenuProps:previewMenuProps}} size="small" sx={{minWidth:0,width:{xs:'50%',sm:155}}} label="Biểu cảm xem thử" value={emotion} onChange={e=>setEmotion(e.target.value)}>{emotions.map(e=><MenuItem key={e} value={e}>{e}</MenuItem>)}</TextField>
+                        <TextField select SelectProps={{MenuProps:previewMenuProps,displayEmpty:true}} InputLabelProps={{shrink:true}} size="small" sx={{minWidth:0,width:{xs:'50%',sm:170}}} label="Hiệu ứng hài" value={comic} onChange={e=>setComic(e.target.value)}>{comics.map(([id,label])=><MenuItem key={id||'none'} value={id}>{label}</MenuItem>)}</TextField>
                     </Stack>
                     <Box data-character-viewport sx={{mr:photoEditorOpen?{xs:'calc(46% + 32px)',sm:'352px',md:'392px'}:0}}>
                         <SceneAssetHtmlPreview html={html} previewMessage={previewMessage} title={`Thiết kế ${asset.name}`} height="43vh" onPhotoOutline={setPhotoOutline} onPhotoTargets={setPhotoTargets} onPasteImage={file=>photoEditor.current?.upload(file)}/>
@@ -192,8 +199,11 @@ export default function CharacterDesignDialog({shortVideoId,asset,busy,onClose,o
                     </Stack>)}
                     <Box sx={{bgcolor:'rgba(20,23,43,.3)',borderRadius:2,px:{xs:1.5,sm:2.5},pt:.5,pb:2}}>
                         <Box data-horizontal-options role="tablist" aria-label="Bộ phận nhân vật" sx={{display:'flex',gap:{xs:2,sm:3.5},overflowX:'auto',overscrollBehaviorX:'contain',mb:2,scrollbarWidth:'thin'}}>
-                            {catalog.catalog.filter(category=>category.id!=='gender'&&(!category.accessoryArea||category.id==='accessory')).map(category=><Button role="tab" id={`design-tab-${category.id}`} aria-controls="design-assets-panel" aria-selected={slot===category.id} key={category.id} onClick={()=>{setSlot(category.id);setView('part:'+(category.id==='accessory'&&activeAccessory?activeAccessory.id:category.id));setFocusNonce(n=>n+1);}} sx={{flexShrink:0,minWidth:0,px:0,py:1.5,color:'#fff',borderRadius:0,borderBottom:'2px solid',borderColor:slot===category.id?'white':'transparent',fontSize:{xs:14,sm:16},fontWeight:600,textTransform:'none'}}>{category.name}</Button>)}
+                            {catalog.catalog.filter(category=>category.id!=='gender'&&(!category.accessoryArea||category.id==='accessory')&&(!category.comicGroup||category.id===comicSlots[0]?.id)).map(category=>{const selected=category.comicGroup?comicActive:slot===category.id;return <Button role="tab" id={`design-tab-${category.id}`} aria-controls="design-assets-panel" aria-selected={selected} key={category.id} onClick={()=>{setSlot(category.id);setView('part:'+(category.comicGroup?'head':category.id==='accessory'&&activeAccessory?activeAccessory.id:category.id));setFocusNonce(n=>n+1);}} sx={{flexShrink:0,minWidth:0,px:0,py:1.5,color:'#fff',borderRadius:0,borderBottom:'2px solid',borderColor:selected?'white':'transparent',fontSize:{xs:14,sm:16},fontWeight:600,textTransform:'none'}}>{category.comicGroup?'Dấu ấn hài':category.name}</Button>;})}
                         </Box>
+                        {comicActive&&<Box data-horizontal-options role="group" aria-label="Loại dấu ấn hài" sx={{display:'flex',gap:1,overflowX:'auto',mb:2}}>
+                            {comicSlots.map(category=><Button key={category.id} size="small" aria-pressed={slot===category.id} onClick={()=>setSlot(category.id)} sx={{color:'#fff',flexShrink:0,textTransform:'none',bgcolor:slot===category.id?'#6258b4':'transparent'}}>{category.name}{config.selections[category.id]&&config.selections[category.id]!=='none'?' •':''}</Button>)}
+                        </Box>}
                         {slot==='accessory'&&activeAccessory&&<Stack spacing={1} sx={{mb:2}}>
                             <Box data-horizontal-options role="group" aria-label="Khu vực phụ kiện" sx={{display:'flex',gap:1,overflowX:'auto'}}>
                                 {accessoryAreas.map(area=><Button key={area.id} size="small" aria-pressed={activeAccessory.accessoryArea===area.id} onClick={()=>{

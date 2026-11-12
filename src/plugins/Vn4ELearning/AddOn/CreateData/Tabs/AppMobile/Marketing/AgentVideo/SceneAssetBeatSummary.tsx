@@ -8,6 +8,12 @@ import { Alert, Box, Button, Chip, Stack, Typography, IconButton, Tooltip, Circu
 import { SceneAsset, SceneAssetRegistry, sceneAssetMessage, sceneAssetsRequest } from 'helpers/shortVideoSceneAssets';
 
 /** Read saved mapping beside the beat direction; never infer asset IDs from prose. */
+const COMIC_LABELS: Record<string, string> = {
+    wild_take: 'Sốc bùng nổ', doyagao: 'Mặt tự mãn', blank: 'Cạn lời', eye_pop: 'Lồi mắt', jaw_drop: 'Rớt hàm', head_enlarge: 'Đầu phình to',
+    skip: 'Nhảy chân sáo', table_slap: 'Đập bàn', belly_hold: 'Ôm bụng cười', vein: 'Gân xanh', sweat_drop: 'Giọt mồ hôi', gloom: 'Vạch u ám',
+    spiral_eyes: 'Mắt xoáy', heart_eyes: 'Mắt tim', star_eyes: 'Mắt sao', soul: 'Hồn lìa khỏi xác', sparkle: 'Lấp lánh', blush_lines: 'Ngượng đỏ mặt', impact: 'Vạch va chạm',
+};
+
 export default function SceneAssetBeatSummary({shortVideoId, beatId, variant = 'summary'}: {shortVideoId: number; beatId: string; variant?: 'summary' | 'toolbar'}) {
     const [registry, setRegistry] = React.useState<SceneAssetRegistry | null>(null);
     const [error, setError] = React.useState('');
@@ -85,6 +91,12 @@ export default function SceneAssetBeatSummary({shortVideoId, beatId, variant = '
                 <Typography variant="body2"><b>Hành động:</b> {mapping.action}</Typography>
                 {mapping.end_state && <Typography variant="body2"><b>Kết thúc:</b> {mapping.end_state}</Typography>}
                 {mapping.new_information && <Typography variant="body2"><b>Thay đổi:</b> {mapping.new_information}</Typography>}
+            </Box>}
+            {!!mapping.gags?.length && <Box>
+                <Typography variant="subtitle2">Điểm gây cười</Typography>
+                {mapping.gags.map((gag, i) => <Typography key={i} variant="body2">
+                    <b>{registry?.assets?.[gag.character_id]?.name || gag.character_id}:</b> {[gag.reaction ? (COMIC_LABELS[gag.reaction] || gag.reaction) : '', ...(gag.fx || []).map(fx => COMIC_LABELS[fx] || fx)].filter(Boolean).join(' + ')} khi đọc “{gag.cue}”{gag.sfx ? ` · âm thanh: ${gag.sfx}` : gag.sfx === '' ? ' · không âm thanh' : ''}
+                </Typography>)}
             </Box>}
             {mapping.continuity && <Typography variant="body2" sx={{whiteSpace: 'pre-wrap'}}>{mapping.continuity}</Typography>}
             <Typography variant="caption" color="text.secondary">Dùng các asset này để giữ cùng hình dáng và bố trí giữa các beat. Beat cùng cảnh kế thừa trạng thái frame cuối; hành động tiếp tục từ điểm nối.</Typography>

@@ -38,7 +38,7 @@ try {
  document.getElementById('speaking-support').textContent=speakingSupported?'':'(HTML chưa hỗ trợ)';
  document.getElementById('speaking-control').title=speakingSupported?'Bật để xem miệng nói chuyện':'HTML này chưa hỗ trợ nói chuyện. Hãy tạo lại HTML nhân vật theo hồ sơ mới.';
  if(asset.capabilities?.neutralCue===true)document.getElementById('deadpan-control').hidden=false;
- if(asset.capabilities?.emotionIntensity){document.getElementById('intensity-control').hidden=false;for(const id of ['crying','laughing'])if(asset.capabilities.emotions?.includes(id)){const option=document.createElement('option');option.value=id;option.textContent=id==='crying'?'Khóc thành dòng':'Cười lớn';document.getElementById('emotion').appendChild(option);}}
+ if(asset.capabilities?.emotionIntensity){document.getElementById('intensity-control').hidden=false;for(const [id,label] of [['crying','Khóc thành dòng'],['laughing','Cười lớn'],['doyagao','Tự mãn (doyagao)'],['blank','Cạn lời']])if(asset.capabilities.emotions?.includes(id)){const option=document.createElement('option');option.value=id;option.textContent=label;document.getElementById('emotion').appendChild(option);}}
  asset.update(0,state);asset.root.updateMatrixWorld(true);
  const bounds=new THREE.Box3().setFromObject(asset.root),size=bounds.getSize(new THREE.Vector3());
  if(bounds.isEmpty())throw new Error('Nhân vật không có hình học.');
