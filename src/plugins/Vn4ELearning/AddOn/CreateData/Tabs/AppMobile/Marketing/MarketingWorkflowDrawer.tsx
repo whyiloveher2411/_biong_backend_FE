@@ -549,6 +549,10 @@ export default function MarketingWorkflowDrawer({
         [savedChoiceValues, draftChoiceValues],
     );
 
+    /** Engine render của video-html: lựa chọn đã lưu, nếu chưa có thì engine CMS đã resolve (mặc định Blender cho video mới). */
+    const renderEngine: 'blender' | 'threejs' = (effectiveChoiceValues['render-engine']
+        || workflowOutputs['__render-engine-resolved'] || 'blender') === 'threejs' ? 'threejs' : 'blender';
+
     /** Chọn nhóm prompt (Business/History…) → lưu vào workflow outputs, refresh vẫn giữ. */
     const handleSelectChoice = React.useCallback(async (choiceName: string, label: string) => {
         if (!workflow || !choiceName || savingChoice) {
@@ -1446,6 +1450,22 @@ export default function MarketingWorkflowDrawer({
                                     <ToggleButton value="free">Asset tự do</ToggleButton>
                                 </ToggleButtonGroup>
                             </Stack>
+                            <Stack direction={{xs: 'column', sm: 'row'}} alignItems={{xs: 'flex-start', sm: 'center'}} gap={1} sx={{mt: 1}}>
+                                <Typography variant="subtitle2" sx={{minWidth: 96}}>Engine render</Typography>
+                                <ToggleButtonGroup exclusive size="small" color="primary"
+                                    value={renderEngine}
+                                    onChange={(_, value) => { if (value) void handleSelectChoice('render-engine', value); }}
+                                    disabled={Boolean(savingChoice)} aria-label="Engine render"
+                                    sx={{'& .MuiToggleButton-root': {textTransform: 'none', fontWeight: 600, px: 1.5, py: 0.5}}}>
+                                    <ToggleButton value="blender">Blender (mặc định)</ToggleButton>
+                                    <ToggleButton value="threejs">Three.js HTML</ToggleButton>
+                                </ToggleButtonGroup>
+                            </Stack>
+                            <Typography variant="caption" sx={{display: 'block', mt: 0.75, color: 'text.secondary'}}>
+                                {renderEngine === 'blender'
+                                    ? 'Blender: diễn viên người thật (MakeHuman), bối cảnh dựng từ asset CC0 + HDRI, render Cycles. Agent dựng cast/bối cảnh và render từng beat thành video; CMS trộn thoại, SFX, BGM khi render. Bỏ qua Thiết kế nhân vật/HTML beat. Đổi engine giữa chừng cần dựng lại beat.'
+                                    : 'Three.js: HTML beat real-time với nhân vật Thiết kế và factory bối cảnh như trước.'}
+                            </Typography>
                             <Typography variant="caption" sx={{display: 'block', mt: 0.75, color: 'text.secondary'}}>
                                 {effectiveChoiceValues['asset-mode'] === 'free'
                                     ? 'HTML beat tự thiết kế nhân vật, bối cảnh và đạo cụ; dùng prompt tự do với vật liệu chi tiết, màu đậm và bão hòa như trước. Hãy tạo lại visual/HTML để áp dụng chế độ mới.'
@@ -1613,7 +1633,9 @@ export default function MarketingWorkflowDrawer({
                                             {workflow.key === 'video-html' && effectiveChoiceValues['asset-mode'] === 'free' && step.prompts.some((p) => p.file === 'create-beat-visual.md') ? 'Thiết kế hình ảnh và hành động từng beat tự do' : (label || step.title)}
                                         </Typography>
                                         {workflow.key === 'video-html' && index === 0 && Number(shortVideoId) > 0 && <ShortVideoAgentSaydiCastSettings shortVideoId={Number(shortVideoId)} revision={String(audioScript || '')} />}
-                                        {workflow.key === 'video-html' && index === 2 && Number(shortVideoId) > 0 && <SceneAssetsPanel shortVideoId={Number(shortVideoId)}/>}
+                                        {workflow.key === 'video-html' && index === 2 && Number(shortVideoId) > 0 && (renderEngine === 'blender'
+                                            ? <Typography variant="caption" sx={{display: 'block', mt: 0.75, color: 'text.secondary'}}>Blender: lập danh sách vai/bối cảnh như trên; Agent dựng diễn viên MakeHuman và bối cảnh trong Blender (blender_asset) rồi gửi ảnh review để duyệt.</Typography>
+                                            : <SceneAssetsPanel shortVideoId={Number(shortVideoId)}/>)}
 
                                         {step.description.length > 0 && (
                                             <Box component="ul" sx={{ m: 0, mt: 0.75, p: 0, listStyle: 'none' }}>

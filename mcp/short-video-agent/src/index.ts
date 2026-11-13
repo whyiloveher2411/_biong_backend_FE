@@ -95,7 +95,7 @@ function formatJson(data: unknown): string {
 
 const server = new McpServer({
   name: 'biong-short-video',
-  version: '2.7.0',
+  version: '2.8.0',
 });
 
 const video3dId = z.number().int().positive();
@@ -131,6 +131,7 @@ server.tool(
     aspect: z.enum(['16:9', '9:16']).optional().describe('Mặc định 16:9'),
     asset_mode: z.enum(['shared', 'free']),
     tts: z.enum(['gemini', 'saydi']),
+    render_engine: z.enum(['blender', 'threejs']).optional().describe('Mặc định blender (MakeHuman + asset CC0 + Cycles). threejs = HTML beat cũ.'),
   },
   async (brief) => video3dRequest('start', brief)
 );
@@ -206,6 +207,21 @@ server.tool(
         revision: z.string().regex(/^[a-f0-9]{64}$/),
         html: z.string().min(1).max(524288),
       }).describe('Chạy QC bắt buộc rồi lưu HTML khi đạt; trả qc/repair_prompt nếu chưa đạt. Sau success + hash readback vẫn phải STOP cho user review. Chỉ continue_beat sau xác nhận user rõ ràng; natural pending vẫn giữ để user chọn.'),
+      z.object({
+        action: z.literal('blender_asset'),
+        operation: z.enum(['list', 'save']),
+        asset_id: z.string().optional(),
+        blend_path: z.string().optional(),
+        preview_path: z.string().optional(),
+        spec: z.record(z.unknown()).optional(),
+      }).describe('Render engine blender only. list: cast/set của manifest, file .blend dự kiến và hướng dẫn dựng (MakeHuman, HDRI/asset CC0). save: đăng ký .blend + ảnh review đã dựng cho CHÍNH video này (cast/<id>/ hoặc env/<id>/ có build.py), rồi STOP cho user review.'),
+      z.object({ action: z.literal('blender_context'), beat_id: z.string().min(1) }).describe('Render engine blender only — thay prepare_beat_html: trả visual, timing Whisper của beat, sound plan/SFX cue, cast/env .blend, đường dẫn, lệnh render draft/final, prompt beat và revision.'),
+      z.object({
+        action: z.literal('save_beat_video'),
+        beat_id: z.string().min(1),
+        revision: z.string().regex(/^[a-f0-9]{64}$/),
+        video_path: z.string().min(1),
+      }).describe('Render engine blender only — lưu beats/<beat>/final.mp4 (preset final, qc_final.json ok, đúng duration/size) làm video của beat; CMS tự trộn narration/SFX/BGM khi render. Sau success + hash vẫn STOP cho user review; continue_beat dùng reviewed_html_sha256 = video_sha256.'),
       z.object({ action: z.literal('title'), title: z.string().min(1).max(200) }),
       z.object({ action: z.literal('karaoke'), enabled: z.boolean() }),
       z.object({ action: z.literal('timeline_audio') }).describe('Đọc clips SFX và bgm_clips riêng của track BGM cấp video; không copy bgm_clips vào save_timeline_audio.'),
@@ -296,15 +312,17 @@ server.tool(
 
 server.tool(
   'short_video_get_image_style',
-  'Lấy style CMS đã resolve. Với video có sẵn truyền short_video_id, với draft HTML 3D chưa tạo truyền asset_mode để đọc file style workflow.',
+  'Lấy style CMS đã resolve. Với video có sẵn truyền short_video_id, với draft video-html chưa tạo truyền asset_mode (+ render_engine, mặc định blender) để đọc file style workflow.',
   {
     short_video_id: z.number().int().positive().optional(),
     asset_mode: z.enum(['shared', 'free']).optional(),
+    render_engine: z.enum(['blender', 'threejs']).optional(),
   },
-  async ({ short_video_id, asset_mode }) => {
+  async ({ short_video_id, asset_mode, render_engine }) => {
     const query: Record<string, string | number> = {};
     if (short_video_id !== undefined) query.short_video_id = short_video_id;
     if (asset_mode !== undefined) query.asset_mode = asset_mode;
+    if (render_engine !== undefined) query.render_engine = render_engine;
     const result = await apiRequest('get-image-style', { query });
     return {
       content: [{ type: 'text', text: formatJson(result) }],
