@@ -131,7 +131,7 @@ server.tool(
     aspect: z.enum(['16:9', '9:16']).optional().describe('Mặc định 16:9'),
     asset_mode: z.enum(['shared', 'free']),
     tts: z.enum(['gemini', 'saydi']),
-    render_engine: z.enum(['blender', 'threejs']).optional().describe('Mặc định blender (MakeHuman + asset CC0 + Cycles). threejs = HTML beat cũ.'),
+    render_engine: z.enum(['blender', 'threejs']).optional().describe('Mặc định threejs (HTML beat). blender = MakeHuman + asset CC0 + Cycles, chỉ khi user chọn.'),
   },
   async (brief) => video3dRequest('start', brief)
 );
@@ -312,7 +312,7 @@ server.tool(
 
 server.tool(
   'short_video_get_image_style',
-  'Lấy style CMS đã resolve. Với video có sẵn truyền short_video_id, với draft video-html chưa tạo truyền asset_mode (+ render_engine, mặc định blender) để đọc file style workflow.',
+  'Lấy style CMS đã resolve. Với video có sẵn truyền short_video_id, với draft video-html chưa tạo truyền asset_mode (+ render_engine, mặc định threejs) để đọc file style workflow.',
   {
     short_video_id: z.number().int().positive().optional(),
     asset_mode: z.enum(['shared', 'free']).optional(),

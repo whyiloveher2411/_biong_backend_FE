@@ -549,9 +549,9 @@ export default function MarketingWorkflowDrawer({
         [savedChoiceValues, draftChoiceValues],
     );
 
-    /** Engine render của video-html: lựa chọn đã lưu, nếu chưa có thì engine CMS đã resolve (mặc định Blender cho video mới). */
+    /** Engine render của video-html: lựa chọn đã lưu, nếu chưa có thì engine CMS đã resolve (mặc định Three.js). */
     const renderEngine: 'blender' | 'threejs' = (effectiveChoiceValues['render-engine']
-        || workflowOutputs['__render-engine-resolved'] || 'blender') === 'threejs' ? 'threejs' : 'blender';
+        || workflowOutputs['__render-engine-resolved'] || 'threejs') === 'blender' ? 'blender' : 'threejs';
 
     /** Chọn nhóm prompt (Business/History…) → lưu vào workflow outputs, refresh vẫn giữ. */
     const handleSelectChoice = React.useCallback(async (choiceName: string, label: string) => {
@@ -1457,8 +1457,8 @@ export default function MarketingWorkflowDrawer({
                                     onChange={(_, value) => { if (value) void handleSelectChoice('render-engine', value); }}
                                     disabled={Boolean(savingChoice)} aria-label="Engine render"
                                     sx={{'& .MuiToggleButton-root': {textTransform: 'none', fontWeight: 600, px: 1.5, py: 0.5}}}>
-                                    <ToggleButton value="blender">Blender (mặc định)</ToggleButton>
-                                    <ToggleButton value="threejs">Three.js HTML</ToggleButton>
+                                    <ToggleButton value="threejs">Three.js HTML (mặc định)</ToggleButton>
+                                    <ToggleButton value="blender">Blender</ToggleButton>
                                 </ToggleButtonGroup>
                             </Stack>
                             <Typography variant="caption" sx={{display: 'block', mt: 0.75, color: 'text.secondary'}}>
