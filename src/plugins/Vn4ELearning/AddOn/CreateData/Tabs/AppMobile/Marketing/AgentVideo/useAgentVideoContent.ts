@@ -209,9 +209,7 @@ import {
     type SocialAccountItem,
     type AgentVideoBeatAudioState,
     type AgentVideoSfxSummary,
-    type ApiMessage,
     saveAgentBeatAudio,
-    generateSfxCue,
     generateManualBeatAudio,
     mergeManualBeatAudio,
     uploadManualBeatAudio,
@@ -693,7 +691,6 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [beatAudio, setBeatAudio] = React.useState<AgentVideoBeatAudioState | null>(null);
     /** Tóm tắt SFX (beat_ids có cue, đếm trạng thái) — dùng cho icon trên beat list/timeline. */
     const [sfxSummary, setSfxSummary] = React.useState<AgentVideoSfxSummary | null>(null);
-    const [generatingSfxCueId, setGeneratingSfxCueId] = React.useState('');
     const [beatAudioOnlyMissing, setBeatAudioOnlyMissing] = React.useState<boolean>(
         DEFAULT_BEAT_AUDIO_ONLY_MISSING,
     );
@@ -7455,33 +7452,6 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     };
 
     /** Sinh / tạo lại SFX cho 1 cue (nút thủ công trong drawer ảnh beat). */
-    const handleGenerateSfxCue = React.useCallback(async (cueId: string, force = true): Promise<boolean> => {
-        const id = String(cueId || '').trim();
-        if (!shortVideoId || !id) {
-            return false;
-        }
-        setGeneratingSfxCueId(id);
-        try {
-            const res = await generateSfxCue(shortVideoId, id, force);
-            const sfx = (res as { sfx?: AgentVideoSfxSummary } | null)?.sfx;
-            if (sfx && typeof sfx === 'object') {
-                setSfxSummary(sfx);
-            }
-            const ok = (res as { success?: boolean } | null)?.success === true;
-            showMessage(
-                parseApiMessage((res as { message?: ApiMessage } | null)?.message)
-                    || (ok ? 'Đã sinh SFX' : 'Sinh SFX thất bại'),
-                ok ? 'success' : 'error',
-            );
-            return ok;
-        } catch (e) {
-            showMessage(e instanceof Error ? e.message : String(e), 'error');
-            return false;
-        } finally {
-            setGeneratingSfxCueId('');
-        }
-    }, [shortVideoId, showMessage]);
-
     const handleGenerateBeatAudio = React.useCallback(async (markId: string, force = false) => {        if (!shortVideoId || generatingBeatAudio) {
             return;
         }
@@ -10786,8 +10756,6 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         sfxBeatReadySet,
         sfxBeatCountMap,
         sfxSummary,
-        generatingSfxCueId,
-        handleGenerateSfxCue,
         openingBeatGeminiBeatIds,
         openingBeatGeminiHeadlessBeatIds,
         openingBeatMetaAiBrowserBeatIds,

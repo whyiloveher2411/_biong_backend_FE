@@ -132,62 +132,7 @@ export function saveShortVideoModel3d(payload: ShortVideoModel3dSavePayload): Pr
     }) as Promise<{ success?: boolean; model?: ShortVideoModel3d; model_id?: number }>;
 }
 
-/** Slot asset trích từ HTML beat (id + kind + clip dùng). */
-export type ShortVideoModel3dBeatSlot = {
-    id: string;
-    kind: 'person' | 'prop' | string;
-    clips: string[];
-};
-
-export type ShortVideoModel3dBeatAssetEntry = {
-    model_id: number;
-    clip_map: Record<string, string>;
-};
-
-/** Trích asset slot từ HTML beat + map đã lưu + model chọn-trước. */
-export function getShortVideoModel3dBeatSlots(shortVideoId: number, beatId: string): Promise<{
-    success?: boolean;
-    slots?: ShortVideoModel3dBeatSlot[];
-    map?: Record<string, ShortVideoModel3dBeatAssetEntry>;
-    pre_ids?: number[];
-    /** Lần quét slot gần nhất (BE tự quét khi HTML beat đổi). */
-    scanned_at?: string;
-}> {
-    return ajax({
-        url: `${MODEL_3D_BASE_PATH}/beat-slots`,
-        method: 'POST',
-        loading: false,
-        data: { short_video_id: shortVideoId, beat_id: beatId },
-    }) as Promise<{
-        success?: boolean;
-        slots?: ShortVideoModel3dBeatSlot[];
-        map?: Record<string, ShortVideoModel3dBeatAssetEntry>;
-        pre_ids?: number[];
-        scanned_at?: string;
-    }>;
-}
-
-/** Lưu map slot→model cho beat. */
-export function saveShortVideoModel3dBeatAssetMap(
-    shortVideoId: number,
-    beatId: string,
-    map: Record<string, ShortVideoModel3dBeatAssetEntry>,
-): Promise<{ success?: boolean; beat_id?: string; map?: Record<string, ShortVideoModel3dBeatAssetEntry> }> {
-    return (ajax({
-        url: `${MODEL_3D_BASE_PATH}/save-beat-asset-map`,
-        method: 'POST',
-        loading: false,
-        data: { short_video_id: shortVideoId, beat_id: beatId, map },
-    }) as Promise<{ success?: boolean; beat_id?: string; map?: Record<string, ShortVideoModel3dBeatAssetEntry> }>)
-        .then((res) => {
-            if (res?.success !== false) {
-                dispatchBeatAssetChanged(shortVideoId, beatId);
-            }
-            return res;
-        });
-}
-
-/** Sự kiện phát khi map asset / model chọn-trước của beat thay đổi → preview reload. */
+/** Sự kiện phát khi asset 3D của beat thay đổi (nguồn nhân vật) → preview reload. */
 export const MODEL3D_BEAT_ASSET_CHANGED_EVENT = 'vn4-model3d-beat-asset-changed';
 
 export function dispatchBeatAssetChanged(shortVideoId: number, beatId: string) {
@@ -198,47 +143,6 @@ export function dispatchBeatAssetChanged(shortVideoId: number, beatId: string) {
     } catch {
         // ignore (non-browser)
     }
-}
-
-/** Lấy danh sách model 3D đã chọn cho 1 beat (đọc từ BE — không phụ thuộc beat_map phía FE). */
-export function getShortVideoModel3dBeatIds(shortVideoId: number, beatId: string): Promise<{
-    success?: boolean;
-    beat_id?: string;
-    model_3d_ids?: number[];
-}> {
-    return ajax({
-        url: `${MODEL_3D_BASE_PATH}/get-beat`,
-        method: 'POST',
-        loading: false,
-        data: {
-            short_video_id: shortVideoId,
-            beat_id: beatId,
-        },
-    }) as Promise<{ success?: boolean; beat_id?: string; model_3d_ids?: number[] }>;
-}
-
-/** Lưu danh sách model 3D đã chọn cho 1 beat (field model_3d_ids trong beat_map section). */
-export function saveShortVideoModel3dBeatIds(shortVideoId: number, beatId: string, modelIds: number[]): Promise<{
-    success?: boolean;
-    beat_id?: string;
-    model_3d_ids?: number[];
-}> {
-    return (ajax({
-        url: `${MODEL_3D_BASE_PATH}/save-beat`,
-        method: 'POST',
-        loading: false,
-        data: {
-            short_video_id: shortVideoId,
-            beat_id: beatId,
-            model_3d_ids: modelIds,
-        },
-    }) as Promise<{ success?: boolean; beat_id?: string; model_3d_ids?: number[] }>)
-        .then((res) => {
-            if (res?.success !== false) {
-                dispatchBeatAssetChanged(shortVideoId, beatId);
-            }
-            return res;
-        });
 }
 
 export function deleteShortVideoModel3ds(ids: number[]): Promise<{
@@ -351,20 +255,6 @@ export async function uploadShortVideoModel3dThumbnail(
 
 /** Phiên bản asset runtime — tăng khi runtime thay đổi để bust cache trình duyệt. */
 export const MODEL3D_ASSET_RUNTIME_VERSION = '14';
-
-/** Sự kiện yêu cầu preview định vị (bay camera tới) 1 asset slot. */
-export const MODEL3D_LOCATE_ASSET_EVENT = 'vn4-model3d-locate-asset';
-
-/** Yêu cầu preview định vị asset slot (slotId rỗng = bỏ định vị). */
-export function dispatchModel3dLocateAsset(shortVideoId: number, beatId: string, slotId: string) {
-    try {
-        document.dispatchEvent(new CustomEvent(MODEL3D_LOCATE_ASSET_EVENT, {
-            detail: { shortVideoId, beatId, slotId },
-        }));
-    } catch {
-        // ignore
-    }
-}
 
 /** URL tuyệt đối tới assets-runtime.js (same-origin, có access_token) cho preview. */
 export function buildModel3dRuntimeAssetUrl(revision = 0): string {

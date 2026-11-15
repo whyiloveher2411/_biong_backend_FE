@@ -14,7 +14,6 @@ import {
     seekCustomHtmlIframe,
     setModelAudioPlayback,
     useModel3dBeatAssetRevision,
-    useModel3dLocateAsset,
 } from './agentVideoCustomHtmlPreview';
 import ShortVideoAgentAvatarPipOverlay from './ShortVideoAgentAvatarPipOverlay';
 import type { AvatarPipAnchor } from './agentVideoApi';
@@ -84,7 +83,6 @@ export default function ShortVideoAgentCustomHtmlPreview({
 
     const activeHtml = activeBeat ? (beatHtml[activeBeat.id]?.html || '') : '';
     const assetRevision = useModel3dBeatAssetRevision(shortVideoId, activeBeat?.id || '');
-    useModel3dLocateAsset(iframeRef, shortVideoId, activeBeat?.id || '');
     const activeHtmlLocalized = React.useMemo(() => {
         // Beat dùng asset library → giữ three/loader CDN (khớp runtime) + rewrite 2 thẻ assets/ tương đối.
         const useAssetLibrary = activeHtml.includes('assets/assets-runtime.js');

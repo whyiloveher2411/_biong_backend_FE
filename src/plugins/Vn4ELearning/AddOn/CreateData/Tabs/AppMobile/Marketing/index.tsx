@@ -47,7 +47,6 @@ import LeaderboardOutlinedIcon from '@mui/icons-material/LeaderboardOutlined';
 import BrushOutlinedIcon from '@mui/icons-material/BrushOutlined';
 import AnimationOutlinedIcon from '@mui/icons-material/AnimationOutlined';
 import DeleteSweepOutlinedIcon from '@mui/icons-material/DeleteSweepOutlined';
-import GraphicEqOutlinedIcon from '@mui/icons-material/GraphicEqOutlined';
 import FieldForm from 'components/atoms/fields/relationship_onetomany_show/Form';
 import { useSearchParams } from 'react-router-dom';
 import MarketingSourceTablesPanel from './MarketingSourceTablesPanel';
@@ -63,7 +62,6 @@ import MarketingShortVideoAvatarDrawer from './MarketingShortVideoAvatarDrawer';
 import MarketingGetScriptDrawer from './MarketingGetScriptDrawer';
 import MarketingCheckMailDrawer from './MarketingCheckMailDrawer';
 import MarketingCompetitorChannelDrawer from './MarketingCompetitorChannelDrawer';
-import MarketingSoundEffectDrawer from './MarketingSoundEffectDrawer';
 import MarketingImageToWhiteboardDrawer from './MarketingImageToWhiteboardDrawer';
 import WhiteboardTransitionManagerDrawer from './WhiteboardTransitionManagerDrawer';
 import AudioScriptStyleManagerDrawer from './AudioScriptStyleManagerDrawer';
@@ -497,7 +495,6 @@ export default function Marketing({ data }: { data: CreatePostTypeData }) {
     const [openGetScriptDrawer, setOpenGetScriptDrawer] = useState(false);
     const [openCheckMailDrawer, setOpenCheckMailDrawer] = useState(false);
     const [openCompetitorChannelDrawer, setOpenCompetitorChannelDrawer] = useState(false);
-    const [openSoundEffectDrawer, setOpenSoundEffectDrawer] = useState(false);
     const [openWhiteboardDrawer, setOpenWhiteboardDrawer] = useState(false);
     const [openScriptStyleDrawer, setOpenScriptStyleDrawer] = useState(false);
     const [openWhiteboardTransitionManager, setOpenWhiteboardTransitionManager] = useState(false);
@@ -892,15 +889,6 @@ export default function Marketing({ data }: { data: CreatePostTypeData }) {
                                 <Button
                                     size="small"
                                     variant="outlined"
-                                    startIcon={<GraphicEqOutlinedIcon fontSize="small" />}
-                                    onClick={() => setOpenSoundEffectDrawer(true)}
-                                    sx={{ textTransform: 'none', flexShrink: 0 }}
-                                >
-                                    Sound effect
-                                </Button>
-                                <Button
-                                    size="small"
-                                    variant="outlined"
                                     startIcon={<BrushOutlinedIcon fontSize="small" />}
                                     onClick={() => setOpenWhiteboardDrawer(true)}
                                     sx={{ textTransform: 'none', flexShrink: 0 }}
@@ -1264,11 +1252,6 @@ export default function Marketing({ data }: { data: CreatePostTypeData }) {
             <MarketingCompetitorChannelDrawer
                 open={openCompetitorChannelDrawer}
                 onClose={() => setOpenCompetitorChannelDrawer(false)}
-            />
-
-            <MarketingSoundEffectDrawer
-                open={openSoundEffectDrawer}
-                onClose={() => setOpenSoundEffectDrawer(false)}
             />
 
             <MarketingImageToWhiteboardDrawer

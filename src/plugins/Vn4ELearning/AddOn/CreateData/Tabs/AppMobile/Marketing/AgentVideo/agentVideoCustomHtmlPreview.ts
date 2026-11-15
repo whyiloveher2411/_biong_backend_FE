@@ -2,7 +2,6 @@ import React from 'react';
 import { normalizeImportHtmlForAudio } from './agentVideoImportHtmlNormalize';
 import {
     MODEL3D_BEAT_ASSET_CHANGED_EVENT,
-    MODEL3D_LOCATE_ASSET_EVENT,
     buildModel3dAssetConfigUrl,
     buildModel3dRuntimeAssetUrl,
 } from 'helpers/marketingShortVideoModel3dApi';
@@ -40,45 +39,6 @@ export {
 
 export function ensureImportHtmlDataDuration(html: string, expectedDurationSec: number): string {
     return normalizeImportHtmlForAudio(html, expectedDurationSec).html;
-}
-
-/**
- * Nghe yêu cầu "định vị asset" → gửi postMessage vào iframe preview để runtime
- * bay camera tới model + highlight (slotId rỗng = bỏ định vị).
- */
-export function useModel3dLocateAsset(
-    iframeRef: React.RefObject<HTMLIFrameElement | null>,
-    shortVideoId: number,
-    beatId: string,
-): void {
-    const sid = Number(shortVideoId || 0);
-    const bid = String(beatId || '');
-    React.useEffect(() => {
-        const onLocate = (event: Event) => {
-            const detail = (event as CustomEvent<{ shortVideoId?: number; beatId?: string; slotId?: string }>).detail || {};
-            if (Number(detail.shortVideoId || 0) !== sid) {
-                return;
-            }
-            if (String(detail.beatId || '') !== '' && String(detail.beatId) !== bid) {
-                return;
-            }
-            const win = iframeRef.current?.contentWindow;
-            if (!win) {
-                return;
-            }
-            const slotId = String(detail.slotId || '');
-            try {
-                win.postMessage(
-                    slotId ? { type: 'hf-assets-focus', id: slotId } : { type: 'hf-assets-clear' },
-                    '*',
-                );
-            } catch {
-                // ignore
-            }
-        };
-        document.addEventListener(MODEL3D_LOCATE_ASSET_EVENT, onLocate);
-        return () => document.removeEventListener(MODEL3D_LOCATE_ASSET_EVENT, onLocate);
-    }, [sid, bid, iframeRef]);
 }
 
 export function setModelAudioPlayback(iframe:HTMLIFrameElement|null,playing:boolean):void{

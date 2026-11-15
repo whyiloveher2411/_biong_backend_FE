@@ -3129,21 +3129,6 @@ export type AgentVideoSfxSummary = {
     items?: AgentVideoSfxCue[];
 };
 
-/** Sinh / tạo lại SFX cho 1 cue (AudioCraft) — nút thủ công trong drawer ảnh beat. */
-export async function generateSfxCue(
-    shortVideoId: number,
-    cueId: string,
-    force = false,
-): Promise<JsonResponse & { cue_id?: string; url?: string; file?: string; sfx?: AgentVideoSfxSummary }> {
-    return postJson(
-        'plugin/vn4-e-learning/app-mobile/marketing/short-video/sfx-generate-cue',
-        shortVideoBody(shortVideoId, {
-            cue_id: cueId,
-            force: force ? '1' : '0',
-        }),
-    ) as Promise<JsonResponse & { cue_id?: string; url?: string; file?: string; sfx?: AgentVideoSfxSummary }>;
-}
-
 export async function saveAgentRenderDebug(
     shortVideoId: number,
     enabled: boolean,

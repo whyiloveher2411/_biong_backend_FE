@@ -13,7 +13,6 @@ import {
     seekCustomHtmlIframe,
     setModelAudioPlayback,
     useModel3dBeatAssetRevision,
-    useModel3dLocateAsset,
 } from './agentVideoCustomHtmlPreview';
 
 type Props = {
@@ -62,7 +61,6 @@ export default function ShortVideoAgentBeatVisualPreview({
     const safeDurationSec = Math.max(0.1, Number(durationSec) || 0.1);
     const hasHtml = Boolean(html.trim());
     const assetRevision = useModel3dBeatAssetRevision(shortVideoId, beatId);
-    useModel3dLocateAsset(iframeRef, shortVideoId, beatId);
     const localHtml = React.useMemo(() => {
         const useAssetLibrary = html.includes('assets/assets-runtime.js');
         const localized = useAssetLibrary ? html : localizeImportHtmlExternalScripts(html);

@@ -8,7 +8,6 @@ import {
     seekCustomHtmlIframe,
     setModelAudioPlayback,
     useModel3dBeatAssetRevision,
-    useModel3dLocateAsset,
 } from './agentVideoCustomHtmlPreview';
 
 type Props = {
@@ -91,7 +90,6 @@ export default function BeatHtmlMotionPreview({ html, timeSec, durationSec, beat
 
     const duration = Math.max(0.2, Number(durationSec) || 0.2);
     const assetRevision = useModel3dBeatAssetRevision(shortVideoId, beatId || '');
-    useModel3dLocateAsset(iframeRef, shortVideoId, beatId || '');
     const srcDoc = React.useMemo(() => {
         const raw = String(html || '');
         // Beat dùng asset library → dùng bundle Three.js r186 cùng bộ render,

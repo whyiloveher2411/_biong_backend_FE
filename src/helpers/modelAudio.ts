@@ -28,10 +28,6 @@ export async function uploadLibrarySound(file:File,meta:{title:string;license:st
 }
 export function resolveCharacterAudio<T extends {audio?:ModelAudioConfig}>(character:T):T {return {...character,audio:character.audio?{...character.audio,bindings:character.audio.bindings.map(b=>({...b,sounds:b.sounds?.map(s=>({...s,url:librarySoundUrl(s.file)}))}))}:undefined};}
 
-export type SoundGenerationJob={id:string;status:'queued'|'running'|'complete'|'failed';created_at:string;started_at?:string;error?:string;sound?:LibrarySound;options:GenerateLibrarySoundInput};
-export type GenerateLibrarySoundInput={title:string;prompt:string;duration:number;category:string;seed?:number;single_event:boolean;license?:string;source?:string};
-export const generateLibrarySound=(data:GenerateLibrarySoundInput)=>ajax({url:'plugin/vn4-e-learning/app-mobile/marketing/sound-library/generate',method:'POST',loading:false,data}) as Promise<{success:boolean;job?:SoundGenerationJob;message?:string}>;
-export const getSoundGeneration=(job_id:string)=>ajax({url:'plugin/vn4-e-learning/app-mobile/marketing/sound-library/generation',method:'POST',loading:false,data:{job_id}}) as Promise<{success:boolean;job?:SoundGenerationJob;message?:string}>;
 export const translateSoundSearchQuery=(text:string)=>ajax({url:'plugin/vn4-e-learning/app-mobile/marketing/sound-library/translate-search',method:'POST',loading:false,data:{text}}) as Promise<{success:boolean;source_text:string;translated_text:string;message?:string}>;
 
 export type CodeSoundInput={title:string;category:string;license:string;code:string;duration:number;seed:number};

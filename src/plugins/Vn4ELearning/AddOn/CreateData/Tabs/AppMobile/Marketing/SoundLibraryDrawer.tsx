@@ -3,11 +3,10 @@ import {Alert,Box,Button,Chip,MenuItem,Pagination,Paper,Stack,Table,TableBody,Ta
 import DrawerCustom from 'components/molecules/DrawerCustom';
 import {LibrarySound,listLibrarySounds,librarySoundUrl,uploadLibrarySound,translateSoundSearchQuery} from 'helpers/modelAudio';
 import CodeSoundEditor from './CodeSoundEditor';
-import SoundLibraryAiGenerator from './SoundLibraryAiGenerator';
 
-type SourceMode='upload'|'ai'|'code';
+type SourceMode='upload'|'code';
 const PAGE_SIZE=8;
-export default function SoundLibraryDrawer({open,onClose,onSelect,initialPixabayQuery='',initialPixabayQueryIsEnglish=false,initialTitle='',initialCategory='foley',initialAudioPrompt='',initialTimingSummary=''}:{open:boolean;onClose:()=>void;onSelect?:(sound:LibrarySound)=>void;initialPixabayQuery?:string;initialPixabayQueryIsEnglish?:boolean;initialTitle?:string;initialCategory?:string;initialAudioPrompt?:string;initialTimingSummary?:string}){
+export default function SoundLibraryDrawer({open,onClose,onSelect,initialPixabayQuery='',initialPixabayQueryIsEnglish=false,initialTitle='',initialCategory='foley',initialTimingSummary=''}:{open:boolean;onClose:()=>void;onSelect?:(sound:LibrarySound)=>void;initialPixabayQuery?:string;initialPixabayQueryIsEnglish?:boolean;initialTitle?:string;initialCategory?:string;initialTimingSummary?:string}){
  const [soundType,setSoundType]=React.useState('all');
  const [editingCode,setEditingCode]=React.useState<LibrarySound|undefined>(undefined);
  const [sounds,setSounds]=React.useState<LibrarySound[]>([]),[query,setQuery]=React.useState(''),[page,setPage]=React.useState(1),[error,setError]=React.useState(''),[busy,setBusy]=React.useState(false);
@@ -25,20 +24,20 @@ export default function SoundLibraryDrawer({open,onClose,onSelect,initialPixabay
  const translateAndSearchPixabay=async()=>{const source=pixQuery.trim();if(!source)return;setError('');setTranslationBusy(true);setTranslatedPixQuery('');const popup=window.open('about:blank','_blank');if(popup)popup.opener=null;try{const response=await translateSoundSearchQuery(source);if(!response.success||!response.translated_text)throw new Error(response.message||'Không dịch được từ khóa.');const english=response.translated_text.trim();setTranslatedPixQuery(english);const url=pixabaySearchUrl(english);setMeta(m=>({...m,license:'Pixabay Content License',source:url}));if(popup&&!popup.closed)popup.location.href=url;}catch(e){if(popup&&!popup.closed)popup.close();setError(e instanceof Error?e.message:'Không dịch được từ khóa.');}finally{setTranslationBusy(false);}};
  return <DrawerCustom open={open} onClose={onClose} title="Thư viện âm thanh" width={980} activeOnClose>
   <Stack spacing={2}>
-   <Typography variant="body2">Tìm, nghe thử và thêm âm thanh vào timeline. Nguồn có thể là code Tone.js, tải lên, AudioGen hoặc Pixabay.</Typography>
+   <Typography variant="body2">Tìm, nghe thử và thêm âm thanh vào timeline. Nguồn có thể là code Tone.js, tải lên hoặc Pixabay.</Typography>
    {initialTimingSummary&&<Alert severity="info">{initialTimingSummary} Khi chọn hoặc lưu file, âm thanh sẽ được đặt vào đúng thời điểm này.</Alert>}
    {error&&<Alert severity="error" onClose={()=>setError('')}>{error}</Alert>}
    <Paper variant="outlined" sx={{p:2}}>
     <Typography variant="h6" sx={{mb:1.5}}>Thêm âm thanh vào thư viện</Typography>
     <Stack spacing={1.5}>
-     <ToggleButtonGroup exclusive fullWidth size="small" value={mode} onChange={(_,v)=>{if(v){setMode(v);if(v==='code')setMeta(m=>({...m,license:'Âm thanh tổng hợp từ code',source:'Tone.js offline'}));if(v==='ai')setMeta(m=>({...m,license:'AudioGen model: CC-BY-NC-4.0 (phi thương mại)',source:'https://huggingface.co/facebook/audiogen-medium'}));}setError('');}} aria-label="Nguồn âm thanh">
-      <ToggleButton value="code">Âm thanh bằng code</ToggleButton><ToggleButton value="upload">Tải file lên</ToggleButton><ToggleButton value="ai">Tạo bằng AI</ToggleButton>
+     <ToggleButtonGroup exclusive fullWidth size="small" value={mode} onChange={(_,v)=>{if(v){setMode(v);if(v==='code')setMeta(m=>({...m,license:'Âm thanh tổng hợp từ code',source:'Tone.js offline'}));}setError('');}} aria-label="Nguồn âm thanh">
+      <ToggleButton value="code">Âm thanh bằng code</ToggleButton><ToggleButton value="upload">Tải file lên</ToggleButton>
      </ToggleButtonGroup>
      <Stack direction={{xs:'column',sm:'row'}} spacing={1.5}>
       <TextField fullWidth size="small" label="Tên âm thanh" value={meta.title} onChange={e=>setMeta(m=>({...m,title:e.target.value}))}/>
       <TextField fullWidth size="small" select label="Phân loại" value={meta.category} onChange={e=>setMeta(m=>({...m,category:e.target.value}))}>{[['foley','Hành động / đồ vật'],['emotion','Biểu cảm cartoon'],['ambience','Âm thanh nền']].map(([id,label])=><MenuItem key={id} value={id}>{label}</MenuItem>)}</TextField>
      </Stack>
-     <Stack direction={{xs:'column',sm:'row'}} spacing={1.5}><TextField fullWidth size="small" label="Nguồn" value={meta.source} onChange={e=>setMeta(m=>({...m,source:e.target.value}))}/><TextField fullWidth size="small" label="Giấy phép / quyền sử dụng" value={meta.license} onChange={e=>setMeta(m=>({...m,license:e.target.value}))} InputProps={{readOnly:mode==='ai'}} helperText={mode==='ai'?'AudioGen dùng theo CC-BY-NC-4.0, phi thương mại.':''}/></Stack>
+     <Stack direction={{xs:'column',sm:'row'}} spacing={1.5}><TextField fullWidth size="small" label="Nguồn" value={meta.source} onChange={e=>setMeta(m=>({...m,source:e.target.value}))}/><TextField fullWidth size="small" label="Giấy phép / quyền sử dụng" value={meta.license} onChange={e=>setMeta(m=>({...m,license:e.target.value}))}/></Stack>
      {mode==='upload'&&<>
       <Box onDragEnter={e=>{e.preventDefault();e.stopPropagation();setDraggingFile(true);}} onDragOver={e=>{e.preventDefault();e.stopPropagation();e.dataTransfer.dropEffect='copy';setDraggingFile(true);}} onDragLeave={e=>{e.preventDefault();e.stopPropagation();if(!e.currentTarget.contains(e.relatedTarget as Node|null))setDraggingFile(false);}} onDrop={e=>{e.preventDefault();e.stopPropagation();setDraggingFile(false);const dropped=e.dataTransfer.files?.[0];if(dropped)acceptUploadFile(dropped);}} sx={{p:1.5,border:'2px dashed',borderColor:draggingFile?'primary.main':'divider',bgcolor:draggingFile?'action.hover':'transparent',borderRadius:1,transition:'background-color .15s,border-color .15s'}}>
        <Button component="label" variant="outlined" fullWidth sx={{minHeight:54,borderStyle:'dashed'}}>{file?`Đã chọn: ${file.name}`:'Kéo file audio vào đây hoặc bấm để chọn (tối đa 20 MB)'}<input hidden type="file" accept=".wav,.mp3,.ogg,.m4a,.flac" onChange={e=>{const f=e.target.files?.[0];if(f)acceptUploadFile(f);e.currentTarget.value='';}}/></Button>
@@ -48,7 +47,6 @@ export default function SoundLibraryDrawer({open,onClose,onSelect,initialPixabay
       <Button variant="contained" disabled={busy||!file||!meta.title.trim()||!meta.license.trim()} onClick={async()=>{if(!file)return;setBusy(true);setError('');try{const r=await uploadLibrarySound(file,meta);if(!r.success)throw new Error(r.message);setFile(null);setMeta({title:'',license:'Bản thu của tôi',source:'',category:'foley'});await load();if(r.sound&&onSelect)onSelect(r.sound);}catch(e){setError(e instanceof Error?e.message:'Tải file thất bại.');}finally{setBusy(false);}}}>{busy?'Đang lưu…':onSelect?'Lưu và thêm vào timeline':'Lưu vào thư viện'}</Button>
      </>}
      {mode==='code'&&<CodeSoundEditor title={meta.title} category={meta.category} license={meta.license} sound={editingCode} onCreated={()=>void load()} onSelect={onSelect}/>}
-     {mode==='ai'&&<SoundLibraryAiGenerator active={open&&mode==='ai'} title={meta.title} category={meta.category} license={meta.license} source={meta.source} initialPrompt={initialAudioPrompt} onCreated={()=>void load()} onSelect={onSelect}/>}
     </Stack>
    </Paper>
    <Stack direction={{xs:'column',sm:'row'}} spacing={1} alignItems={{sm:'center'}}><TextField size="small" label="Tìm trong thư viện" value={query} onChange={e=>{setQuery(e.target.value);setPage(1);}} sx={{flex:1}}/><TextField select size="small" label="Loại âm thanh" value={soundType} onChange={e=>{setSoundType(e.target.value);setPage(1);}} sx={{minWidth:160}}><MenuItem value="all">Tất cả</MenuItem><MenuItem value="code">Âm thanh code</MenuItem><MenuItem value="natural">File / âm thanh tự nhiên</MenuItem></TextField><Chip label={`${filtered.length} âm thanh`}/></Stack>

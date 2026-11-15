@@ -2,7 +2,6 @@ import React from 'react';
 import {fireEvent,render,screen} from '@testing-library/react';
 import SoundLibraryDrawer from './SoundLibraryDrawer';
 jest.mock('components/molecules/DrawerCustom',()=>({children}:React.PropsWithChildren<{}>)=><div>{children}</div>);
-jest.mock('./SoundLibraryAiGenerator',()=>()=>null);
 jest.mock('./CodeSoundEditor',()=>()=> <div>Code editor ready</div>);
 jest.mock('helpers/modelAudio',()=>({listLibrarySounds:async()=>({success:true,sounds:[{id:'code_draft',title:'Draft pop',file:'',duration_sec:0,category:'emotion',license:'Own code',source:'Tone.js offline',source_type:'code',code:'function buildSound() {}'}]}),librarySoundUrl:(f:string)=>'/audio/'+f}));
 test('code source is accessible and drafts cannot be added before recording',async()=>{
