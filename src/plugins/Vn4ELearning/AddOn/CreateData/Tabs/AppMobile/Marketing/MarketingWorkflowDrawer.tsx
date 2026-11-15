@@ -571,6 +571,9 @@ export default function MarketingWorkflowDrawer({
     const renderEngine: 'blender' | 'threejs' = (effectiveChoiceValues['render-engine']
         || workflowOutputs['__render-engine-resolved'] || 'threejs') === 'blender' ? 'blender' : 'threejs';
 
+    /** Dạng video của video-html: story (kể chuyện, mặc định) | showcase (bảng xếp hạng/so sánh một beat, camera tour). */
+    const videoFormat: 'story' | 'showcase' = effectiveChoiceValues['video-format'] === 'showcase' ? 'showcase' : 'story';
+
     /** Chế độ voice của video-html: full (mặc định) | mixed | none. */
     const voiceMode: 'full' | 'mixed' | 'none' = (['mixed', 'none'] as const).find(
         (mode) => mode === effectiveChoiceValues['voice-mode'],
@@ -1498,6 +1501,24 @@ export default function MarketingWorkflowDrawer({
                                     <ToggleButton value="blender">Blender</ToggleButton>
                                 </ToggleButtonGroup>
                             </Stack>
+                            {renderEngine === 'threejs' && (
+                                <Stack direction={{xs: 'column', sm: 'row'}} alignItems={{xs: 'flex-start', sm: 'center'}} gap={1} sx={{mt: 1}}>
+                                    <Typography variant="subtitle2" sx={{minWidth: 96}}>Dạng video</Typography>
+                                    <ToggleButtonGroup exclusive size="small" color="primary"
+                                        value={videoFormat}
+                                        onChange={(_, value) => { if (value) void handleSelectChoice('video-format', value); }}
+                                        disabled={Boolean(savingChoice)} aria-label="Dạng video"
+                                        sx={{'& .MuiToggleButton-root': {textTransform: 'none', fontWeight: 600, px: 1.5, py: 0.5}}}>
+                                        <ToggleButton value="story">Kể chuyện (mặc định)</ToggleButton>
+                                        <ToggleButton value="showcase">Bảng xếp hạng / so sánh</ToggleButton>
+                                    </ToggleButtonGroup>
+                                </Stack>
+                            )}
+                            {renderEngine === 'threejs' && videoFormat === 'showcase' && (
+                                <Typography variant="caption" sx={{display: 'block', mt: 0.75, color: 'text.secondary'}}>
+                                    Showcase: một beat dài chứa cả thế giới (nền toà nhà, bục, vật thể, cờ/logo, nhãn), camera tour lia qua từng vùng để đọc bảng. Thường chọn Không voice; style atlas bị tắt; thời lượng beat = thời lượng brief.
+                                </Typography>
+                            )}
                             <Stack direction={{xs: 'column', sm: 'row'}} alignItems={{xs: 'flex-start', sm: 'center'}} gap={1} sx={{mt: 1}}>
                                 <Typography variant="subtitle2" sx={{minWidth: 96}}>Chế độ voice</Typography>
                                 <ToggleButtonGroup exclusive size="small" color="primary"
@@ -1510,7 +1531,7 @@ export default function MarketingWorkflowDrawer({
                                     <ToggleButton value="none">Không voice</ToggleButton>
                                 </ToggleButtonGroup>
                             </Stack>
-                            {renderEngine === 'threejs' && (
+                            {renderEngine === 'threejs' && videoFormat === 'story' && (
                                 <Stack direction={{xs: 'column', sm: 'row'}} alignItems={{xs: 'flex-start', sm: 'center'}} gap={1} sx={{mt: 1}}>
                                     <Typography variant="subtitle2" sx={{minWidth: 96}}>Style atlas</Typography>
                                     <ToggleButtonGroup exclusive size="small" color="primary"
@@ -1525,7 +1546,7 @@ export default function MarketingWorkflowDrawer({
                                     </ToggleButtonGroup>
                                 </Stack>
                             )}
-                            {renderEngine === 'threejs' && (
+                            {renderEngine === 'threejs' && videoFormat === 'story' && (
                                 <Typography variant="caption" sx={{display: 'block', mt: 0.75, color: 'text.secondary'}}>
                                     {ATLAS_DENSITY_HINTS[atlasDensity]}
                                     {' '}{atlasDensityChoice

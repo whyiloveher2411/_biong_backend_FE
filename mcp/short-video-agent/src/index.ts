@@ -95,7 +95,7 @@ function formatJson(data: unknown): string {
 
 const server = new McpServer({
   name: 'biong-short-video',
-  version: '2.11.0',
+  version: '2.12.0',
 });
 
 const video3dId = z.number().int().positive();
@@ -132,6 +132,7 @@ server.tool(
     asset_mode: z.enum(['shared', 'free']),
     tts: z.enum(['gemini', 'saydi']),
     render_engine: z.enum(['blender', 'threejs']).optional().describe('Mặc định threejs (HTML beat). blender = MakeHuman + asset CC0 + Cycles, chỉ khi user chọn.'),
+    video_format: z.enum(['story', 'showcase']).optional().describe('Mặc định story (kể chuyện nhiều beat). showcase = bảng xếp hạng / so sánh: MỘT beat dài, camera tour lia qua các vùng (bục, nền toà nhà, cờ/logo, nhãn trong cảnh), thường không voice (voice_mode mặc định none), atlas bị ép none, thời lượng beat = thời lượng brief. Hỏi user khi chốt brief nếu video là top N / so sánh / linh thú / món ăn các nước.'),
     voice_mode: z.enum(['full', 'mixed', 'none']).optional().describe('Mặc định full (Nhiều voice). mixed = Voice vừa: lời dẫn chính đọc, câu phụ/dữ kiện trong <caption>…</caption> chỉ hiện chữ. none = Không voice: kể bằng câu chữ ở đáy khung + nhạc/SFX, thoại thành bong bóng. Hỏi user khi chốt brief.'),
     persistent_hud: z.boolean().optional().describe('Bật chữ xuyên suốt video (HUD: bộ đếm, nhãn trạng thái/chương, mốc thời gian ở mép trên). Lập nội dung bằng step action hud ở công đoạn visual.'),
     atlas_density: z.enum(['none', 'medium', 'high', 'all']).optional().describe('Tần suất beat dùng 3D Style Atlas (engine threejs). Bỏ trống = mặc định theo nhóm chủ đề (Business high, History none, What-if medium). none = Không có; medium = Vừa (chỉ vài khoảnh khắc giải thích); high = Nhiều (xen kẽ cảnh kể chuyện và cảnh atlas); all = Toàn bộ (mọi beat là atlas). Hỏi user khi chốt brief nếu muốn khác mặc định.'),
