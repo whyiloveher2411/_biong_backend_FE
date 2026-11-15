@@ -4,6 +4,7 @@ import { Box, Alert, Button } from '@mui/material';
 import { useVoiceMedia, voicePreviewUrl } from 'helpers/timelineVoice';
 import type { BeatMap, BeatImageEntry } from './agentVideoBeatMap';
 import BeatHtmlMotionPreview from './BeatHtmlMotionPreview';
+import StoryOverlay, { type StoryOverlayData } from './StoryOverlay';
 type Props = {
     videoId: number;
     beatMap: BeatMap | null;
@@ -21,9 +22,11 @@ type Props = {
             url?: string;
         }[];
     } | null;
+    /** voice-mode caption + chữ xuyên suốt (HUD) — CMS vẽ như lớp phủ khi render. */
+    storyOverlay?: StoryOverlayData | null;
 };
 /** A separate whole-video clock: beat-local controls retain their stop-at-end behaviour. */
-export default function ShortVideoAgentWholePreview({ videoId, beatMap, beatHtml, beatImage, audioUrl, beatAudio, publicAssets, publicAudioStart }: Props) {
+export default function ShortVideoAgentWholePreview({ videoId, beatMap, beatHtml, beatImage, audioUrl, beatAudio, publicAssets, publicAudioStart, storyOverlay }: Props) {
     const initialTime = publicAssets ? beatMap?.sections[0]?.startSec ?? 0 : 0;
     const voiceOffset = (publicAudioStart ?? initialTime) - initialTime;
     const [time, setTime] = React.useState(initialTime), [visible, setVisible] = React.useState(Boolean(publicAssets)), [playing, setPlaying] = React.useState(false), [error, setError] = React.useState(''), [run, setRun] = React.useState(0), [buffering, setBuffering] = React.useState(false);
@@ -194,6 +197,7 @@ export default function ShortVideoAgentWholePreview({ videoId, beatMap, beatHtml
             playPublic();
         }}>{time >= duration ? 'Phát lại' : 'Phát'}</Button> : null}
         {visible && !publicAssets ? <Button size="small" variant="contained" sx={{ position: 'absolute', top: 8, right: 8, zIndex: 2 }} onClick={() => { pause(); publish(control.current.time, false); setVisible(false); }}>Trở về chỉnh beat</Button> : null}
+        {visible ? <StoryOverlay data={storyOverlay} sections={sections} time={time}/> : null}
         {sections.slice(index, index + 3).map((beat, offset) => {
             const order = index + offset + 1;
             const html = beatHtml[beat.id]?.html;

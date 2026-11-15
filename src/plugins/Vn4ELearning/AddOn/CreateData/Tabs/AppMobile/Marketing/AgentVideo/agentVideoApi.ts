@@ -1818,6 +1818,8 @@ export type AgentVideoContentResponse = {
     agent_show_avatar?: boolean;
     agent_avatar_anchor?: AvatarPipAnchor;
     agent_show_karaoke?: boolean;
+    /** voice-mode + chữ xuyên suốt (HUD) — xem StoryOverlay. */
+    story_overlay?: import('./StoryOverlay').StoryOverlayData;
     agent_render_debug?: boolean;
     agent_beat_audio?: boolean;
     beat_audio?: AgentVideoBeatAudioState;

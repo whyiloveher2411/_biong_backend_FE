@@ -1,3 +1,4 @@
+import type { StoryOverlayData } from './StoryOverlay';
 import { openClaudeHtmlBeatSession } from './agentVideoApi';
 import { generateBeatHtmlViaDeepseekApi } from './agentVideoApi';
 import {storyV2Request} from './agentVideoApi';
@@ -683,6 +684,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [verifiedAvatars, setVerifiedAvatars] = React.useState<Array<{ id: number; title: string; master_url: string }>>([]);
     const [savingAgentAvatar, setSavingAgentAvatar] = React.useState(false);
     const [agentShowKaraoke, setAgentShowKaraoke] = React.useState(true);
+    /** voice-mode + chữ xuyên suốt (HUD) cho preview toàn video. */
+    const [storyOverlay, setStoryOverlay] = React.useState<StoryOverlayData | null>(null);
     const [savingShowKaraoke, setSavingShowKaraoke] = React.useState(false);
     const [agentRenderDebug, setAgentRenderDebug] = React.useState(false);
     const [savingRenderDebug, setSavingRenderDebug] = React.useState(false);
@@ -1421,6 +1424,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         setAgentShowAvatar(resolvedId > 0);
         setAgentAvatarAnchor(nextAnchor);
         setAgentShowKaraoke(res?.agent_show_karaoke !== false);
+        setStoryOverlay(res?.story_overlay && typeof res.story_overlay === 'object' ? res.story_overlay : null);
         setAgentRenderDebug(Boolean(res?.agent_render_debug));
         setAgentBeatAudio(Boolean(res?.agent_beat_audio));
         setBeatAudio(
@@ -10390,6 +10394,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         verifiedAvatars,
         savingAgentAvatar,
         agentShowKaraoke,
+        storyOverlay,
         savingShowKaraoke,
         handleAgentShowKaraokeChange,
         agentBeatAudio,

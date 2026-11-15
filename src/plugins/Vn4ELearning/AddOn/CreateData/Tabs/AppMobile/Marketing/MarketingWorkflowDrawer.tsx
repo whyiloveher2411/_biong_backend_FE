@@ -553,6 +553,11 @@ export default function MarketingWorkflowDrawer({
     const renderEngine: 'blender' | 'threejs' = (effectiveChoiceValues['render-engine']
         || workflowOutputs['__render-engine-resolved'] || 'threejs') === 'blender' ? 'blender' : 'threejs';
 
+    /** Chế độ voice của video-html: full (mặc định) | mixed | none. */
+    const voiceMode: 'full' | 'mixed' | 'none' = (['mixed', 'none'] as const).find(
+        (mode) => mode === effectiveChoiceValues['voice-mode'],
+    ) || 'full';
+
     /** Chọn nhóm prompt (Business/History…) → lưu vào workflow outputs, refresh vẫn giữ. */
     const handleSelectChoice = React.useCallback(async (choiceName: string, label: string) => {
         if (!workflow || !choiceName || savingChoice) {
@@ -1461,6 +1466,26 @@ export default function MarketingWorkflowDrawer({
                                     <ToggleButton value="blender">Blender</ToggleButton>
                                 </ToggleButtonGroup>
                             </Stack>
+                            <Stack direction={{xs: 'column', sm: 'row'}} alignItems={{xs: 'flex-start', sm: 'center'}} gap={1} sx={{mt: 1}}>
+                                <Typography variant="subtitle2" sx={{minWidth: 96}}>Chế độ voice</Typography>
+                                <ToggleButtonGroup exclusive size="small" color="primary"
+                                    value={voiceMode}
+                                    onChange={(_, value) => { if (value) void handleSelectChoice('voice-mode', value); }}
+                                    disabled={Boolean(savingChoice)} aria-label="Chế độ voice"
+                                    sx={{'& .MuiToggleButton-root': {textTransform: 'none', fontWeight: 600, px: 1.5, py: 0.5}}}>
+                                    <ToggleButton value="full">Nhiều voice</ToggleButton>
+                                    <ToggleButton value="mixed">Voice vừa</ToggleButton>
+                                    <ToggleButton value="none">Không voice</ToggleButton>
+                                </ToggleButtonGroup>
+                            </Stack>
+                            <Typography variant="caption" sx={{display: 'block', mt: 0.75, color: 'text.secondary'}}>
+                                {voiceMode === 'none'
+                                    ? 'Không voice: kể chuyện bằng câu chữ ở đáy khung, thoại thành bong bóng, nhạc + SFX gánh cảm xúc. Thời lượng tính theo tốc độ đọc; audio beat là đoạn câm dài bằng thời gian đọc.'
+                                    : voiceMode === 'mixed'
+                                        ? 'Voice vừa: lời dẫn chính vẫn đọc; câu phụ, dữ kiện, chuyển cảnh viết trong <caption>…</caption> chỉ hiện chữ.'
+                                        : 'Nhiều voice: mọi lời đều đọc bằng TTS (như trước).'}
+                                {' '}Chọn trước khi viết kịch bản; đổi giữa chừng cần tạo lại audio các beat.
+                            </Typography>
                             <Typography variant="caption" sx={{display: 'block', mt: 0.75, color: 'text.secondary'}}>
                                 {renderEngine === 'blender'
                                     ? 'Blender: diễn viên người thật (MakeHuman), bối cảnh dựng từ asset CC0 + HDRI, render Cycles. Agent dựng cast/bối cảnh và render từng beat thành video; CMS trộn thoại, SFX, BGM khi render. Bỏ qua Thiết kế nhân vật/HTML beat. Đổi engine giữa chừng cần dựng lại beat.'

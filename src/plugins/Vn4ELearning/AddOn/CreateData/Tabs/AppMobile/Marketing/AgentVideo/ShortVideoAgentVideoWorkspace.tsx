@@ -825,7 +825,7 @@ function ShortVideoAgentVideoSession({
                         }}
                         style={{position:'relative'}}
                     >
-                        {(state.isWhiteboardMode || useCustomHtmlPreview) && <ShortVideoAgentWholePreview videoId={shortVideoId} beatMap={beatMapReadyForUi ? beatMapForUi : null} beatHtml={state.beatHtml} beatImage={state.beatImage} audioUrl={state.audioPreviewUrl || ''} beatAudio={state.beatAudio} />}
+                        {(state.isWhiteboardMode || useCustomHtmlPreview) && <ShortVideoAgentWholePreview videoId={shortVideoId} beatMap={beatMapReadyForUi ? beatMapForUi : null} beatHtml={state.beatHtml} beatImage={state.beatImage} audioUrl={state.audioPreviewUrl || ''} beatAudio={state.beatAudio} storyOverlay={state.storyOverlay} />}
                         {canEditRegion ? (
                             <ShortVideoAgentBeatRegionEditor
                                 key={`beat-editor:${currentBeatId}`}

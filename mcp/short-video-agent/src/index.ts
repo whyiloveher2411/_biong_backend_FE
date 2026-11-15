@@ -95,7 +95,7 @@ function formatJson(data: unknown): string {
 
 const server = new McpServer({
   name: 'biong-short-video',
-  version: '2.9.0',
+  version: '2.10.0',
 });
 
 const video3dId = z.number().int().positive();
@@ -132,6 +132,8 @@ server.tool(
     asset_mode: z.enum(['shared', 'free']),
     tts: z.enum(['gemini', 'saydi']),
     render_engine: z.enum(['blender', 'threejs']).optional().describe('Mặc định threejs (HTML beat). blender = MakeHuman + asset CC0 + Cycles, chỉ khi user chọn.'),
+    voice_mode: z.enum(['full', 'mixed', 'none']).optional().describe('Mặc định full (Nhiều voice). mixed = Voice vừa: lời dẫn chính đọc, câu phụ/dữ kiện trong <caption>…</caption> chỉ hiện chữ. none = Không voice: kể bằng câu chữ ở đáy khung + nhạc/SFX, thoại thành bong bóng. Hỏi user khi chốt brief.'),
+    persistent_hud: z.boolean().optional().describe('Bật chữ xuyên suốt video (HUD: bộ đếm, nhãn trạng thái/chương, mốc thời gian ở mép trên). Lập nội dung bằng step action hud ở công đoạn visual.'),
   },
   async (brief) => video3dRequest('start', brief)
 );
@@ -159,6 +161,29 @@ server.tool(
         config: z.record(z.unknown()).optional(),
       }),
       z.object({ action: z.literal('narration') }),
+      z.object({
+        action: z.literal('hud'),
+        operation: z.enum(['get', 'save']),
+        hud: z.object({
+          slots: z.array(z.object({
+            id: z.string().regex(/^[a-z][a-z0-9_]{0,23}$/),
+            kind: z.enum(['counter', 'label']),
+            anchor: z.enum(['top-left', 'top-center', 'top-right']).optional(),
+            label: z.string().max(40).optional(),
+            color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+            initial: z.union([z.number(), z.string().max(32)]).optional(),
+          })).min(1).max(6),
+          keys: z.array(z.object({
+            slot: z.string(),
+            beat_id: z.string().regex(/^beat_\d+$/),
+            value: z.union([z.number(), z.string().max(32)]),
+            at_word: z.string().max(80).optional(),
+            at_sec: z.number().min(0).max(600).optional(),
+            tween_sec: z.number().min(0).max(6).optional(),
+          })).max(400).optional(),
+          hidden_beats: z.array(z.string().regex(/^beat_\d+$/)).optional(),
+        }).optional().describe('Chữ xuyên suốt cả video (CMS vẽ lớp phủ). keys gắn beat + từ trong lời/caption (at_word) hoặc giây local (at_sec).'),
+      }),
       z.object({ action: z.literal('beat_list'), list_text: z.string().min(1) }),
       z.object({ action: z.literal('translations'), translations: z.record(z.string()), source_language: z.string().optional() }),
       z.object({ action: z.literal('merge_audio') }),

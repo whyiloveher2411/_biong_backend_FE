@@ -65,6 +65,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--fps", type=int, default=30)
     parser.add_argument("--max-line-width", type=int, default=920)
     parser.add_argument("--keep-temp", action="store_true")
+    # Font cho câu caption (voice-mode mixed/none) — mặc định dùng --font.
+    parser.add_argument("--caption-font", default="")
     return parser.parse_args()
 
 
@@ -182,9 +184,88 @@ def align_times(tokens: list[str], whisper: list[dict], dur: float) -> list[tupl
     return out
 
 
+SENTENCE_END_RE = re.compile(r"[.!?…:;][\"'”’)]*$")
+
+
+def caption_sentence_blocks(text: str, start: float, end: float) -> list[dict]:
+    """Câu caption (không có giọng): hiện cả câu một lần, đổi theo câu; thời lượng mỗi câu tỉ lệ số chữ."""
+    tokens = EMOTION_TAG_RE.sub(" ", text).split()
+    if not tokens or end <= start:
+        return []
+    sentences: list[list[str]] = []
+    current: list[str] = []
+    for token in tokens:
+        current.append(token)
+        if SENTENCE_END_RE.search(token) and len(current) >= 3:
+            sentences.append(current)
+            current = []
+    if current:
+        if sentences and len(current) < 3:
+            sentences[-1].extend(current)
+        else:
+            sentences.append(current)
+    weights = [sum(len(t) + 1 for t in sent) for sent in sentences]
+    total = float(sum(weights)) or 1.0
+    blocks = []
+    cursor = start
+    for i, sent in enumerate(sentences):
+        dur = (end - start) * weights[i] / total
+        s_end = end if i == len(sentences) - 1 else cursor + dur
+        blocks.append({
+            "start": cursor,
+            "end": s_end,
+            "dur": max(0.05, s_end - cursor),
+            "style": "caption",
+            "tokens": [{"text": t, "relStart": 0.0, "relEnd": 0.0} for t in sent],
+        })
+        cursor = s_end
+    return blocks
+
+
+def blocks_from_beat_parts(beat: dict, start: float, dur: float) -> list[dict]:
+    """Beat có phần đọc + phần caption: phần đọc chạy karaoke từng từ, phần caption hiện theo câu."""
+    parts = [p for p in (beat.get("parts") or []) if isinstance(p, dict)]
+    whisper = [w for w in (beat.get("whisper") or []) if isinstance(w, dict)]
+    blocks = []
+    for index, part in enumerate(parts):
+        p_start = max(0.0, min(dur, float(part.get("start") or 0)))
+        p_end = max(p_start, min(dur, float(part.get("end") or dur)))
+        if index == len(parts) - 1:
+            p_end = dur  # giữ chữ phần cuối tới hết beat
+        elif index + 1 < len(parts):
+            p_end = max(p_end, min(dur, float(parts[index + 1].get("start") or p_end)))
+        text = str(part.get("text") or "").strip()
+        if not text or p_end - p_start < 0.05:
+            continue
+        if part.get("type") == "caption":
+            blocks.extend(caption_sentence_blocks(text, start + p_start, start + p_end))
+            continue
+        tokens = EMOTION_TAG_RE.sub(" ", text).split()
+        local = []
+        for w in whisper:
+            ws = float(w.get("start") or 0)
+            if p_start - 0.05 <= ws <= p_end + 0.05 and not w.get("caption"):
+                local.append({"text": w.get("text"), "start": ws - p_start, "end": float(w.get("end") or ws) - p_start})
+        p_dur = p_end - p_start
+        times = align_times(tokens, local, p_dur)
+        block_tokens = []
+        for i, token in enumerate(tokens):
+            s_, e_ = times[i] if i < len(times) else (0.0, 0.0)
+            s_ = max(0.0, min(p_dur, s_))
+            block_tokens.append({"text": token, "relStart": s_, "relEnd": max(s_, min(p_dur, e_))})
+        blocks.append({"start": start + p_start, "end": start + p_end, "dur": p_dur, "tokens": block_tokens})
+    return blocks
+
+
 def blocks_from_beats(beats: list[dict]) -> list[dict]:
     blocks = []
     for beat in beats:
+        if any(isinstance(p, dict) and p.get("type") == "caption" for p in (beat.get("parts") or [])):
+            b_start = float(beat.get("start") or 0)
+            b_dur = float(beat.get("duration") or 0)
+            if b_dur > 0:
+                blocks.extend(blocks_from_beat_parts(beat, b_start, b_dur))
+                continue
         content = str(beat.get("content") or "").strip()
         content = EMOTION_TAG_RE.sub(" ", content).strip()
         tokens = content.split()
@@ -209,14 +290,14 @@ def blocks_from_beats(beats: list[dict]) -> list[dict]:
 # Layout / render
 # ---------------------------------------------------------------------------
 
-def wrap_lines(draw: ImageDraw.ImageDraw, tokens: list[dict], font, max_width: int) -> list[list[dict]]:
+def wrap_lines(draw: ImageDraw.ImageDraw, tokens: list[dict], font, max_width: int, gap: int = WORD_GAP) -> list[list[dict]]:
     lines = []
     line = []
     line_width = 0
     space = draw.textlength(" ", font=font)
     for token in tokens:
         width = draw.textlength(token["text"], font=font)
-        extra = width if not line else width + space + WORD_GAP
+        extra = width if not line else width + space + gap
         if line and line_width + extra > max_width:
             lines.append(line)
             line = [token]
@@ -229,31 +310,74 @@ def wrap_lines(draw: ImageDraw.ImageDraw, tokens: list[dict], font, max_width: i
     return lines
 
 
-def compute_layouts(draw, blocks, font, args):
+def font_for(block, font, caption_font):
+    return caption_font if block.get("style") == "caption" and caption_font is not None else font
+
+
+def compute_layouts(draw, blocks, font, args, caption_font=None):
     max_line_width = min(args.max_line_width, args.width - PAD_X * 2 - 40)
     layouts = []
     max_lines = 1
-    space = draw.textlength(" ", font=font)
     for block in blocks:
-        lines = wrap_lines(draw, block["tokens"], font, max_line_width)
+        bfont = font_for(block, font, caption_font)
+        space = draw.textlength(" ", font=bfont)
+        gap = 0 if block.get("style") == "caption" else WORD_GAP
+        lines = wrap_lines(draw, block["tokens"], bfont, max_line_width, gap)
         max_lines = max(max_lines, len(lines))
         widths = []
         for line in lines:
             total = 0
             for idx, token in enumerate(line):
-                total += draw.textlength(token["text"], font=font)
+                total += draw.textlength(token["text"], font=bfont)
                 if idx < len(line) - 1:
-                    total += space + WORD_GAP
+                    total += space + gap
             widths.append(total)
         layouts.append({"lines": lines, "widths": widths})
     return layouts, max_lines
 
 
-def render_state(path, block, layout, active, args, font, band_h, empty=False):
+def render_caption_state(path, layout, args, font, band_h):
+    """Câu kể chuyện không giọng: chữ sáng, bóng mềm, không pill, không tô từng từ."""
+    canvas_w = args.width
+    img = Image.new("RGBA", (canvas_w, band_h), (0, 0, 0, 0))
+    size = getattr(font, "size", args.font_size)
+    line_height = int(round(size * LINE_HEIGHT_RATIO))
+    space = ImageDraw.Draw(img).textlength(" ", font=font)
+    block_h = line_height * len(layout["lines"])
+    top = band_h - block_h - PAD_BOTTOM
+    shadow = Image.new("RGBA", (canvas_w, band_h), (0, 0, 0, 0))
+    sdraw = ImageDraw.Draw(shadow)
+    for li, line in enumerate(layout["lines"]):
+        x = (canvas_w - layout["widths"][li]) / 2
+        y = top + li * line_height
+        for token in line:
+            for dx, dy in ((0, 3), (2, 3), (-2, 3), (0, 1)):
+                sdraw.text((x + dx, y + dy), token["text"], font=font, fill=(0, 0, 0, 150))
+            x += sdraw.textlength(token["text"], font=font) + space
+    try:
+        from PIL import ImageFilter
+        shadow = shadow.filter(ImageFilter.GaussianBlur(radius=max(2, size // 14)))
+    except Exception:  # pragma: no cover
+        pass
+    img = Image.alpha_composite(img, shadow)
+    draw = ImageDraw.Draw(img)
+    for li, line in enumerate(layout["lines"]):
+        x = (canvas_w - layout["widths"][li]) / 2
+        y = top + li * line_height
+        for token in line:
+            draw.text((x, y), token["text"], font=font, fill=(255, 255, 255, 255), stroke_width=max(1, size // 30), stroke_fill=(0, 0, 0, 120))
+            x += draw.textlength(token["text"], font=font) + space
+    img.save(path, "PNG")
+
+
+def render_state(path, block, layout, active, args, font, band_h, empty=False, caption_font=None):
     canvas_w = args.width
     img = Image.new("RGBA", (canvas_w, band_h), (0, 0, 0, 0))
     if empty or not layout["lines"]:
         img.save(path, "PNG")
+        return
+    if block.get("style") == "caption":
+        render_caption_state(path, layout, args, font_for(block, font, caption_font), band_h)
         return
     draw = ImageDraw.Draw(img)
     line_height = int(round(args.font_size * LINE_HEIGHT_RATIO))
@@ -353,14 +477,20 @@ def main() -> int:
     cap = int(args.height * 0.6)
     font_size = args.font_size
     font = ImageFont.truetype(font_path, font_size)
+    caption_path = os.path.abspath(args.caption_font) if args.caption_font else ""
+    has_caption = any(b.get("style") == "caption" for b in blocks)
+    caption_scale = 1.08
+    load_caption = (lambda size: ImageFont.truetype(caption_path if caption_path and os.path.isfile(caption_path) else font_path, int(round(size * caption_scale)))) if has_caption else (lambda size: None)
+    caption_font = load_caption(font_size)
     probe = Image.new("RGBA", (args.width, args.height), (0, 0, 0, 0))
     pdraw = ImageDraw.Draw(probe)
-    layouts, max_lines = compute_layouts(pdraw, blocks, font, args)
+    layouts, max_lines = compute_layouts(pdraw, blocks, font, args, caption_font)
     needed = max_lines * int(round(font_size * LINE_HEIGHT_RATIO)) + PAD_TOP + PAD_BOTTOM
     if needed > cap and max_lines > 0:
         font_size = max(18, int((cap - PAD_TOP - PAD_BOTTOM) / (max_lines * LINE_HEIGHT_RATIO)))
         font = ImageFont.truetype(font_path, font_size)
-        layouts, max_lines = compute_layouts(pdraw, blocks, font, args)
+        caption_font = load_caption(font_size)
+        layouts, max_lines = compute_layouts(pdraw, blocks, font, args, caption_font)
         needed = max_lines * int(round(font_size * LINE_HEIGHT_RATIO)) + PAD_TOP + PAD_BOTTOM
 
     band_h = max(args.band_height, needed + 8, 60)
@@ -380,7 +510,7 @@ def main() -> int:
         key = f"{block_index}_{active}"
         if key not in cache:
             out = os.path.join(temp_dir, f"cap_{block_index}_{active}.png")
-            render_state(out, blocks[block_index], layouts[block_index], active, args, font, band_h)
+            render_state(out, blocks[block_index], layouts[block_index], active, args, font, band_h, caption_font=caption_font)
             cache[key] = out
         return cache[key]
 
