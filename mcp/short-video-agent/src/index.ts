@@ -95,7 +95,7 @@ function formatJson(data: unknown): string {
 
 const server = new McpServer({
   name: 'biong-short-video',
-  version: '2.10.0',
+  version: '2.11.0',
 });
 
 const video3dId = z.number().int().positive();
@@ -134,6 +134,7 @@ server.tool(
     render_engine: z.enum(['blender', 'threejs']).optional().describe('Mặc định threejs (HTML beat). blender = MakeHuman + asset CC0 + Cycles, chỉ khi user chọn.'),
     voice_mode: z.enum(['full', 'mixed', 'none']).optional().describe('Mặc định full (Nhiều voice). mixed = Voice vừa: lời dẫn chính đọc, câu phụ/dữ kiện trong <caption>…</caption> chỉ hiện chữ. none = Không voice: kể bằng câu chữ ở đáy khung + nhạc/SFX, thoại thành bong bóng. Hỏi user khi chốt brief.'),
     persistent_hud: z.boolean().optional().describe('Bật chữ xuyên suốt video (HUD: bộ đếm, nhãn trạng thái/chương, mốc thời gian ở mép trên). Lập nội dung bằng step action hud ở công đoạn visual.'),
+    atlas_density: z.enum(['none', 'medium', 'high', 'all']).optional().describe('Tần suất beat dùng 3D Style Atlas (engine threejs). Bỏ trống = mặc định theo nhóm chủ đề (Business high, History none, What-if medium). none = Không có; medium = Vừa (chỉ vài khoảnh khắc giải thích); high = Nhiều (xen kẽ cảnh kể chuyện và cảnh atlas); all = Toàn bộ (mọi beat là atlas). Hỏi user khi chốt brief nếu muốn khác mặc định.'),
   },
   async (brief) => video3dRequest('start', brief)
 );

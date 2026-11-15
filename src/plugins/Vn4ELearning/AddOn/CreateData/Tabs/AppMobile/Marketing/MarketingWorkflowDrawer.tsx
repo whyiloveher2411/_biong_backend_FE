@@ -81,6 +81,24 @@ import {
     parseShortVideoResourceApiMessage,
 } from 'helpers/marketingShortVideoResourceApi';
 
+/** Mặc định tần suất style atlas theo nhóm chủ đề (khớp marketing_sv_atlas_density_group_defaults). */
+const ATLAS_DENSITY_GROUP_DEFAULTS: Record<string, 'none' | 'medium' | 'high' | 'all'> = {
+    business: 'high',
+    history: 'none',
+    whatif: 'medium',
+    psychology: 'medium',
+    personalfinance: 'high',
+    socialskills: 'medium',
+    everydayscience: 'high',
+};
+
+const ATLAS_DENSITY_HINTS: Record<'none' | 'medium' | 'high' | 'all', string> = {
+    none: 'Không có: mọi beat dùng look mặc định của video (nhân vật diễn trong bối cảnh).',
+    medium: 'Vừa: chỉ vài khoảnh khắc giải thích (tối đa 3 mỗi 60 giây) dùng style atlas.',
+    high: 'Nhiều: xen kẽ cảnh kể chuyện và cảnh style atlas (khoảng một nửa số beat).',
+    all: 'Toàn bộ: mọi beat là style atlas; beat nhân vật dùng style kể chuyện (paper pop-up, spotlight stage, LED wall, painted).',
+};
+
 function assertWorkflowSfxPromptContext(file: string, context: WorkflowPromptContext): void {
     if (file.split('/').pop() !== 'generate-sfx.md') return;
     const missing = ['PROJECT_INFO', 'FULL_BEATS'].filter((key) => !String(context[key] || '').trim() || String(context[key]).trim() === `[${key}]`);
@@ -557,6 +575,20 @@ export default function MarketingWorkflowDrawer({
     const voiceMode: 'full' | 'mixed' | 'none' = (['mixed', 'none'] as const).find(
         (mode) => mode === effectiveChoiceValues['voice-mode'],
     ) || 'full';
+
+    /**
+     * Tần suất beat 3D Style Atlas: none | medium | high | all. Chưa chọn thì lấy mặc định theo nhóm chủ đề
+     * (giống marketing_sv_atlas_density_group_defaults ở backend).
+     */
+    const atlasDensityChoice = (['none', 'medium', 'high', 'all'] as const).find(
+        (density) => density === effectiveChoiceValues['atlas-density'],
+    );
+    const atlasDensityGroupDefault = ATLAS_DENSITY_GROUP_DEFAULTS[
+        String(effectiveChoiceValues['nhom-chu-de'] || '').toLowerCase().replace(/[\s_-]+/g, '')
+    ];
+    const atlasDensity: 'none' | 'medium' | 'high' | 'all' = atlasDensityChoice || atlasDensityGroupDefault
+        || (['none', 'medium', 'high', 'all'] as const).find((density) => density === workflowOutputs['__atlas-density-resolved'])
+        || 'medium';
 
     /** Chọn nhóm prompt (Business/History…) → lưu vào workflow outputs, refresh vẫn giữ. */
     const handleSelectChoice = React.useCallback(async (choiceName: string, label: string) => {
@@ -1478,6 +1510,30 @@ export default function MarketingWorkflowDrawer({
                                     <ToggleButton value="none">Không voice</ToggleButton>
                                 </ToggleButtonGroup>
                             </Stack>
+                            {renderEngine === 'threejs' && (
+                                <Stack direction={{xs: 'column', sm: 'row'}} alignItems={{xs: 'flex-start', sm: 'center'}} gap={1} sx={{mt: 1}}>
+                                    <Typography variant="subtitle2" sx={{minWidth: 96}}>Style atlas</Typography>
+                                    <ToggleButtonGroup exclusive size="small" color="primary"
+                                        value={atlasDensity}
+                                        onChange={(_, value) => { if (value) void handleSelectChoice('atlas-density', value); }}
+                                        disabled={Boolean(savingChoice)} aria-label="Tần suất style atlas"
+                                        sx={{'& .MuiToggleButton-root': {textTransform: 'none', fontWeight: 600, px: 1.5, py: 0.5}}}>
+                                        <ToggleButton value="none">Không có</ToggleButton>
+                                        <ToggleButton value="medium">Vừa</ToggleButton>
+                                        <ToggleButton value="high">Nhiều</ToggleButton>
+                                        <ToggleButton value="all">Toàn bộ</ToggleButton>
+                                    </ToggleButtonGroup>
+                                </Stack>
+                            )}
+                            {renderEngine === 'threejs' && (
+                                <Typography variant="caption" sx={{display: 'block', mt: 0.75, color: 'text.secondary'}}>
+                                    {ATLAS_DENSITY_HINTS[atlasDensity]}
+                                    {' '}{atlasDensityChoice
+                                        ? 'Đã chọn riêng cho video này.'
+                                        : `Đang dùng mặc định${effectiveChoiceValues['nhom-chu-de'] ? ` của nhóm ${effectiveChoiceValues['nhom-chu-de']}` : ''}.`}
+                                    {' '}Chọn trước khi viết kịch bản; đổi giữa chừng cần viết lại visual các beat.
+                                </Typography>
+                            )}
                             <Typography variant="caption" sx={{display: 'block', mt: 0.75, color: 'text.secondary'}}>
                                 {voiceMode === 'none'
                                     ? 'Không voice: kể chuyện bằng câu chữ ở đáy khung, thoại thành bong bóng, nhạc + SFX gánh cảm xúc. Thời lượng tính theo tốc độ đọc; audio beat là đoạn câm dài bằng thời gian đọc.'
