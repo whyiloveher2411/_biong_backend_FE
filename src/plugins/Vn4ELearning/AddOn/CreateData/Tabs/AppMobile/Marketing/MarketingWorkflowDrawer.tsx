@@ -607,6 +607,14 @@ export default function MarketingWorkflowDrawer({
     ) || 'full';
 
     /**
+     * Kiểu lời của kịch bản kể chuyện (`narrative-style`): narration (toàn lời kể) | mixed (kể + thoại, mặc định) | dialogue (toàn thoại).
+     * Showcase không có kiểu lời. Toàn thoại không đi cùng Voice vừa (backend: marketing_short_video_narrative_style_allowed).
+     */
+    const narrativeStyle: 'narration' | 'mixed' | 'dialogue' = videoFormat === 'story'
+        ? ((['narration', 'dialogue'] as const).find((style) => style === effectiveChoiceValues['narrative-style']) || 'mixed')
+        : 'mixed';
+
+    /**
      * Tần suất beat 3D Style Atlas: none | medium | high | all. Chưa chọn thì lấy mặc định theo nhóm chủ đề
      * (giống marketing_sv_atlas_density_group_defaults ở backend).
      */
@@ -1567,6 +1575,28 @@ export default function MarketingWorkflowDrawer({
                                     Showcase: một beat dài chứa cả thế giới (nền toà nhà, bục, vật thể, cờ/logo, nhãn), camera tour lia qua từng vùng để đọc bảng. Thường chọn Không voice; style atlas bị tắt; thời lượng beat = thời lượng brief.
                                 </Typography>
                             )}
+                            {videoFormat === 'story' && (
+                                <Stack direction={{xs: 'column', sm: 'row'}} alignItems={{xs: 'flex-start', sm: 'center'}} gap={1} sx={{mt: 1}}>
+                                    <Typography variant="subtitle2" sx={{minWidth: 96}}>Lời thoại</Typography>
+                                    <ToggleButtonGroup exclusive size="small" color="primary"
+                                        value={narrativeStyle}
+                                        onChange={(_, value) => { if (value) void handleSelectChoice('narrative-style', value); }}
+                                        disabled={Boolean(savingChoice)} aria-label="Lời thoại"
+                                        sx={{'& .MuiToggleButton-root': {textTransform: 'none', fontWeight: 600, px: 1.5, py: 0.5}}}>
+                                        <ToggleButton value="narration">Toàn lời kể</ToggleButton>
+                                        <ToggleButton value="mixed">Kể + thoại (mặc định)</ToggleButton>
+                                        <ToggleButton value="dialogue" disabled={voiceMode === 'mixed'}>Toàn thoại</ToggleButton>
+                                    </ToggleButtonGroup>
+                                </Stack>
+                            )}
+                            {videoFormat === 'story' && narrativeStyle !== 'mixed' && (
+                                <Typography variant="caption" sx={{display: 'block', mt: 0.75, color: 'text.secondary'}}>
+                                    {narrativeStyle === 'narration'
+                                        ? 'Toàn lời kể: một giọng dẫn truyện kể cả video, nhân vật chỉ diễn (không mở miệng nói, không bong bóng thoại).'
+                                        : 'Toàn thoại: mọi lời là thoại nhân vật, không có người dẫn truyện; hook, giải thích, đúc kết và CTA đều do nhân vật nói. Không dùng cùng Voice vừa.'}
+                                    {' '}Chọn trước khi viết kịch bản; kịch bản sai kiểu lời sẽ bị từ chối khi lưu.
+                                </Typography>
+                            )}
                             <Stack direction={{xs: 'column', sm: 'row'}} alignItems={{xs: 'flex-start', sm: 'center'}} gap={1} sx={{mt: 1}}>
                                 <Typography variant="subtitle2" sx={{minWidth: 96}}>Chế độ voice</Typography>
                                 <ToggleButtonGroup exclusive size="small" color="primary"
@@ -1575,7 +1605,7 @@ export default function MarketingWorkflowDrawer({
                                     disabled={Boolean(savingChoice)} aria-label="Chế độ voice"
                                     sx={{'& .MuiToggleButton-root': {textTransform: 'none', fontWeight: 600, px: 1.5, py: 0.5}}}>
                                     <ToggleButton value="full">Nhiều voice</ToggleButton>
-                                    <ToggleButton value="mixed">Voice vừa</ToggleButton>
+                                    <ToggleButton value="mixed" disabled={narrativeStyle === 'dialogue'}>Voice vừa</ToggleButton>
                                     <ToggleButton value="none">Không voice</ToggleButton>
                                 </ToggleButtonGroup>
                             </Stack>
