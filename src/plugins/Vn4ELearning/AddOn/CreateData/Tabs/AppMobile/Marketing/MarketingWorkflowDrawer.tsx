@@ -1,4 +1,5 @@
 import WorkflowChatSessionBox from './WorkflowChatSessionBox';
+import AtlasStylePicker from './AtlasStylePicker';
 import SceneAssetsPanel from './AgentVideo/SceneAssetsPanel';
 import ShortVideoAgentSaydiCastSettings from './AgentVideo/ShortVideoAgentSaydiCastSettings';
 import React from 'react';
@@ -97,6 +98,20 @@ const ATLAS_DENSITY_HINTS: Record<'none' | 'medium' | 'high' | 'all', string> = 
     medium: 'Vừa: chỉ vài khoảnh khắc giải thích (tối đa 3 mỗi 60 giây) dùng style atlas.',
     high: 'Nhiều: xen kẽ cảnh kể chuyện và cảnh style atlas (khoảng một nửa số beat).',
     all: 'Toàn bộ: mọi beat là style atlas; beat nhân vật dùng style kể chuyện (paper pop-up, spotlight stage, LED wall, painted).',
+};
+
+/** Style khoá cho cả video khi backend chưa trả danh sách (khớp marketing_sv_atlas_lock_style_ids). */
+const ATLAS_LOCK_STYLE_FALLBACK: Record<string, string> = {
+    painted: 'Painted',
+    'ink-toon': 'Ink and Toon',
+    'spotlight-stage': 'Spotlight Stage',
+    'paper-pop-up': 'Paper Pop-Up',
+    'led-wall': 'LED Wall',
+    'soft-clay': 'Soft Clay',
+    inflated: 'Inflated',
+    'tiny-diorama': 'Tiny Diorama',
+    'low-poly': 'Low-Poly',
+    voxel: 'Voxel',
 };
 
 function assertWorkflowSfxPromptContext(file: string, context: WorkflowPromptContext): void {
@@ -592,6 +607,16 @@ export default function MarketingWorkflowDrawer({
     const atlasDensity: 'none' | 'medium' | 'high' | 'all' = atlasDensityChoice || atlasDensityGroupDefault
         || (['none', 'medium', 'high', 'all'] as const).find((density) => density === workflowOutputs['__atlas-density-resolved'])
         || 'medium';
+
+    /**
+     * Khoá một style atlas cho cả video (`atlas-style`). Giá trị `per-beat` (hoặc trống) = style chọn theo từng beat.
+     * Khi khoá, backend coi tần suất là `all` và mọi beat phải ghi đúng style này.
+     */
+    const atlasLockStyles: Record<string, string> = (workflowOutputs['__atlas-style-options'] && typeof workflowOutputs['__atlas-style-options'] === 'object'
+        ? workflowOutputs['__atlas-style-options'] as Record<string, string>
+        : ATLAS_LOCK_STYLE_FALLBACK);
+    const atlasStyleChoice = String(effectiveChoiceValues['atlas-style'] || '');
+    const atlasStyle = atlasLockStyles[atlasStyleChoice] ? atlasStyleChoice : '';
 
     /** Chọn nhóm prompt (Business/History…) → lưu vào workflow outputs, refresh vẫn giữ. */
     const handleSelectChoice = React.useCallback(async (choiceName: string, label: string) => {
@@ -1418,7 +1443,7 @@ export default function MarketingWorkflowDrawer({
             activeOnClose
             open={open}
             onClose={onClose}
-            width={560}
+            width={900}
             title="Prompt"
         >
             {!workflow ? null : (
@@ -1535,9 +1560,9 @@ export default function MarketingWorkflowDrawer({
                                 <Stack direction={{xs: 'column', sm: 'row'}} alignItems={{xs: 'flex-start', sm: 'center'}} gap={1} sx={{mt: 1}}>
                                     <Typography variant="subtitle2" sx={{minWidth: 96}}>Style atlas</Typography>
                                     <ToggleButtonGroup exclusive size="small" color="primary"
-                                        value={atlasDensity}
+                                        value={atlasStyle ? 'all' : atlasDensity}
                                         onChange={(_, value) => { if (value) void handleSelectChoice('atlas-density', value); }}
-                                        disabled={Boolean(savingChoice)} aria-label="Tần suất style atlas"
+                                        disabled={Boolean(savingChoice) || Boolean(atlasStyle)} aria-label="Tần suất style atlas"
                                         sx={{'& .MuiToggleButton-root': {textTransform: 'none', fontWeight: 600, px: 1.5, py: 0.5}}}>
                                         <ToggleButton value="none">Không có</ToggleButton>
                                         <ToggleButton value="medium">Vừa</ToggleButton>
@@ -1547,6 +1572,20 @@ export default function MarketingWorkflowDrawer({
                                 </Stack>
                             )}
                             {renderEngine === 'threejs' && videoFormat === 'story' && (
+                                <Stack direction={{xs: 'column', sm: 'row'}} alignItems="flex-start" gap={1} sx={{mt: 1}}>
+                                    <Typography variant="subtitle2" sx={{minWidth: 96, pt: {sm: 0.5}}}>Style cả video</Typography>
+                                    <AtlasStylePicker value={atlasStyle} options={atlasLockStyles}
+                                        disabled={Boolean(savingChoice)}
+                                        onChange={(id) => { void handleSelectChoice('atlas-style', id); }} />
+                                </Stack>
+                            )}
+                            {renderEngine === 'threejs' && videoFormat === 'story' && atlasStyle && (
+                                <Typography variant="caption" sx={{display: 'block', mt: 0.75, color: 'text.secondary'}}>
+                                    Cả video dùng một style: {atlasLockStyles[atlasStyle]}. Mọi beat là atlas beat theo style này, nhân vật được dựng lại theo style và dùng chung mã dựng giữa các beat.
+                                    {' '}Chọn trước khi viết kịch bản; đổi giữa chừng cần viết lại visual các beat.
+                                </Typography>
+                            )}
+                            {renderEngine === 'threejs' && videoFormat === 'story' && !atlasStyle && (
                                 <Typography variant="caption" sx={{display: 'block', mt: 0.75, color: 'text.secondary'}}>
                                     {ATLAS_DENSITY_HINTS[atlasDensity]}
                                     {' '}{atlasDensityChoice
