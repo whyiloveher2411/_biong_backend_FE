@@ -114,6 +114,18 @@ const ATLAS_LOCK_STYLE_FALLBACK: Record<string, string> = {
     voxel: 'Voxel',
 };
 
+/** Style nhân vật khi backend chưa trả danh sách (khớp marketing_sv_cast_style_ids). */
+const CAST_STYLE_FALLBACK: Record<string, string> = {
+    'ink-toon': 'Ink and Toon',
+    'soft-clay': 'Soft Clay',
+    inflated: 'Inflated',
+    'tiny-diorama': 'Tiny Diorama',
+    'low-poly': 'Low-Poly',
+    voxel: 'Voxel',
+    'paper-pop-up': 'Paper Pop-Up',
+    'spotlight-stage': 'Spotlight Stage',
+};
+
 function assertWorkflowSfxPromptContext(file: string, context: WorkflowPromptContext): void {
     if (file.split('/').pop() !== 'generate-sfx.md') return;
     const missing = ['PROJECT_INFO', 'FULL_BEATS'].filter((key) => !String(context[key] || '').trim() || String(context[key]).trim() === `[${key}]`);
@@ -617,6 +629,16 @@ export default function MarketingWorkflowDrawer({
         : ATLAS_LOCK_STYLE_FALLBACK);
     const atlasStyleChoice = String(effectiveChoiceValues['atlas-style'] || '');
     const atlasStyle = atlasLockStyles[atlasStyleChoice] ? atlasStyleChoice : '';
+
+    /**
+     * Style nhân vật (`character-style`): chỉ nhân vật dựng theo một style atlas (THREE.SVCast), bối cảnh vẫn theo từng beat.
+     * Giá trị `default` (hoặc trống) = nhân vật bình thường. Bị bỏ qua khi đã khoá style cả video.
+     */
+    const castStyles: Record<string, string> = (workflowOutputs['__character-style-options'] && typeof workflowOutputs['__character-style-options'] === 'object'
+        ? workflowOutputs['__character-style-options'] as Record<string, string>
+        : CAST_STYLE_FALLBACK);
+    const castStyleChoice = String(effectiveChoiceValues['character-style'] || '');
+    const castStyle = !atlasStyle && castStyles[castStyleChoice] ? castStyleChoice : '';
 
     /** Chọn nhóm prompt (Business/History…) → lưu vào workflow outputs, refresh vẫn giữ. */
     const handleSelectChoice = React.useCallback(async (choiceName: string, label: string) => {
@@ -1578,6 +1600,20 @@ export default function MarketingWorkflowDrawer({
                                         disabled={Boolean(savingChoice)}
                                         onChange={(id) => { void handleSelectChoice('atlas-style', id); }} />
                                 </Stack>
+                            )}
+                            {renderEngine === 'threejs' && videoFormat === 'story' && !atlasStyle && (
+                                <Stack direction={{xs: 'column', sm: 'row'}} alignItems="flex-start" gap={1} sx={{mt: 1}}>
+                                    <Typography variant="subtitle2" sx={{minWidth: 96, pt: {sm: 0.5}}}>Style nhân vật</Typography>
+                                    <AtlasStylePicker variant="cast" value={castStyle} options={castStyles}
+                                        disabled={Boolean(savingChoice)}
+                                        onChange={(id) => { void handleSelectChoice('character-style', id); }} />
+                                </Stack>
+                            )}
+                            {renderEngine === 'threejs' && videoFormat === 'story' && !atlasStyle && castStyle && (
+                                <Typography variant="caption" sx={{display: 'block', mt: 0.75, color: 'text.secondary'}}>
+                                    Nhân vật dựng theo style {castStyles[castStyle]} (hình đơn giản, dùng chung mã dựng giữa các beat); bối cảnh vẫn theo từng beat như bình thường.
+                                    {' '}Video shared không cần thiết kế nhân vật. Chọn trước bước hồ sơ nhân vật; đổi giữa chừng cần viết lại visual và HTML các beat.
+                                </Typography>
                             )}
                             {renderEngine === 'threejs' && videoFormat === 'story' && atlasStyle && (
                                 <Typography variant="caption" sx={{display: 'block', mt: 0.75, color: 'text.secondary'}}>
