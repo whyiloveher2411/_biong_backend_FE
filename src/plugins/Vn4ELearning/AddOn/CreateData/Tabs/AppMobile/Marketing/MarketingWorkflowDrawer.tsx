@@ -632,12 +632,13 @@ export default function MarketingWorkflowDrawer({
 
     /**
      * Style nhân vật (`character-style`): chỉ nhân vật dựng theo một style atlas (THREE.SVCast), bối cảnh vẫn theo từng beat.
-     * Giá trị `default` (hoặc trống) = nhân vật bình thường. Bị bỏ qua khi đã khoá style cả video.
+     * Giá trị `default` = nhân vật bình thường. Trống = mặc định backend (`__character-style-resolved`: Ink and Toon cho
+     * video tạo từ 16/11/2026 18:00, video cũ là nhân vật bình thường). Bị bỏ qua khi đã khoá style cả video.
      */
     const castStyles: Record<string, string> = (workflowOutputs['__character-style-options'] && typeof workflowOutputs['__character-style-options'] === 'object'
         ? workflowOutputs['__character-style-options'] as Record<string, string>
         : CAST_STYLE_FALLBACK);
-    const castStyleChoice = String(effectiveChoiceValues['character-style'] || '');
+    const castStyleChoice = String(effectiveChoiceValues['character-style'] || workflowOutputs['__character-style-resolved'] || '');
     const castStyle = !atlasStyle && castStyles[castStyleChoice] ? castStyleChoice : '';
 
     /** Chọn nhóm prompt (Business/History…) → lưu vào workflow outputs, refresh vẫn giữ. */
