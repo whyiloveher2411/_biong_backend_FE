@@ -607,12 +607,23 @@ export default function MarketingWorkflowDrawer({
     ) || 'full';
 
     /**
-     * Kiểu lời của kịch bản kể chuyện (`narrative-style`): narration (toàn lời kể) | mixed (kể + thoại, mặc định) | dialogue (toàn thoại).
+     * Kiểu lời của kịch bản kể chuyện (`narrative-style`): narration (toàn lời kể) | mixed (kể nhiều + thoại, mặc định)
+     * | dialogue-heavy (kể ít + thoại nhiều) | dialogue (toàn thoại).
      * Showcase không có kiểu lời. Toàn thoại không đi cùng Voice vừa (backend: marketing_short_video_narrative_style_allowed).
      */
-    const narrativeStyle: 'narration' | 'mixed' | 'dialogue' = videoFormat === 'story'
-        ? ((['narration', 'dialogue'] as const).find((style) => style === effectiveChoiceValues['narrative-style']) || 'mixed')
+    const narrativeStyle: 'narration' | 'mixed' | 'dialogue-heavy' | 'dialogue' = videoFormat === 'story'
+        ? ((['narration', 'dialogue-heavy', 'dialogue'] as const).find((style) => style === effectiveChoiceValues['narrative-style']) || 'mixed')
         : 'mixed';
+
+    /**
+     * Mức biểu cảm của lời thoại nhân vật (`dialogue-emotion`): low | medium | high. Chỉ khi kịch bản có thoại (khác narration).
+     * Chưa chọn: backend trả `__dialogue-emotion-resolved` (high cho video tạo từ 17/11/2026 16:00) và `__dialogue-emotion-source`
+     * (`legacy` = video cũ, giữ cách cũ cho tới khi chọn).
+     */
+    const dialogueEmotion: 'low' | 'medium' | 'high' = (['low', 'medium', 'high'] as const).find((level) => level === effectiveChoiceValues['dialogue-emotion'])
+        || (['low', 'medium', 'high'] as const).find((level) => level === workflowOutputs['__dialogue-emotion-resolved'])
+        || 'high';
+    const dialogueEmotionLegacy = !effectiveChoiceValues['dialogue-emotion'] && workflowOutputs['__dialogue-emotion-source'] === 'legacy';
 
     /**
      * Tần suất hiệu ứng hình ảnh (`vfx-density`, bộ kit THREE.SVFx, chỉ Three.js): none | medium | high.
@@ -1595,7 +1606,8 @@ export default function MarketingWorkflowDrawer({
                                         disabled={Boolean(savingChoice)} aria-label="Lời thoại"
                                         sx={{'& .MuiToggleButton-root': {textTransform: 'none', fontWeight: 600, px: 1.5, py: 0.5}}}>
                                         <ToggleButton value="narration">Toàn lời kể</ToggleButton>
-                                        <ToggleButton value="mixed">Kể + thoại (mặc định)</ToggleButton>
+                                        <ToggleButton value="mixed">Kể nhiều + thoại (mặc định)</ToggleButton>
+                                        <ToggleButton value="dialogue-heavy">Kể ít + thoại nhiều</ToggleButton>
                                         <ToggleButton value="dialogue" disabled={voiceMode === 'mixed'}>Toàn thoại</ToggleButton>
                                     </ToggleButtonGroup>
                                 </Stack>
@@ -1604,8 +1616,36 @@ export default function MarketingWorkflowDrawer({
                                 <Typography variant="caption" sx={{display: 'block', mt: 0.75, color: 'text.secondary'}}>
                                     {narrativeStyle === 'narration'
                                         ? 'Toàn lời kể: một giọng dẫn truyện kể cả video, nhân vật chỉ diễn (không mở miệng nói, không bong bóng thoại).'
-                                        : 'Toàn thoại: mọi lời là thoại nhân vật, không có người dẫn truyện; hook, giải thích, đúc kết và CTA đều do nhân vật nói. Không dùng cùng Voice vừa.'}
+                                        : narrativeStyle === 'dialogue-heavy'
+                                            ? 'Kể ít + thoại nhiều: thoại nhân vật gánh câu chuyện (ít nhất 55% lời, ít nhất 2 vai nói), lời dẫn chỉ nối cảnh, nói tiền đề và đúc kết.'
+                                            : 'Toàn thoại: mọi lời là thoại nhân vật, không có người dẫn truyện; hook, giải thích, đúc kết và CTA đều do nhân vật nói. Không dùng cùng Voice vừa.'}
                                     {' '}Chọn trước khi viết kịch bản; kịch bản sai kiểu lời sẽ bị từ chối khi lưu.
+                                </Typography>
+                            )}
+                            {videoFormat === 'story' && narrativeStyle !== 'narration' && (
+                                <Stack direction={{xs: 'column', sm: 'row'}} alignItems={{xs: 'flex-start', sm: 'center'}} gap={1} sx={{mt: 1}}>
+                                    <Typography variant="subtitle2" sx={{minWidth: 96}}>Biểu cảm thoại</Typography>
+                                    <ToggleButtonGroup exclusive size="small" color="primary"
+                                        value={dialogueEmotionLegacy ? null : dialogueEmotion}
+                                        onChange={(_, value) => { if (value) void handleSelectChoice('dialogue-emotion', value); }}
+                                        disabled={Boolean(savingChoice)} aria-label="Biểu cảm thoại"
+                                        sx={{'& .MuiToggleButton-root': {textTransform: 'none', fontWeight: 600, px: 1.5, py: 0.5}}}>
+                                        <ToggleButton value="low">Ít biểu cảm</ToggleButton>
+                                        <ToggleButton value="medium">Biểu cảm vừa</ToggleButton>
+                                        <ToggleButton value="high">Nhiều biểu cảm (mặc định)</ToggleButton>
+                                    </ToggleButtonGroup>
+                                </Stack>
+                            )}
+                            {videoFormat === 'story' && narrativeStyle !== 'narration' && (
+                                <Typography variant="caption" sx={{display: 'block', mt: 0.75, color: 'text.secondary'}}>
+                                    {dialogueEmotionLegacy
+                                        ? 'Video cũ chưa chọn mức biểu cảm: giữ cách viết thoại cũ cho tới khi chọn.'
+                                        : dialogueEmotion === 'high'
+                                            ? 'Nhiều biểu cảm: mọi câu thoại có cảm xúc rõ (câu cảm thán, hỏi gắt, thán từ, câu bỏ lửng), tình huống gây phản ứng mạnh, cảm xúc lên đỉnh ở lúc tưởng thua; ít nhất một nửa lượt thoại có chỉ dẫn giọng (feeling hoặc <gasp>, <laugh>…).'
+                                            : dialogueEmotion === 'medium'
+                                                ? 'Biểu cảm vừa: lời tự nhiên, cảm xúc rõ ở hook, bước ngoặt, cao trào và kết.'
+                                                : 'Ít biểu cảm: lời tự nhiên, tiết chế; cảm xúc đến từ tình huống.'}
+                                    {' '}Ảnh hưởng nội dung kịch bản, giọng đọc và diễn xuất nhân vật.
                                 </Typography>
                             )}
                             <Stack direction={{xs: 'column', sm: 'row'}} alignItems={{xs: 'flex-start', sm: 'center'}} gap={1} sx={{mt: 1}}>
