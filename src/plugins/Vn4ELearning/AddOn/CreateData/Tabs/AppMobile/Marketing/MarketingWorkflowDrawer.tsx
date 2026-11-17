@@ -669,6 +669,10 @@ export default function MarketingWorkflowDrawer({
         ? workflowOutputs['__character-style-options'] as Record<string, string>
         : CAST_STYLE_FALLBACK);
     const castStyleChoice = String(effectiveChoiceValues['character-style'] || workflowOutputs['__character-style-resolved'] || '');
+    /** Kiểu viền ink-toon (`ink-line`): detail (mảnh + chi tiết, mặc định video mới) | thick (viền dày cũ). */
+    const inkLine: 'detail' | 'thick' = (['detail', 'thick'] as const).find((v) => v === effectiveChoiceValues['ink-line'])
+        || (['detail', 'thick'] as const).find((v) => v === workflowOutputs['__ink-line-resolved']) || 'detail';
+    const inkLineLegacy = !effectiveChoiceValues['ink-line'] && workflowOutputs['__ink-line-source'] === 'legacy';
     const castStyle = !atlasStyle && castStyles[castStyleChoice] ? castStyleChoice : '';
 
     /** Chọn nhóm prompt (Business/History…) → lưu vào workflow outputs, refresh vẫn giữ. */
@@ -1721,6 +1725,27 @@ export default function MarketingWorkflowDrawer({
                                 <Typography variant="caption" sx={{display: 'block', mt: 0.75, color: 'text.secondary'}}>
                                     Nhân vật dựng theo style {castStyles[castStyle]} (hình đơn giản, dùng chung mã dựng giữa các beat); bối cảnh vẫn theo từng beat như bình thường.
                                     {' '}Video shared không cần thiết kế nhân vật. Chọn trước bước hồ sơ nhân vật; đổi giữa chừng cần viết lại visual và HTML các beat.
+                                </Typography>
+                            )}
+                            {renderEngine === 'threejs' && videoFormat === 'story' && !atlasStyle && castStyle === 'ink-toon' && (
+                                <Stack direction={{xs: 'column', sm: 'row'}} alignItems={{xs: 'flex-start', sm: 'center'}} gap={1} sx={{mt: 1}}>
+                                    <Typography variant="subtitle2" sx={{minWidth: 96}}>Kiểu viền</Typography>
+                                    <ToggleButtonGroup exclusive size="small" color="primary"
+                                        value={inkLineLegacy ? null : inkLine}
+                                        onChange={(_, value) => { if (value) void handleSelectChoice('ink-line', value); }}
+                                        disabled={Boolean(savingChoice)} aria-label="Kiểu viền"
+                                        sx={{'& .MuiToggleButton-root': {textTransform: 'none', fontWeight: 600, px: 1.5, py: 0.5}}}>
+                                        <ToggleButton value="detail">Viền mảnh + chi tiết (mặc định)</ToggleButton>
+                                        <ToggleButton value="thick">Viền dày</ToggleButton>
+                                    </ToggleButtonGroup>
+                                </Stack>
+                            )}
+                            {renderEngine === 'threejs' && videoFormat === 'story' && !atlasStyle && castStyle === 'ink-toon' && (
+                                <Typography variant="caption" sx={{display: 'block', mt: 0.75, color: 'text.secondary'}}>
+                                    {inkLineLegacy
+                                        ? 'Video cũ chưa chọn: giữ viền dày 6,5 px. '
+                                        : inkLine === 'detail' ? 'Viền bao 2 px + nét chi tiết 1,1 px ở cạnh, mép, chỗ tiếp xúc; tán lá dùng màu lá sẫm. ' : 'Viền dày 6,5 px, chỉ đường bao từng vật. '}
+                                    Đổi giữa chừng cần dựng lại HTML các beat.
                                 </Typography>
                             )}
                             {renderEngine === 'threejs' && videoFormat === 'story' && atlasStyle && (
