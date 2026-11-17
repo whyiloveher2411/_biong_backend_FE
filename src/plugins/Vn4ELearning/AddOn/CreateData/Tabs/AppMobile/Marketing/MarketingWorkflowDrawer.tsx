@@ -615,6 +615,17 @@ export default function MarketingWorkflowDrawer({
         : 'mixed';
 
     /**
+     * Tần suất hiệu ứng hình ảnh (`vfx-density`, bộ kit THREE.SVFx, chỉ Three.js): none | medium | high.
+     * Chưa chọn: backend trả `__vfx-density-resolved` (high cho video tạo từ 16/11/2026) và `__vfx-density-source`
+     * (`legacy` = video cũ, giữ quy tắc cũ cho tới khi chọn).
+     */
+    const vfxDensityChoice = (['none', 'medium', 'high'] as const).find((density) => density === effectiveChoiceValues['vfx-density']);
+    const vfxDensity: 'none' | 'medium' | 'high' = vfxDensityChoice
+        || (['none', 'medium', 'high'] as const).find((density) => density === workflowOutputs['__vfx-density-resolved'])
+        || 'high';
+    const vfxDensityLegacy = !vfxDensityChoice && workflowOutputs['__vfx-density-source'] === 'legacy';
+
+    /**
      * Tần suất beat 3D Style Atlas: none | medium | high | all. Chưa chọn thì lấy mặc định theo nhóm chủ đề
      * (giống marketing_sv_atlas_density_group_defaults ở backend).
      */
@@ -1623,6 +1634,32 @@ export default function MarketingWorkflowDrawer({
                                         <ToggleButton value="all">Toàn bộ</ToggleButton>
                                     </ToggleButtonGroup>
                                 </Stack>
+                            )}
+                            {renderEngine === 'threejs' && (
+                                <Stack direction={{xs: 'column', sm: 'row'}} alignItems={{xs: 'flex-start', sm: 'center'}} gap={1} sx={{mt: 1}}>
+                                    <Typography variant="subtitle2" sx={{minWidth: 96}}>Hiệu ứng</Typography>
+                                    <ToggleButtonGroup exclusive size="small" color="primary"
+                                        value={vfxDensityLegacy ? null : vfxDensity}
+                                        onChange={(_, value) => { if (value) void handleSelectChoice('vfx-density', value); }}
+                                        disabled={Boolean(savingChoice)} aria-label="Tần suất hiệu ứng hình ảnh"
+                                        sx={{'& .MuiToggleButton-root': {textTransform: 'none', fontWeight: 600, px: 1.5, py: 0.5}}}>
+                                        <ToggleButton value="none">Không có</ToggleButton>
+                                        <ToggleButton value="medium">Vừa</ToggleButton>
+                                        <ToggleButton value="high">Nhiều (mặc định)</ToggleButton>
+                                    </ToggleButtonGroup>
+                                </Stack>
+                            )}
+                            {renderEngine === 'threejs' && (
+                                <Typography variant="caption" sx={{display: 'block', mt: 0.75, color: 'text.secondary'}}>
+                                    {vfxDensityLegacy
+                                        ? 'Video tạo trước 16/11/2026 chưa chọn: giữ quy tắc cũ (hiệu ứng tuỳ ý, thường rất ít). Chọn một mức để áp dụng cho các beat chưa dựng.'
+                                        : vfxDensity === 'none'
+                                            ? 'Không có: beat không dùng hiệu ứng hình ảnh (lưu ảnh, vạch tốc độ, tia nổ, khói bụi, lấp lánh, vòng lan, quầng sáng).'
+                                            : vfxDensity === 'medium'
+                                                ? 'Vừa: mỗi beat có ít nhất một hiệu ứng ở hành động chính.'
+                                                : 'Nhiều: mọi lúc có thể — mỗi shot ít nhất một hiệu ứng; vật rơi/bay/ném có lưu ảnh, va chạm có tia nổ, cảm xúc có lấp lánh hoặc vạch tốc độ.'}
+                                    {!vfxDensityLegacy && ' Chọn trước bước visual; đổi giữa chừng cần viết lại visual và HTML các beat. Lưu beat sai tần suất bị từ chối.'}
+                                </Typography>
                             )}
                             {renderEngine === 'threejs' && videoFormat === 'story' && (
                                 <Stack direction={{xs: 'column', sm: 'row'}} alignItems="flex-start" gap={1} sx={{mt: 1}}>
