@@ -95,7 +95,7 @@ function formatJson(data: unknown): string {
 
 const server = new McpServer({
   name: 'biong-short-video',
-  version: '2.22.0',
+  version: '2.24.0',
 });
 
 const video3dId = z.number().int().positive();
@@ -141,7 +141,7 @@ server.tool(
     persistent_hud: z.boolean().optional().describe('Bật chữ xuyên suốt video (HUD: bộ đếm, nhãn trạng thái/chương, mốc thời gian ở mép trên). Lập nội dung bằng step action hud ở công đoạn visual.'),
     atlas_density: z.enum(['none', 'medium', 'high', 'all']).optional().describe('Tần suất beat dùng 3D Style Atlas (engine threejs). Bỏ trống = mặc định theo nhóm chủ đề (Business high, History none, What-if medium). none = Không có; medium = Vừa (chỉ vài khoảnh khắc giải thích); high = Nhiều (xen kẽ cảnh kể chuyện và cảnh atlas); all = Toàn bộ (mọi beat là atlas). Hỏi user khi chốt brief nếu muốn khác mặc định.'),
     atlas_style: z.enum(['painted', 'ink-toon', 'spotlight-stage', 'paper-pop-up', 'led-wall', 'soft-clay', 'inflated', 'tiny-diorama', 'low-poly', 'voxel']).optional().describe('Khoá MỘT style atlas cho mọi beat của video (engine threejs, video_format story). Bỏ trống = style chọn theo từng beat. Khi khoá, tần suất là all (không truyền atlas_density khác all), mọi visual ghi `STYLE: <id>`, nhân vật dựng lại theo style và dùng chung khối mã `// SV-CAST BEGIN … END` giữa các beat. Đưa ra cho user chọn khi chốt brief; không chọn thì bỏ trống (theo từng beat).'),
-    character_style: z.enum(['default', 'ink-toon', 'soft-clay', 'inflated', 'tiny-diorama', 'low-poly', 'voxel', 'paper-pop-up', 'spotlight-stage']).optional().describe('Style nhân vật: CHỈ nhân vật dựng theo một style atlas (runtime THREE.SVCast, hình viên thuốc đơn giản), bối cảnh vẫn theo từng beat như bình thường (engine threejs, video_format story). Bỏ trống = mặc định ink-toon (Ink and Toon) cho video story Three.js không khoá style; `default` = nhân vật bình thường (Character Designer). Không truyền style khác default cùng atlas_style (khoá style cả video đã gồm nhân vật). Khi chọn: visual beat 1 có `CAST SHEET:`, mỗi visual có dòng `CAST:`, HTML beat mặc định dựng nhân vật bằng `THREE.SVCast.create(<id>, {renderer})` trong khối `// SV-CAST BEGIN … END`; video shared không gán asset nhân vật. ink-toon: mọi đối tượng của bối cảnh cũng có viền mực 6,5 px — mọi HTML beat mặc định gọi `C.inkWorld(scene)` mỗi frame trước `C.frame(...)` (gate lưu kiểm). Đưa ra cho user chọn khi chốt brief; không chọn thì bỏ trống (ink-toon).'),
+    character_style: z.enum(['default', 'stick-head', 'ink-toon', 'soft-clay', 'inflated', 'tiny-diorama', 'low-poly', 'voxel', 'paper-pop-up', 'spotlight-stage']).optional().describe('Style nhân vật: CHỈ nhân vật dựng theo một style atlas (runtime THREE.SVCast, hình viên thuốc đơn giản), bối cảnh vẫn theo từng beat như bình thường (engine threejs, video_format story). Bỏ trống = mặc định stick-head (Đầu tròn) cho video story Three.js không khoá style tạo từ 17/11/2026 22:00 (video 16/11 18:00–17/11 22:00 mặc định ink-toon); `default` = nhân vật bình thường (Character Designer); `stick-head` (Đầu tròn) = giữ nguyên nhân vật Character Designer, chỉ đổi đầu thành quả cầu màu da với mặt vẽ (THREE.SVStickHead, CMS tự gắn khi compose), cảm xúc phóng đại qua update(t,{emotion,...}). Không truyền style khác default cùng atlas_style (khoá style cả video đã gồm nhân vật). Khi chọn: visual beat 1 có `CAST SHEET:`, mỗi visual có dòng `CAST:`, HTML beat mặc định dựng nhân vật bằng `THREE.SVCast.create(<id>, {renderer})` trong khối `// SV-CAST BEGIN … END`; video shared không gán asset nhân vật. ink-toon: mọi đối tượng của bối cảnh cũng có viền mực 6,5 px — mọi HTML beat mặc định gọi `C.inkWorld(scene)` mỗi frame trước `C.frame(...)` (gate lưu kiểm). Đưa ra cho user chọn khi chốt brief; không chọn thì bỏ trống (ink-toon).'),
   },
   async (brief) => video3dRequest('start', brief)
 );
@@ -215,6 +215,7 @@ server.tool(
         cast_id: z.string().optional(),
         expected_module_hash: z.string().optional(),
         expected_spec_hash: z.string().optional(),
+        user_skin: z.string().optional().describe('character_design: lời user khi user yêu cầu màu da khác cho nhân vật chính. Video mới (từ 17/11/2026 22:00): nhân vật chính mặc định da đen #1E1612 (colors.skin), thiếu user_skin mà da sáng thì bị từ chối (code main_character_skin).'),
         design: z.object({
           template: z.literal('mai_v1').optional(),
           selections: z.record(z.string()).optional(),

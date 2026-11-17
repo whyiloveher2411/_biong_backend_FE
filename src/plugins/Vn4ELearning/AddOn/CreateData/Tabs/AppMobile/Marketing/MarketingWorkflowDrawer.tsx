@@ -1,5 +1,6 @@
 import WorkflowChatSessionBox from './WorkflowChatSessionBox';
 import AtlasStylePicker from './AtlasStylePicker';
+import CastDesignPreviewDialog from './CastDesignPreviewDialog';
 import SceneAssetsPanel from './AgentVideo/SceneAssetsPanel';
 import ShortVideoAgentSaydiCastSettings from './AgentVideo/ShortVideoAgentSaydiCastSettings';
 import React from 'react';
@@ -116,6 +117,7 @@ const ATLAS_LOCK_STYLE_FALLBACK: Record<string, string> = {
 
 /** Style nhân vật khi backend chưa trả danh sách (khớp marketing_sv_cast_style_ids). */
 const CAST_STYLE_FALLBACK: Record<string, string> = {
+    'stick-head': 'Đầu tròn',
     'ink-toon': 'Ink and Toon',
     'soft-clay': 'Soft Clay',
     inflated: 'Inflated',
@@ -662,12 +664,13 @@ export default function MarketingWorkflowDrawer({
 
     /**
      * Style nhân vật (`character-style`): chỉ nhân vật dựng theo một style atlas (THREE.SVCast), bối cảnh vẫn theo từng beat.
-     * Giá trị `default` = nhân vật bình thường. Trống = mặc định backend (`__character-style-resolved`: Ink and Toon cho
-     * video tạo từ 16/11/2026 18:00, video cũ là nhân vật bình thường). Bị bỏ qua khi đã khoá style cả video.
+     * Giá trị `default` = nhân vật bình thường. Trống = mặc định backend (`__character-style-resolved`: Đầu tròn cho
+     * video tạo từ 17/11/2026 22:00, Ink and Toon cho 16/11 18:00–17/11 22:00, video cũ hơn là nhân vật bình thường). Bị bỏ qua khi đã khoá style cả video.
      */
     const castStyles: Record<string, string> = (workflowOutputs['__character-style-options'] && typeof workflowOutputs['__character-style-options'] === 'object'
         ? workflowOutputs['__character-style-options'] as Record<string, string>
         : CAST_STYLE_FALLBACK);
+    const [castPreviewOpen, setCastPreviewOpen] = React.useState(false);
     const castStyleChoice = String(effectiveChoiceValues['character-style'] || workflowOutputs['__character-style-resolved'] || '');
     /** Kiểu viền ink-toon (`ink-line`): detail (mảnh + chi tiết, mặc định video mới) | thick (viền dày cũ). */
     const inkLine: 'detail' | 'thick' = (['detail', 'thick'] as const).find((v) => v === effectiveChoiceValues['ink-line'])
@@ -1721,12 +1724,22 @@ export default function MarketingWorkflowDrawer({
                                         onChange={(id) => { void handleSelectChoice('character-style', id); }} />
                                 </Stack>
                             )}
+                            {renderEngine === 'threejs' && videoFormat === 'story' && !atlasStyle && Number(shortVideoId || 0) > 0 && (
+                                <Box sx={{mt: 1, pl: {sm: 'calc(96px + 8px)'}}}>
+                                    <Button size="small" variant="outlined" sx={{textTransform: 'none'}} onClick={() => setCastPreviewOpen(true)}>
+                                        Xem trước dàn nhân vật
+                                    </Button>
+                                </Box>
+                            )}
                             {renderEngine === 'threejs' && videoFormat === 'story' && !atlasStyle && castStyle && (
                                 <Typography variant="caption" sx={{display: 'block', mt: 0.75, color: 'text.secondary'}}>
-                                    Nhân vật dựng theo style {castStyles[castStyle]} (hình đơn giản, dùng chung mã dựng giữa các beat); bối cảnh vẫn theo từng beat như bình thường.
-                                    {' '}Video shared không cần thiết kế nhân vật. Chọn trước bước hồ sơ nhân vật; đổi giữa chừng cần viết lại visual và HTML các beat.
+                                    {castStyle === 'stick-head'
+                                        ? 'Đầu tròn: giữ nguyên nhân vật thiết kế bằng Character Designer (dáng, quần áo, giày, tay, màu); chỉ đầu thành quả cầu màu da với mắt, mũi, miệng vẽ (da tối dùng nét sáng, da sáng dùng nét đen). Tóc, mũ, kính, râu không hiện. Cảm xúc phóng đại qua mắt và miệng. CMS tự đổi đầu khi ghép beat, kể cả beat đã dựng.'
+                                        : <>Nhân vật dựng theo style {castStyles[castStyle]} (hình đơn giản, dùng chung mã dựng giữa các beat); bối cảnh vẫn theo từng beat như bình thường.
+                                    {' '}Nhân vật vẫn được thiết kế bằng Character Designer ở bước tài sản; beat dựng lại thiết kế đó theo style (giữ màu, kiểu áo, quần/váy, giày, tóc, phụ kiện). Cảm xúc vẽ phóng đại (cười lớn, khóc, giận, ngạc nhiên…). Đổi style giữa chừng cần dựng lại HTML các beat.</>}
                                 </Typography>
                             )}
+                            <CastDesignPreviewDialog open={castPreviewOpen} onClose={() => setCastPreviewOpen(false)} shortVideoId={Number(shortVideoId || 0)} />
                             {renderEngine === 'threejs' && videoFormat === 'story' && !atlasStyle && castStyle === 'ink-toon' && (
                                 <Stack direction={{xs: 'column', sm: 'row'}} alignItems={{xs: 'flex-start', sm: 'center'}} gap={1} sx={{mt: 1}}>
                                     <Typography variant="subtitle2" sx={{minWidth: 96}}>Kiểu viền</Typography>
