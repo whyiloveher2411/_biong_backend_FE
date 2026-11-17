@@ -1696,8 +1696,8 @@ export default function MarketingWorkflowDrawer({
                                         : vfxDensity === 'none'
                                             ? 'Không có: beat không dùng hiệu ứng hình ảnh (lưu ảnh, vạch tốc độ, tia nổ, khói bụi, lấp lánh, vòng lan, quầng sáng).'
                                             : vfxDensity === 'medium'
-                                                ? 'Vừa: mỗi beat có ít nhất một hiệu ứng ở hành động chính.'
-                                                : 'Nhiều: mọi lúc có thể — mỗi shot ít nhất một hiệu ứng; vật rơi/bay/ném có lưu ảnh, va chạm có tia nổ, cảm xúc có lấp lánh hoặc vạch tốc độ.'}
+                                                ? 'Vừa: chỉ khoảnh khắc mạnh nhất (khoảng 3–4/10 beat), luôn gắn với một sự kiện vật lý trên hình.'
+                                                : 'Nhiều: thường xuyên nhưng có lý do — hiệu ứng chỉ khi có sự kiện vật lý trên hình (di chuyển nhanh, nhảy, rơi, ném, va chạm, vật bật ra), khoảng 6/10 beat; không cho lời nói, cử chỉ tay, vật chỉ quan trọng; không đè lên vật chính.'}
                                     {!vfxDensityLegacy && ' Chọn trước bước visual; đổi giữa chừng cần viết lại visual và HTML các beat. Lưu beat sai tần suất bị từ chối.'}
                                 </Typography>
                             )}
