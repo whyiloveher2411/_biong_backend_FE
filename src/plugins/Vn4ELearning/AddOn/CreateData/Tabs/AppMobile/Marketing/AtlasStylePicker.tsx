@@ -29,6 +29,7 @@ const CAST_HINTS: Record<string, string> = {
     'paper-pop-up': 'Nhân vật bìa cắt phẳng, luôn hướng về máy quay',
     'spotlight-stage': 'Nhân vật rối bìa sơn, luôn hướng về máy quay',
     'block-avatar': 'Người khối đồ chơi: thân hộp, tay chân khối, mặt vẽ phẳng',
+    'brick-toy': 'Người gạch đồ chơi: nhựa bóng, đầu trụ tròn, tay thanh tròn, chuyển động stop-motion',
 };
 
 const STYLE_HINTS: Record<string, string> = {
