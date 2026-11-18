@@ -95,22 +95,42 @@ function formatJson(data: unknown): string {
 
 const server = new McpServer({
   name: 'biong-short-video',
-  version: '2.24.0',
+  version: '2.25.0',
 });
 
 const video3dId = z.number().int().positive();
+
+// Autopilot flag per video (status/start/autopilot/continue_beat responses carry it; fetched once otherwise).
+const autopilotByVideo = new Map<number, boolean>();
+function rememberAutopilot(id: number | undefined, raw: unknown) {
+  if (!id || typeof raw !== 'object' || raw === null) return;
+  const r = raw as Record<string, unknown>;
+  const a = r.autopilot;
+  if (typeof a === 'boolean') autopilotByVideo.set(id, a);
+  else if (typeof a === 'object' && a !== null && typeof (a as Record<string, unknown>).enabled === 'boolean') autopilotByVideo.set(id, (a as Record<string, boolean>).enabled);
+}
 
 async function video3dRequest(action: string, input: object = {}, shortVideoId?: number) {
   const body: Record<string, string | number> = { action, input: JSON.stringify(input) };
   if (shortVideoId !== undefined) body.short_video_id = shortVideoId;
   const raw = await apiRequest('video-html-3d', { body });
+  const startedId = action === 'start' && typeof raw === 'object' && raw !== null ? Number((raw as Record<string, unknown>).short_video_id) : undefined;
+  rememberAutopilot(shortVideoId ?? startedId, raw);
+  if (shortVideoId !== undefined && !autopilotByVideo.has(shortVideoId)) {
+    rememberAutopilot(shortVideoId, await apiRequest('video-html-3d', { body: { action: 'status', input: '{}', short_video_id: shortVideoId } }));
+  }
+  const autopilot = shortVideoId !== undefined && autopilotByVideo.get(shortVideoId) === true;
   const boundary = ['beat_list','beat_map','translations','visual_prompt'].includes(action)
     || (action === 'scene_assets' && ['manifest','save_environment','character_design'].includes(String((input as Record<string, unknown>).operation)));
   const result = typeof raw === 'object' && raw !== null ? { ...raw,
-    interaction_policy: { stop_after_each_stage: true, one_beat_at_a_time: true,
-      natural_sfx: 'suggestions_only_user_selects', code_sfx: 'automatic_mp3',
-      next_beat_requires_explicit_user_confirmation: true },
-    ...(boundary && 'success' in raw && raw.success === true ? {stop_required:true,next_action:'await_user_review'} : {}),
+    interaction_policy: autopilot
+      ? { autopilot: true, stop_after_each_stage: false, one_beat_at_a_time: true,
+          natural_sfx: 'natural_sfx_auto (library + Freesound)', code_sfx: 'automatic_mp3', visual_review: 'required_every_beat',
+          next_beat: 'continue_beat without user_confirmation (stored autopilot request)', final_stage: 'scripts/beat-html/autopilot.php finish' }
+      : { stop_after_each_stage: true, one_beat_at_a_time: true,
+          natural_sfx: 'suggestions_only_user_selects', code_sfx: 'automatic_mp3', visual_review: 'required_every_beat',
+          next_beat_requires_explicit_user_confirmation: true },
+    ...(boundary && !autopilot && 'success' in raw && raw.success === true ? {stop_required:true,next_action:'await_user_review'} : {}),
   } : raw;
   return {
     isError: typeof result === 'object' && result !== null && 'success' in result && result.success === false,
@@ -141,6 +161,8 @@ server.tool(
     persistent_hud: z.boolean().optional().describe('Bật chữ xuyên suốt video (HUD: bộ đếm, nhãn trạng thái/chương, mốc thời gian ở mép trên). Lập nội dung bằng step action hud ở công đoạn visual.'),
     atlas_density: z.enum(['none', 'medium', 'high', 'all']).optional().describe('Tần suất beat dùng 3D Style Atlas (engine threejs). Bỏ trống = mặc định theo nhóm chủ đề (Business high, History none, What-if medium). none = Không có; medium = Vừa (chỉ vài khoảnh khắc giải thích); high = Nhiều (xen kẽ cảnh kể chuyện và cảnh atlas); all = Toàn bộ (mọi beat là atlas). Hỏi user khi chốt brief nếu muốn khác mặc định.'),
     atlas_style: z.enum(['painted', 'ink-toon', 'spotlight-stage', 'paper-pop-up', 'led-wall', 'soft-clay', 'inflated', 'tiny-diorama', 'low-poly', 'voxel']).optional().describe('Khoá MỘT style atlas cho mọi beat của video (engine threejs, video_format story). Bỏ trống = style chọn theo từng beat. Khi khoá, tần suất là all (không truyền atlas_density khác all), mọi visual ghi `STYLE: <id>`, nhân vật dựng lại theo style và dùng chung khối mã `// SV-CAST BEGIN … END` giữa các beat. Đưa ra cho user chọn khi chốt brief; không chọn thì bỏ trống (theo từng beat).'),
+    autopilot: z.boolean().optional().describe('Chạy tự động từ brief đến upload, không dừng chờ duyệt (mọi gate kỹ thuật vẫn chạy: QC, va chạm, visual review, SFX, BGM, flicker). CHỈ bật khi user nói rõ muốn chạy một lần đến hết; bắt buộc kèm autopilot_confirmation. Hỏi khi chốt brief; mặc định tắt.'),
+    autopilot_confirmation: z.string().trim().min(1).max(4000).optional().describe('Trích NGUYÊN VĂN tin nhắn user yêu cầu chạy tự động; không tự viết. Dùng thay cho xác nhận từng beat của continue_beat.'),
     character_style: z.enum(['default', 'stick-head', 'ink-toon', 'soft-clay', 'inflated', 'tiny-diorama', 'low-poly', 'voxel', 'paper-pop-up', 'spotlight-stage']).optional().describe('Style nhân vật: CHỈ nhân vật dựng theo một style atlas (runtime THREE.SVCast, hình viên thuốc đơn giản), bối cảnh vẫn theo từng beat như bình thường (engine threejs, video_format story). Bỏ trống = mặc định stick-head (Đầu tròn) cho video story Three.js không khoá style tạo từ 17/11/2026 22:00 (video 16/11 18:00–17/11 22:00 mặc định ink-toon); `default` = nhân vật bình thường (Character Designer); `stick-head` (Đầu tròn) = giữ nguyên nhân vật Character Designer, chỉ đổi đầu thành quả cầu màu da với mặt vẽ (THREE.SVStickHead, CMS tự gắn khi compose), cảm xúc phóng đại qua update(t,{emotion,...}). Không truyền style khác default cùng atlas_style (khoá style cả video đã gồm nhân vật). Khi chọn: visual beat 1 có `CAST SHEET:`, mỗi visual có dòng `CAST:`, HTML beat mặc định dựng nhân vật bằng `THREE.SVCast.create(<id>, {renderer})` trong khối `// SV-CAST BEGIN … END`; video shared không gán asset nhân vật. ink-toon: mọi đối tượng của bối cảnh cũng có viền mực 6,5 px — mọi HTML beat mặc định gọi `C.inkWorld(scene)` mỗi frame trước `C.frame(...)` (gate lưu kiểm). Đưa ra cho user chọn khi chốt brief; không chọn thì bỏ trống (ink-toon).'),
   },
   async (brief) => video3dRequest('start', brief)
@@ -155,7 +177,7 @@ server.tool(
 
 server.tool(
   'short_video_3d_step',
-  'Làm từng công đoạn và dừng cho user kiểm tra sau mỗi công đoạn. Ở giai đoạn HTML, mỗi lượt chỉ một beat: TTS/Whisper, visual, gợi ý natural SFX + tự tạo MP3 code SFX, HTML, QC và lưu rồi STOP. Natural SFX chỉ là gợi ý để user tự tìm/chọn, không mở browser hoặc tải tự động. Không tự làm tất cả beat. Chỉ gọi continue_beat sau khi user nói rõ sang beat tiếp theo; trích nguyên văn xác nhận, không tự tạo xác nhận. Technical ready/QC pass không có nghĩa user đã duyệt.',
+  'Làm từng công đoạn. Mặc định dừng cho user kiểm tra sau mỗi công đoạn; ở giai đoạn HTML mỗi lượt một beat: TTS/Whisper, visual, sound plan (natural + MP3 code), HTML, QC, visual review (chụp frame, đối chiếu VISUAL) và lưu rồi STOP; natural SFX là gợi ý để user chọn; chỉ continue_beat sau khi user nói rõ sang beat tiếp (trích nguyên văn). Khi status.autopilot.enabled (user đã yêu cầu chạy đến hết): không dừng, natural_sfx_auto, continue_beat không cần trích, cuối cùng scripts/beat-html/autopilot.php finish (render → flicker → upload). Visual review bắt buộc ở cả hai chế độ.',
   {
     short_video_id: video3dId,
     step: z.discriminatedUnion('action', [
@@ -240,7 +262,8 @@ server.tool(
         beat_id: z.string().min(1),
         revision: z.string().regex(/^[a-f0-9]{64}$/),
         html: z.string().min(1).max(524288),
-      }).describe('Chạy QC bắt buộc rồi lưu HTML khi đạt; trả qc/repair_prompt nếu chưa đạt. Sau success + hash readback vẫn phải STOP cho user review. Chỉ continue_beat sau xác nhận user rõ ràng; natural pending vẫn giữ để user chọn.'),
+        visual_review: z.record(z.unknown()).describe('Bắt buộc: file review đã điền của ĐÚNG HTML này (scripts/beat-html/visual-review.php --template → beat-live shot … --sheet → xem từng frame, điền status pass|fail + seen mô tả hình thật → --check). Thiếu, sai hash hoặc còn fail → visual_review_required kèm expected_checks.'),
+      }).describe('Chạy QC bắt buộc + kiểm visual review rồi lưu HTML khi đạt; trả qc/repair_prompt nếu chưa đạt. Sau success + hash readback: không autopilot thì STOP cho user review; autopilot thì continue_beat. Natural pending: user chọn trong CMS, hoặc natural_sfx_auto khi autopilot.'),
       z.object({
         action: z.literal('blender_asset'),
         operation: z.enum(['list', 'save']),
@@ -270,7 +293,10 @@ server.tool(
         events: z.array(z.record(z.unknown())).max(24),
       }).describe('AI đề xuất phối hợp natural recordings và code accents cho beat này. CMS tự render code thành MP3; natural giữ là gợi ý để user tự tìm và bấm chọn. Không mở Pixabay/tải thay user, không bỏ một nhóm vì tiện. Giữ natural pending trong HTML review; cảnh không cần SFX có thể events rỗng với lý do rõ.'),
       z.object({ action: z.literal('natural_sfx'), beat_id: z.string().min(1), event_id: z.string().optional() }).describe('Read natural-sound suggestions/search URLs only. Does not open any browser or download audio. The user clicks the CMS cue to find/listen/select natural recordings. Keep pending suggestions in HTML, combine natural recordings with meaningful code accents; never drop either group merely for convenience.'),
-      z.object({action:z.literal('continue_beat'),beat_id:z.string().regex(/^beat_[1-9][0-9]*$/),reviewed_beat_id:z.string().regex(/^beat_[1-9][0-9]*$/),reviewed_html_sha256:z.string().regex(/^[a-f0-9]{64}$/),user_confirmation:z.string().trim().min(1).max(4000)}).describe('ONLY after an explicit user message approving review and requesting the next beat. Quote that actual message verbatim; never invent/assume approval. Binds approval to the saved HTML hash and unlocks one requested beat only. For feedback, stay on the same beat without calling this action.'),
+      z.object({action:z.literal('continue_beat'),beat_id:z.string().regex(/^beat_[1-9][0-9]*$/),reviewed_beat_id:z.string().regex(/^beat_[1-9][0-9]*$/),reviewed_html_sha256:z.string().regex(/^[a-f0-9]{64}$/),user_confirmation:z.string().trim().min(1).max(4000).optional()}).describe('Without autopilot: ONLY after an explicit user message approving review and requesting the next beat; quote that actual message verbatim, never invent/assume approval. With autopilot on (status.autopilot.enabled) omit user_confirmation: the stored autopilot request is used. Either way the reviewed beat needs a passing visual review bound to its saved HTML (visual_review_required otherwise). Binds to the saved HTML hash and unlocks one beat.'),
+      z.object({ action: z.literal('autopilot'), operation: z.enum(['get', 'enable', 'disable']), user_confirmation: z.string().trim().min(1).max(4000).optional() }).describe('Bật/tắt chạy tự động cho video đã có. enable cần user_confirmation = NGUYÊN VĂN tin nhắn user yêu cầu chạy đến hết không dừng; không tự bật.'),
+      z.object({ action: z.literal('natural_sfx_auto'), beat_id: z.string().min(1), event_ids: z.array(z.string()).max(24).optional(), allow_freesound: z.boolean().optional(), user_confirmation: z.string().trim().min(1).max(4000).optional() }).describe('Tự gắn bản thu thật cho các cue natural đang chờ của beat: thư viện storage/sfx-library (bản thu có giấy phép) rồi Freesound CC0/CC BY (FREESOUND_API_KEY), cắt onset/đoạn đủ dài, khoá timeline + đọc lại. Chỉ khi autopilot bật hoặc kèm user_confirmation trích nguyên văn yêu cầu của user. unmatched → đổi query cue trong save_sound_plan. Kiểm peak_after_cue_sec với khoảnh khắc trên hình.'),
+      z.object({ action: z.literal('sfx_library'), operation: z.enum(['search', 'freesound']), query: z.string().min(1).max(200), category: z.enum(['foley', 'emotion', 'ambience']).optional(), need_sec: z.number().positive().optional() }).describe('Chỉ đọc: tìm trong thư viện SFX (điểm, giấy phép, onset/peak) hoặc thử Freesound.'),
       z.object({
         action: z.literal('save_bgm'),
         segments: z.array(z.object({
