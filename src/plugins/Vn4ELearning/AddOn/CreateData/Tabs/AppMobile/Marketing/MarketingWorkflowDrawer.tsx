@@ -126,6 +126,7 @@ const CAST_STYLE_FALLBACK: Record<string, string> = {
     voxel: 'Voxel',
     'paper-pop-up': 'Paper Pop-Up',
     'spotlight-stage': 'Spotlight Stage',
+    'block-avatar': 'Người khối',
 };
 
 function assertWorkflowSfxPromptContext(file: string, context: WorkflowPromptContext): void {

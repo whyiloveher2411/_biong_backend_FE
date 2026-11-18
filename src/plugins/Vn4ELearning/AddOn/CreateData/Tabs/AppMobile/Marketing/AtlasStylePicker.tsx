@@ -28,6 +28,7 @@ const CAST_HINTS: Record<string, string> = {
     voxel: 'Nhân vật xếp từ khối lập phương',
     'paper-pop-up': 'Nhân vật bìa cắt phẳng, luôn hướng về máy quay',
     'spotlight-stage': 'Nhân vật rối bìa sơn, luôn hướng về máy quay',
+    'block-avatar': 'Người khối đồ chơi: thân hộp, tay chân khối, mặt vẽ phẳng',
 };
 
 const STYLE_HINTS: Record<string, string> = {
