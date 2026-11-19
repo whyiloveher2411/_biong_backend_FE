@@ -5,7 +5,14 @@ export type PixelFxEffect = {id: string; category: string; name: string; desc?: 
 export type PixelFxCategory = {id: string; name: string; blurb?: string};
 export type LibraryMaterial = {key: string; assetId: string; category: string; provider: string; source: string; license: string; dimensions?: {width?: number; height?: number} | null; maps: string[]; width: number; height: number; bytes: number; thumb: string; file: string};
 export type VisualLibraryData = {success: boolean; message?: string; pixelfx?: {unit: number; source: string; categories: PixelFxCategory[]; effects: PixelFxEffect[]}; materials?: LibraryMaterial[]};
-export type DressItem = {id: string; group: string; name: string; call: string; note?: string};
+/** Nguồn của con vật: 'repo' = procedural-animals (upstream), 'upgraded' = phái sinh tự nâng cấp từ một loài upstream (cần duyệt), 'classic' = builder cũ. */
+export type AnimalSource = 'repo' | 'upgraded' | 'classic';
+export const ANIMAL_SOURCE_LABEL: Record<AnimalSource, {label: string; color: 'success' | 'warning' | 'default'; hint: string}> = {
+    repo: {label: 'Repo', color: 'success', hint: 'procedural-animals (MIT): lông thật, khung xương, IK, hành động của repo.'},
+    upgraded: {label: 'Tự nâng cấp', color: 'warning', hint: 'Loài repo không có: dựng từ loài gần nhất của repo (khung, dáng đi) + đổi tỉ lệ và vẽ lại bộ lông. Cần duyệt.'},
+    classic: {label: 'Bản cũ', color: 'default', hint: 'Chưa nâng cấp: builder khối loft cũ của SVDress.'},
+};
+export type DressItem = {id: string; group: string; name: string; call: string; note?: string; source?: AnimalSource};
 
 export const loadVisualLibrary = () => ajax({url: 'plugin/vn4-e-learning/app-mobile/marketing/short-video/visual-library', method: 'POST', loading: false, data: {}}) as Promise<VisualLibraryData>;
 
@@ -37,6 +44,10 @@ const PLANTS: Array<[string, string]> = [['monstera', 'Trầu bà lá xẻ'], ['
  * Thêm builder mới vào runtime thì thêm một dòng ở đây.
  */
 /** Động vật: [kind, tên]. Hành động (idle, walk, run, eat, sit, sleep, call, fly, swim…) là trạng thái, đổi bằng D.act(con vật, tên). */
+// Nguồn mỗi loài: giữ khớp với D.animalSources (scripts/beat-html/set-dressing-animals-pa.mjs PA_KINDS + phái sinh).
+const ANIMAL_UPGRADED = ['tiger', 'zebra', 'buffalo', 'panda', 'mouse', 'koi', 'pigeon', 'sparrow', 'parrot', 'giraffe'];
+const ANIMAL_REPO = ['dog', 'cat', 'rabbit', 'fox', 'wolf', 'horse', 'cow', 'pig', 'sheep', 'goat', 'deer', 'lion', 'bear', 'chicken', 'rooster', 'chick', 'crow', 'eagle', 'goldfish', 'clownfish', 'shark', 'frog', 'snake'];
+const animalSource = (kind: string): AnimalSource => ANIMAL_REPO.includes(kind) ? 'repo' : ANIMAL_UPGRADED.includes(kind) ? 'upgraded' : 'classic';
 const ANIMALS: Array<[string, string]> = [
     ['dog', 'Chó'], ['cat', 'Mèo'], ['rabbit', 'Thỏ'], ['mouse', 'Chuột'], ['fox', 'Cáo'], ['wolf', 'Sói'],
     ['horse', 'Ngựa'], ['zebra', 'Ngựa vằn'], ['cow', 'Bò sữa'], ['buffalo', 'Trâu'], ['pig', 'Lợn'], ['sheep', 'Cừu'], ['goat', 'Dê'], ['deer', 'Hươu'],
@@ -47,7 +58,7 @@ const ANIMALS: Array<[string, string]> = [
     ['frog', 'Ếch'], ['turtle', 'Rùa'], ['snake', 'Rắn'], ['crab', 'Cua'], ['snail', 'Ốc sên'], ['butterfly', 'Bướm'], ['bee', 'Ong'], ['ladybug', 'Bọ rùa'],
 ];
 const RAW_DRESS_ITEMS: DressItem[] = [
-    ...ANIMALS.map(([kind, name]): DressItem => ({id: 'animal-' + kind, group: 'Động vật', name, call: `D.animal('${kind}')`, note: 'Hành động chạy theo D.animate(t); đổi bằng D.act(obj, tên) (không dựng lại). Di chuyển con vật với tốc độ obj.userData.svAnimal.speeds[hành động] (m/s) thì chân không trượt. D.lookAt(obj, điểm hoặc object) cho con vật nhìn theo; D.act(obj, \'move\') = kiểu di chuyển của loài. Tham số: action, color, seed, scale.'})),
+    ...ANIMALS.map(([kind, name]): DressItem => ({id: 'animal-' + kind, group: 'Động vật', name, call: `D.animal('${kind}')`, source: animalSource(kind), note: (animalSource(kind) === 'classic' ? '' : 'Lông, khung xương và dáng đi từ procedural-animals; tham số riêng: variant, sex, age, quality (medium mặc định | low | high | hero), engine: \'classic\' để dùng bản cũ. ') + 'Hành động chạy theo D.animate(t); đổi bằng D.act(obj, tên) (không dựng lại). Di chuyển con vật với tốc độ obj.userData.svAnimal.speeds[hành động] (m/s) thì chân không trượt. D.lookAt(obj, điểm hoặc object) cho con vật nhìn theo; D.act(obj, \'move\') = kiểu di chuyển của loài. Tham số: action, color, seed, scale.'})),
     {id: 'tree', group: 'Cây cỏ & thiên nhiên', name: 'Cây lớn', call: 'D.tree({height: 6})', note: 'height, spread, depth (số cấp cành), leaves, leafSize, colors, blossom. Lá đung đưa theo gió.'},
     {id: 'tree-small', group: 'Cây cỏ & thiên nhiên', name: 'Cây nhỏ', call: 'D.tree({height: 2.6})', note: 'Cùng builder tree với height nhỏ.'},
     {id: 'tree-blossom', group: 'Cây cỏ & thiên nhiên', name: 'Cây hoa', call: "D.tree({height: 5, blossom: '#F4B6C2'})", note: 'blossom: màu hoa trộn vào tán lá.'},

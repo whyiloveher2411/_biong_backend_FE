@@ -2,7 +2,7 @@ import React from 'react';
 import {Alert, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, Stack, Tab, Tabs, TextField, Typography} from '@mui/material';
 import DrawerCustom from 'components/molecules/DrawerCustom';
 import {
-    DRESS_ITEMS, DressItem, LibraryMaterial, PixelFxEffect, VisualLibraryData,
+    ANIMAL_SOURCE_LABEL, DRESS_ITEMS, DressItem, LibraryMaterial, PixelFxEffect, VisualLibraryData,
     dressPreviewDocument, dressWorkerDocument, fetchSource, loadVisualLibrary, materialPreviewDocument, materialRuntimeSource,
     pixelFxPreviewDocument, pixelFxWorkerDocument, readThumb, textFingerprint, threeRuntimeSource, writeThumb,
 } from 'helpers/visualLibrary';
@@ -61,6 +61,7 @@ function Detail({card, unit, onClose}: {card: Card | null; unit: number; onClose
                 {(dress || material) && <Typography variant="caption" sx={{color: 'text.secondary'}}>Kéo để xoay, lăn chuột để phóng to hoặc thu nhỏ.</Typography>}
                 {effect?.desc && <Typography variant="body2">{effect.desc}</Typography>}
                 <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
+                    {dress?.source && <Chip size="small" color={ANIMAL_SOURCE_LABEL[dress.source].color} label={ANIMAL_SOURCE_LABEL[dress.source].label} title={ANIMAL_SOURCE_LABEL[dress.source].hint}/>}
                     {dress && <Chip size="small" label={dress.call}/>}
                     {effect && <>
                         <Chip size="small" color="primary" label={effect.id}/>
@@ -106,7 +107,9 @@ function LibraryCard({card, onOpen, onVisible}: {card: Card; onOpen: (card: Card
     return <Box ref={ref} role="listitem">
         <Box component="button" type="button" onClick={() => onOpen(card)} title={card.id}
             sx={{all: 'unset', boxSizing: 'border-box', width: '100%', cursor: 'pointer', display: 'block', border: '1px solid', borderColor: 'divider', borderRadius: 1.5, overflow: 'hidden', bgcolor: 'background.paper', transition: 'border-color .15s, box-shadow .15s', '&:hover, &:focus-visible': {borderColor: 'primary.main', boxShadow: 2}}}>
-            <Box sx={{aspectRatio: card.kind === 'pixelfx' ? '132 / 96' : '1 / 1', bgcolor: card.dark ? '#15131d' : '#E9EDF2', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+            <Box sx={{position: 'relative', aspectRatio: card.kind === 'pixelfx' ? '132 / 96' : '1 / 1', bgcolor: card.dark ? '#15131d' : '#E9EDF2', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+                {card.dress?.source && <Chip size="small" color={ANIMAL_SOURCE_LABEL[card.dress.source].color} variant={card.dress.source === 'classic' ? 'outlined' : 'filled'} label={ANIMAL_SOURCE_LABEL[card.dress.source].label} title={ANIMAL_SOURCE_LABEL[card.dress.source].hint}
+                    sx={{position: 'absolute', top: 6, left: 6, height: 20, fontSize: 11, fontWeight: 600, bgcolor: card.dress.source === 'classic' ? 'rgba(255,255,255,.85)' : undefined, pointerEvents: 'none'}}/>}
                 {seen && card.thumb
                     ? <Box component="img" src={card.thumb} alt="" decoding="async" sx={{width: '100%', height: '100%', objectFit: 'cover', display: 'block', imageRendering: card.kind === 'pixelfx' ? 'pixelated' : 'auto'}}/>
                     : seen ? <CircularProgress size={18} sx={{opacity: 0.5}}/> : null}
@@ -204,7 +207,7 @@ export default function VisualLibraryDrawer({open, onClose}: {open: boolean; onC
     const pixelWorker = React.useMemo(() => (open && runtime && workers.pixelfx ? pixelFxWorkerDocument(runtime) : ''), [open, runtime, workers.pixelfx]);
 
     const cards: Card[] = tab === 'dress'
-        ? DRESS_ITEMS.map((item) => ({kind: 'dress', id: item.id, name: item.name, group: item.group, thumb: thumbCache.dress[item.id] || '', dress: item, search: `${item.name} ${item.group} ${item.call}`.toLowerCase()}))
+        ? DRESS_ITEMS.map((item) => ({kind: 'dress', id: item.id, name: item.name, group: item.group, thumb: thumbCache.dress[item.id] || '', dress: item, search: `${item.name} ${item.group} ${item.call} ${item.source ? ANIMAL_SOURCE_LABEL[item.source].label : ''}`.toLowerCase()}))
         : tab === 'pixelfx'
             ? (data?.pixelfx?.effects || []).map((effect) => ({kind: 'pixelfx', id: effect.id, name: effect.name, group: effect.category, thumb: thumbCache.pixelfx[effect.id] || '', dark: true, effect, search: `${effect.id} ${effect.name} ${effect.desc || ''} ${(effect.tags || []).join(' ')}`.toLowerCase()}))
             : (data?.materials || []).map((material) => ({kind: 'material', id: material.key, name: material.assetId, group: material.category, thumb: material.thumb, material, search: `${material.assetId} ${material.category}`.toLowerCase()}));
