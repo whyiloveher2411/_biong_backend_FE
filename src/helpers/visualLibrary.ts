@@ -57,7 +57,31 @@ const ANIMALS: Array<[string, string]> = [
     ['goldfish', 'Cá vàng'], ['koi', 'Cá koi'], ['clownfish', 'Cá hề'], ['shark', 'Cá mập'], ['dolphin', 'Cá heo'], ['whale', 'Cá voi'],
     ['frog', 'Ếch'], ['turtle', 'Rùa'], ['snake', 'Rắn'], ['crab', 'Cua'], ['snail', 'Ốc sên'], ['butterfly', 'Bướm'], ['bee', 'Ong'], ['ladybug', 'Bọ rùa'],
 ];
-const RAW_DRESS_ITEMS: DressItem[] = [
+/**
+ * Kiểu dáng (scripts/beat-html/set-dressing-styles.mjs, 19/11/2026): [id món gốc, kind gọi, [[style, tên]…]]; kiểu đầu là hình gốc.
+ * Mỗi kiểu khác hiện thành một thẻ ngay sau món gốc. Thêm kiểu trong runtime thì thêm ở đây.
+ */
+const STYLED: Array<[string, string, Array<[string, string]>]> = [
+    ['furniture-dining-chair', "D.furniture('dining-chair'", [['spindle', 'nan dọc'], ['ladder', 'lưng thang'], ['cafe', 'vỏ nhựa quán cà phê'], ['upholstered', 'bọc vải']]],
+    ['furniture-stool', "D.furniture('stool'", [['bar', 'quầy bar'], ['farmhouse', 'gỗ 3 chân'], ['milking', 'thấp'], ['metal', 'sắt sơn']]],
+    ['furniture-dining-table', "D.furniture('dining-table'", [['classic', 'cổ điển'], ['trestle', 'chân chữ I'], ['metal-frame', 'khung sắt'], ['tulip', 'chân loe, mặt oval'], ['mid-century', 'chân xoè']]],
+    ['furniture-wardrobe', "D.furniture('wardrobe'", [['classic', 'cổ điển'], ['mid-century', 'chân xoè'], ['mirrored', 'cánh gương']]],
+    ['furniture-drawers', "D.furniture('drawers'", [['classic', 'cổ điển'], ['tall', 'cao 5 ngăn'], ['mid-century', '3 × 2 ngăn, chân xoè']]],
+    ['device-monitor', "D.device('monitor'", [['classic', 'thường'], ['slim', 'viền mỏng'], ['crt', 'màn hình ống cũ']]],
+    ['device-speaker', "D.device('speaker'", [['bookshelf', 'loa kệ'], ['tower', 'loa cột'], ['smart', 'loa thông minh']]],
+    ['arch-door', "D.arch('door'", [['panel', 'ô panel'], ['flush', 'phẳng'], ['glass', 'ô kính'], ['plank', 'ván gỗ']]],
+    ['food-soda-can', "D.food('soda-can'", [['standard', 'thường'], ['slim', 'cao thon'], ['stubby', 'lùn']]],
+    ['food-wine-bottle', "D.food('wine-bottle'", [['bordeaux', 'vai cao'], ['burgundy', 'vai xuôi'], ['hock', 'cao thon'], ['champagne', 'sâm panh']]],
+    ['food-wine-glass', "D.food('wine-glass'", [['red', 'vang đỏ'], ['white', 'vang trắng'], ['flute', 'sâm panh cao'], ['coupe', 'sâm panh miệng rộng'], ['martini', 'martini'], ['tumbler', 'cốc whisky']]],
+    ['desk-mug', "D.deskItem('mug'", [['classic', 'thường'], ['tapered', 'loe'], ['espresso', 'tách espresso'], ['enamel', 'cốc men']]],
+];
+const withStyles = (items: DressItem[]): DressItem[] => items.flatMap((item) => {
+    const st = STYLED.find(([id]) => id === item.id); if (!st) return [item];
+    const [, head, list] = st, names = list.map(([k]) => k).join(' | ');
+    const base = {...item, name: `${item.name} · ${list[0][1]}`, note: `style: ${names} (kiểu đầu là mặc định; 'auto' chọn theo seed). ${item.note || ''}`.trim()};
+    return [base, ...list.slice(1).map(([style, label]): DressItem => ({id: `${item.id}-${style}`, group: item.group, name: `${item.name} · ${label}`, call: `${head}, {style: '${style}'})`, note: `{style: '${style}'}. ${item.note || ''}`.trim()}))];
+});
+const RAW_DRESS_ITEMS: DressItem[] = withStyles([
     ...ANIMALS.map(([kind, name]): DressItem => ({id: 'animal-' + kind, group: 'Động vật', name, call: `D.animal('${kind}')`, source: animalSource(kind), note: (animalSource(kind) === 'classic' ? '' : 'Lông, khung xương và dáng đi từ procedural-animals; tham số riêng: variant, sex, age, quality (medium mặc định | low | high | hero), engine: \'classic\' để dùng bản cũ. ') + 'Hành động chạy theo D.animate(t); đổi bằng D.act(obj, tên) (không dựng lại). Di chuyển con vật với tốc độ obj.userData.svAnimal.speeds[hành động] (m/s) thì chân không trượt. D.lookAt(obj, điểm hoặc object) cho con vật nhìn theo; D.act(obj, \'move\') = kiểu di chuyển của loài. Tham số: action, color, seed, scale.'})),
     {id: 'tree', group: 'Cây cỏ & thiên nhiên', name: 'Cây lớn', call: 'D.tree({height: 6})', note: 'height, spread, depth (số cấp cành), leaves, leafSize, colors, blossom. Lá đung đưa theo gió.'},
     {id: 'tree-small', group: 'Cây cỏ & thiên nhiên', name: 'Cây nhỏ', call: 'D.tree({height: 2.6})', note: 'Cùng builder tree với height nhỏ.'},
@@ -121,7 +145,7 @@ const RAW_DRESS_ITEMS: DressItem[] = [
     {id: 'lamp-neon', group: 'Đèn', name: 'Biển neon', call: "D.lamp('neon')", note: 'shape: heart|star|bolt|arrow|ring, color, size. userData.svLight = {at, color} là chỗ đặt PointLight; light: true|cường độ tự thêm đèn. Đèn trần treo xuống từ gốc toạ độ.'},
     {id: 'lamp-string', group: 'Đèn', name: 'Dây đèn trang trí', call: "D.lamp('string')", note: 'length, sag, color. userData.svLight = {at, color} là chỗ đặt PointLight; light: true|cường độ tự thêm đèn. Đèn trần treo xuống từ gốc toạ độ.'},
     {id: 'lamp-led-strip', group: 'Đèn', name: 'Thanh LED', call: "D.lamp('led-strip')", note: 'length, color. userData.svLight = {at, color} là chỗ đặt PointLight; light: true|cường độ tự thêm đèn. Đèn trần treo xuống từ gốc toạ độ.'},
-    {id: 'arch-door', group: 'Kiến trúc', name: 'Cửa đi (có tay nắm, bản lề)', call: "D.arch('door')", note: 'width, height, kind: panel|glass|flush, open (rad, mở ra +Z), userData.leaf. Đặt vào lỗ tường do bối cảnh tự khoét; mặt trước +Z.'},
+    {id: 'arch-door', group: 'Kiến trúc', name: 'Cửa đi (có tay nắm, bản lề)', call: "D.arch('door')", note: 'width, height, style: panel|flush|glass|plank (tên cũ kind), open (rad, mở ra +Z), userData.leaf. Đặt vào lỗ tường do bối cảnh tự khoét; mặt trước +Z.'},
     {id: 'arch-window', group: 'Kiến trúc', name: 'Cửa sổ có bậu', call: "D.arch('window')", note: 'width, height, cols, rows. Đặt vào lỗ tường do bối cảnh tự khoét; mặt trước +Z.'},
     {id: 'arch-stairs', group: 'Kiến trúc', name: 'Cầu thang', call: "D.arch('stairs')", note: 'steps, rise, run, width, rail: right|left|both|none; leo lên về phía -Z, userData.top. Đặt vào lỗ tường do bối cảnh tự khoét; mặt trước +Z.'},
     {id: 'arch-railing', group: 'Kiến trúc', name: 'Lan can', call: "D.arch('railing')", note: 'length, height, kind: glass. Đặt vào lỗ tường do bối cảnh tự khoét; mặt trước +Z.'},
@@ -153,6 +177,7 @@ const RAW_DRESS_ITEMS: DressItem[] = [
     {id: 'food-water-bottle', group: 'Đồ ăn & thức uống', name: 'Chai nước', call: "D.food('water-bottle')", note: 'Gốc ở mặt bàn (y = 0), đặt ở độ cao mặt bàn.'},
     {id: 'food-soda-can', group: 'Đồ ăn & thức uống', name: 'Lon nước ngọt', call: "D.food('soda-can')", note: 'color. Gốc ở mặt bàn (y = 0), đặt ở độ cao mặt bàn.'},
     {id: 'food-wine-bottle', group: 'Đồ ăn & thức uống', name: 'Chai rượu vang', call: "D.food('wine-bottle')", note: 'Gốc ở mặt bàn (y = 0), đặt ở độ cao mặt bàn.'},
+    {id: 'food-wine-glass', group: 'Đồ ăn & thức uống', name: 'Ly rượu vang', call: "D.food('wine-glass')", note: 'fill 0..0.95 (0 = ly rỗng, hoặc state: empty), drink: màu rượu, glassColor. Gốc ở mặt bàn.'},
     {id: 'food-takeout-box', group: 'Đồ ăn & thức uống', name: 'Hộp đồ ăn mang đi', call: "D.food('takeout-box')", note: 'Gốc ở mặt bàn (y = 0), đặt ở độ cao mặt bàn.'},
     {id: 'food-plated-meal', group: 'Đồ ăn & thức uống', name: 'Đĩa bít tết', call: "D.food('plated-meal')", note: 'Gốc ở mặt bàn (y = 0), đặt ở độ cao mặt bàn.'},
     {id: 'food-fruit-crate', group: 'Đồ ăn & thức uống', name: 'Sọt trái cây', call: "D.food('fruit-crate')", note: 'color. Gốc ở mặt bàn (y = 0), đặt ở độ cao mặt bàn.'},
@@ -245,7 +270,7 @@ const RAW_DRESS_ITEMS: DressItem[] = [
     {id: 'cushion', group: 'Vải & đồ mềm', name: 'Gối tựa', call: 'D.cushion({width: 0.45})', note: 'width, color.'},
     {id: 'rug', group: 'Vải & đồ mềm', name: 'Thảm', call: 'D.rug({width: 2, depth: 1.4})', note: 'width, depth, color, inner.'},
     {id: 'curtains', group: 'Vải & đồ mềm', name: 'Rèm cửa', call: 'D.curtains({width: 2, height: 2.2})', note: 'width, height, panel, color, sway. Rèm đung đưa theo gió.'},
-];
+]);
 /** Groups shown in this order in the library (rooms first, then outdoors). */
 const GROUP_ORDER = ['Động vật', 'Nội thất', 'Bếp & phòng tắm', 'Điện tử', 'Đèn', 'Kiến trúc', 'Sách và kệ', 'Treo tường', 'Đồ trang trí', 'Đồ bàn làm việc', 'Bộ đồ sắp sẵn', 'Vải & đồ mềm', 'Đồ ăn & thức uống', 'Dụng cụ & vật phẩm', 'Đường phố', 'Xe & phương tiện', 'Cây cỏ & thiên nhiên'];
 export const DRESS_ITEMS: DressItem[] = RAW_DRESS_ITEMS.map((item, i) => ({item, i})).sort((a, b) => ((GROUP_ORDER.indexOf(a.item.group) + 1 || 99) - (GROUP_ORDER.indexOf(b.item.group) + 1 || 99)) || a.i - b.i).map(({item}) => item);
