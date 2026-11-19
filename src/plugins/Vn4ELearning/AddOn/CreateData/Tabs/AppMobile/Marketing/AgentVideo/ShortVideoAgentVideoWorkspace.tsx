@@ -1,5 +1,6 @@
 import ShortVideoAgentWholePreview from './ShortVideoAgentWholePreview';
 import SoundLibraryDrawer from '../SoundLibraryDrawer';
+import VisualLibraryDrawer from '../VisualLibraryDrawer';
 import React from 'react';
 import { Box, Typography } from '@mui/material';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
@@ -77,6 +78,7 @@ function ShortVideoAgentVideoSession({
     const [infoBeatId, setInfoBeatId] = React.useState('');
     const [currentTimeSec, setCurrentTimeSec] = React.useState(0);
     const [soundLibraryOpen,setSoundLibraryOpen]=React.useState(false);
+    const [visualLibraryOpen,setVisualLibraryOpen]=React.useState(false);
     const [timelinePlaying,setTimelinePlaying] = React.useState(false);
 
     const currentBeatId = React.useMemo(() => {
@@ -631,6 +633,7 @@ function ShortVideoAgentVideoSession({
                 Quản lý model 3D
             </Button>
             <Button size="small" variant="contained" color="info" sx={HEADER_BTN_SX} onClick={()=>setSoundLibraryOpen(true)}>Thư viện âm thanh</Button><SoundLibraryDrawer open={soundLibraryOpen} onClose={()=>setSoundLibraryOpen(false)}/>
+            <Button size="small" variant="contained" color="info" sx={HEADER_BTN_SX} onClick={()=>setVisualLibraryOpen(true)}>Thư viện hình ảnh</Button><VisualLibraryDrawer open={visualLibraryOpen} onClose={()=>setVisualLibraryOpen(false)}/>
             <Button
                 size="small"
                 variant="contained"

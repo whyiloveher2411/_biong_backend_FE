@@ -1,5 +1,6 @@
 import WorkflowChatSessionBox from './WorkflowChatSessionBox';
 import AtlasStylePicker from './AtlasStylePicker';
+import VisualLibraryDrawer from './VisualLibraryDrawer';
 import CastDesignPreviewDialog from './CastDesignPreviewDialog';
 import SceneAssetsPanel from './AgentVideo/SceneAssetsPanel';
 import ShortVideoAgentSaydiCastSettings from './AgentVideo/ShortVideoAgentSaydiCastSettings';
@@ -323,6 +324,7 @@ export default function MarketingWorkflowDrawer({
     );
     const configBlocked = unconfiguredConfigs.length > 0;
     const [copyingStep, setCopyingStep] = React.useState('');
+    const [visualLibraryOpen, setVisualLibraryOpen] = React.useState(false);
     const [copiedStep, setCopiedStep] = React.useState('');
     const [outputs, setOutputs] = React.useState<WorkflowOutputsMap>({});
     /** Keyword [key] tách từ từng file prompt — key cache: `${workflow}::${file}`. */
@@ -1696,6 +1698,8 @@ export default function MarketingWorkflowDrawer({
                                         <ToggleButton value="medium">Vừa</ToggleButton>
                                         <ToggleButton value="high">Nhiều (mặc định)</ToggleButton>
                                     </ToggleButtonGroup>
+                                    <Button size="small" variant="outlined" startIcon={<ImageOutlinedIcon />} onClick={() => setVisualLibraryOpen(true)} sx={{textTransform: 'none', fontWeight: 600}}>Thư viện hình ảnh</Button>
+                                    <VisualLibraryDrawer open={visualLibraryOpen} onClose={() => setVisualLibraryOpen(false)} />
                                 </Stack>
                             )}
                             {renderEngine === 'threejs' && (
