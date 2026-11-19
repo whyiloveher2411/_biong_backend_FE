@@ -27,13 +27,18 @@ beforeEach(() => {
     jest.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(function (this: HTMLMediaElement) { Object.defineProperty(this, 'paused', { configurable: true, value: true }); });
 });
 afterEach(() => jest.restoreAllMocks());
-test('pre-mounts current HTML/audio and next two beats, then continues to next beat without reloading it', async () => {
+test('mounts no beat while hidden, then the current beat, then pre-mounts the next two once it is ready', async () => {
     const view = render(<WholePreview {...props}/>);
+    expect(screen.queryByTestId('beat_1')).toBeNull();
+    expect(view.container.querySelectorAll('audio[preload="auto"]')).toHaveLength(3);
+    command('pause', 0);
+    expect(screen.getByTestId('beat_1')).toBeInTheDocument();
+    expect(screen.queryByTestId('beat_2')).toBeNull();
+    fireEvent.click(screen.getByTestId('beat_1'));
     expect(screen.getByTestId('beat_3')).toBeInTheDocument();
     expect(screen.queryByTestId('beat_4')).toBeNull();
-    expect(view.container.querySelectorAll('audio[preload="auto"]')).toHaveLength(3);
     const next = screen.getByTestId('beat_2');
-    for (const b of sections.slice(0, 3))
+    for (const b of sections.slice(1, 3))
         fireEvent.click(screen.getByTestId(b.id));
     command('play', 0);
     await step();
@@ -48,6 +53,9 @@ test('pre-mounts current HTML/audio and next two beats, then continues to next b
     const count = (HTMLMediaElement.prototype.play as jest.Mock).mock.calls.length;
     await step();
     expect(HTMLMediaElement.prototype.play).toHaveBeenCalledTimes(count);
+    // Back to beat editing (a user seek on the timeline) hides the preview and unmounts every beat.
+    act(() => { document.dispatchEvent(new CustomEvent('timeline-audio-playhead', { detail: { videoId: 67, time: 1, playing: false, origin: 'user' } })); });
+    expect(screen.queryByTestId('beat_2')).toBeNull();
 });
 test('freezes the clock until HTML assets are ready and cancels pending playback on pause', async () => {
     render(<WholePreview {...props}/>);
@@ -95,7 +103,7 @@ test('whole video freezes voice and its clock until timeline SFX are ready; paus
  const unregister=registerTimelineAudioReadiness(67,prepare);
  const view=render(<WholePreview {...props}/>);
  try{
-  fireEvent.click(screen.getByTestId('beat_1'));command('play',0);startTick();await settle();
+  command('play',0);fireEvent.click(screen.getByTestId('beat_1'));startTick();await settle();
   expect(prepare).toHaveBeenCalledWith(0,1);expect(HTMLMediaElement.prototype.play).not.toHaveBeenCalled();
   expect(screen.getByTestId('beat_1')).toHaveTextContent('0');
   command('pause',0);resolve();await settle();expect(HTMLMediaElement.prototype.play).not.toHaveBeenCalled();
@@ -107,7 +115,7 @@ test('a rejected voice play from the previous run cannot stop the new whole-vide
  (HTMLMediaElement.prototype.play as jest.Mock).mockImplementationOnce(function(this:HTMLMediaElement){Object.defineProperty(this,'paused',{configurable:true,value:false});return new Promise<void>((_,r)=>{reject=r;});});
  const view=render(<WholePreview {...props}/>);
  try{
-  fireEvent.click(screen.getByTestId('beat_1'));command('play',0);startTick();await settle();
+  command('play',0);fireEvent.click(screen.getByTestId('beat_1'));startTick();await settle();
   expect(HTMLMediaElement.prototype.play).toHaveBeenCalledTimes(1);
   command('pause',0);command('play',0);await step();
   expect(HTMLMediaElement.prototype.play).toHaveBeenCalledTimes(2);
@@ -122,7 +130,7 @@ test('whole-video start publishes the requested cue time before catching up to t
  const updates:any[]=[];const receive=(e:Event)=>updates.push((e as CustomEvent).detail);
  document.addEventListener('timeline-audio-playhead',receive);const view=render(<WholePreview {...props}/>);
  try{
-  fireEvent.click(screen.getByTestId('beat_1'));command('play',0);await step();
+  command('play',0);fireEvent.click(screen.getByTestId('beat_1'));await step();
   expect(updates.filter(x=>x.soundPlaying).map(x=>x.time)).toEqual([0]);
   await step();expect(updates.filter(x=>x.soundPlaying).at(-1).time).toBeCloseTo(.033);
  }finally{view.unmount();document.removeEventListener('timeline-audio-playhead',receive);}

@@ -48,6 +48,9 @@ export default function ShortVideoAgentWholePreview({ videoId, beatMap, beatHtml
         document.dispatchEvent(new CustomEvent('timeline-main-transport', { detail: { videoId, time: seconds, playing: running, source: 'whole' } }));
         document.dispatchEvent(new CustomEvent('timeline-audio-playhead', { detail: { videoId, time: seconds, playing: running, soundPlaying: soundRunning, origin: 'user', source: 'whole' } }));
     }, [videoId]);
+    const [warm, setWarm] = React.useState<Record<string, string>>({});
+    // Hiding unmounts the beat iframes, so their readiness no longer holds.
+    React.useEffect(() => { if (!visible) { ready.current.clear(); setWarm({}); } }, [visible]);
     React.useEffect(() => { const retained = new Set(sections.slice(index, index + 3).map(b => b.id)); ready.current.forEach((_, id) => { if (!retained.has(id))
         ready.current.delete(id); }); }, [index, sections]);
     const pause = React.useCallback(() => { ++generation.current;control.current.playing = false; audioRefs.current.forEach(a => a.pause()); }, []);
@@ -203,9 +206,15 @@ export default function ShortVideoAgentWholePreview({ videoId, beatMap, beatHtml
             const html = beatHtml[beat.id]?.html;
             const signature = html || beatImage[beat.id]?.image_url || 'empty';
             const url = audioUrl || (beatAudio?.items || []).find(a => a.order === order && a.status === 'ready')?.url || '';
+            const markReady = () => { ready.current.set(beat.id, signature); setWarm(w => w[beat.id] === signature ? w : { ...w, [beat.id]: signature }); };
+            // Beat iframes run on the CMS main thread (same-origin srcdoc): mount none while the whole
+            // preview is hidden, and pre-mount the next beats only once the current one is ready, so
+            // opening the timeline or pressing Play never initialises several Three.js beats at once.
+            const head = sections[index], headSignature = head ? beatHtml[head.id]?.html || beatImage[head.id]?.image_url || 'empty' : '';
+            const mountVisual = visible && (offset === 0 || (!!head && warm[head.id] === headSignature));
             return <Box key={beat.id} sx={{ position: 'absolute', inset: 0, visibility: visible && offset === 0 ? 'visible' : 'hidden', pointerEvents: offset === 0 ? 'auto' : 'none' }}>
-                {html ? <BeatHtmlMotionPreview publicAssets={publicAssets} html={html} timeSec={offset === 0 ? Math.max(0, time - beat.startSec) : 0} durationSec={beat.endSec - beat.startSec} beatId={beat.id} shortVideoId={videoId} playing={playing && !buffering && offset === 0} onReady={() => ready.current.set(beat.id, signature)}/> : <img src={beatImage[beat.id]?.image_url || ''} alt={beat.id} onLoad={() => ready.current.set(beat.id, signature)} style={{ width: '100%', height: '100%', objectFit: 'contain' }}/>}
-                {!html && !beatImage[beat.id]?.image_url ? <EmptyReady onReady={() => ready.current.set(beat.id, signature)}/> : null}
+                {mountVisual ? (html ? <BeatHtmlMotionPreview publicAssets={publicAssets} html={html} timeSec={offset === 0 ? Math.max(0, time - beat.startSec) : 0} durationSec={beat.endSec - beat.startSec} beatId={beat.id} shortVideoId={videoId} playing={playing && !buffering && offset === 0} onReady={markReady}/> : <img src={beatImage[beat.id]?.image_url || ''} alt={beat.id} onLoad={markReady} style={{ width: '100%', height: '100%', objectFit: 'contain' }}/>) : null}
+                {mountVisual && !html && !beatImage[beat.id]?.image_url ? <EmptyReady onReady={markReady}/> : null}
                 {url ? <Voice key={url} url={url} videoId={videoId} publicPlayback={Boolean(publicAssets)} register={a => {
                     if (a) audioRefs.current.set(beat.id, a);
                     else audioRefs.current.delete(beat.id);
