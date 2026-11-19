@@ -95,7 +95,7 @@ function formatJson(data: unknown): string {
 
 const server = new McpServer({
   name: 'biong-short-video',
-  version: '2.27.0',
+  version: '2.28.0',
 });
 
 const video3dId = z.number().int().positive();
@@ -191,6 +191,13 @@ server.tool(
         config: z.record(z.unknown()).optional(),
       }),
       z.object({ action: z.literal('narration') }),
+      z.object({
+        action: z.literal('script_review'),
+        operation: z.enum(['get', 'check', 'store']),
+        script: z.string().max(60000).optional().describe('Kịch bản ứng viên (thẻ <voice>); bỏ trống = kịch bản đang lưu. store luôn dùng bản đang lưu và đòi lời nói trùng bản đã review.'),
+        review: z.record(z.unknown()).optional().describe('sv_script_review_v1: review_skeleton của get + reviewers[] = JSON nguyên văn của 2 reviewer độc lập (nguoi-nghe-lanh, bien-tap-truyen) + round 1–3 + history.'),
+        user_override: z.string().trim().min(1).max(4000).optional().describe('Chỉ khi hết 3 vòng chưa pass: trích NGUYÊN VĂN tin nhắn user chấp nhận kịch bản; không tự viết.'),
+      }).describe('Vòng chất lượng kịch bản story (video tạo từ 19/11/2026 23:00): get = đo bằng code (độ dài, câu mở, CTA, câu dài, mốc giờ, gate kiểu lời) + 2 prompt reviewer đã điền kịch bản; chạy mỗi prompt trong agent MỚI độc lập, check, sửa theo blocking (giữ keep), tối đa 3 vòng; store gắn review đạt vào lời nói của kịch bản đang lưu. beat_audio/narration từ chối script_review_required khi chưa có. Docs: docs/short-video/script-review.md.'),
       z.object({
         action: z.literal('hud'),
         operation: z.enum(['get', 'save']),
