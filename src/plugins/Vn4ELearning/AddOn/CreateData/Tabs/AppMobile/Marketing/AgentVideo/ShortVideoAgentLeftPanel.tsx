@@ -8,11 +8,12 @@ import ShortVideoAgentChatbotHtmlPanel from './ShortVideoAgentChatbotHtmlPanel';
 import ShortVideoAgentThumbnailPanel from './ShortVideoAgentThumbnailPanel';
 import ShortVideoAgentFacebookSocialCopyPanel from './ShortVideoAgentFacebookSocialCopyPanel';
 import ShortVideoAgentYoutubePanel from './ShortVideoAgentYoutubePanel';
+import ShortVideoAgentPublishedLinksPanel from './ShortVideoAgentPublishedLinksPanel';
 import MarketingFacebookPreviewPanel from '../MarketingFacebookPreviewPanel';
 import { isAgentVideo2sMode } from './agentVideoVisualMode';
 import type { useAgentVideoContent } from './useAgentVideoContent';
 
-type LeftTabKey = 'content' | 'script' | 'render' | 'thumbnail' | 'facebook' | 'youtube';
+type LeftTabKey = 'content' | 'script' | 'render' | 'thumbnail' | 'facebook' | 'youtube' | 'published';
 
 const LEFT_TABS: { key: LeftTabKey; label: string }[] = [
     { key: 'content', label: 'Content' },
@@ -21,10 +22,11 @@ const LEFT_TABS: { key: LeftTabKey; label: string }[] = [
     { key: 'thumbnail', label: 'Thumbnail' },
     { key: 'facebook', label: 'Facebook' },
     { key: 'youtube', label: 'YouTube' },
+    { key: 'published', label: 'Đã đăng' },
 ];
 
-/** Video 2s chỉ dùng Script & TTS + YouTube — ẩn các tab khác. */
-const VIDEO_2S_TAB_KEYS: LeftTabKey[] = ['script', 'youtube'];
+/** Video 2s chỉ dùng Script & TTS + YouTube + Đã đăng — ẩn các tab khác. */
+const VIDEO_2S_TAB_KEYS: LeftTabKey[] = ['script', 'youtube', 'published'];
 
 type AgentVideoState = ReturnType<typeof useAgentVideoContent>;
 
@@ -43,6 +45,9 @@ function resolveInitialTabKey(initialTab?: ShortVideoAgentLeftTab): LeftTabKey {
     }
     if (initialTab === 'youtube') {
         return 'youtube';
+    }
+    if (initialTab === 'published') {
+        return 'published';
     }
     if (initialTab === 'resources' || initialTab === 'chatbot' || initialTab === 'render') {
         return 'render';
@@ -130,6 +135,9 @@ export default function ShortVideoAgentLeftPanel({
                 ) : null}
                 {activeKey === 'youtube' ? (
                     <ShortVideoAgentYoutubePanel state={state} />
+                ) : null}
+                {activeKey === 'published' ? (
+                    <ShortVideoAgentPublishedLinksPanel state={state} />
                 ) : null}
             </Box>
         </Box>

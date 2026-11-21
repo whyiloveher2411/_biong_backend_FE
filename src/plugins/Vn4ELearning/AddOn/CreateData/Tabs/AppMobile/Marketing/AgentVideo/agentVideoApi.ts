@@ -1977,6 +1977,8 @@ export type AgentVideoContentResponse = {
     readme_media?: GithubReadmeMediaItem[];
     post_eligible?: boolean;
     social_posted?: boolean;
+    /** Link bài đã đăng theo nền tảng (agent_video_json.social_publish, skill biong-social-publish). */
+    social_publish?: SocialPublishBlock;
     render_mode?: AgentRenderMode;
     import_html?: ImportHtmlSummary;
     tts_phonetic_dict?: TtsPhoneticDictEntry[];
@@ -1988,6 +1990,21 @@ export type AgentVideoContentResponse = {
     github_top_enrich?: GithubTopEnrichSummary;
     topic_research?: TopicResearchBlock;
     remix?: RemixBlock;
+};
+
+export type SocialPublishLink = {
+    url: string;
+    kind?: 'video' | 'teaser' | 'link' | 'reel' | 'short' | 'post' | string;
+    account?: string;
+    post_id?: string;
+    title?: string;
+    note?: string;
+    posted_at?: string;
+};
+
+export type SocialPublishBlock = {
+    links?: Record<string, SocialPublishLink>;
+    updated_at?: string;
 };
 
 export type GithubTopEnrichSummary = {

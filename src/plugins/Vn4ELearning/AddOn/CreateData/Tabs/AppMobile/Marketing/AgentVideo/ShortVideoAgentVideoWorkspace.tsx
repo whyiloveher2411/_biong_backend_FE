@@ -667,16 +667,15 @@ function ShortVideoAgentVideoSession({
                             const sep = raw.includes('?') ? '&' : '?';
                             openUrl = `${raw}${sep}v=${Date.now()}`;
                         }
-                        // Quan trọng: features có `noopener` khiến window.open luôn trả null
-                        // dù tab mới đã mở — không được fallback location.assign (sẽ navigate tab hiện tại).
-                        const opened = window.open(openUrl, '_blank');
-                        if (opened) {
-                            try {
-                                opened.opener = null;
-                            } catch {
-                                // ignore
-                            }
-                        }
+                        // <a>.click() ổn định hơn window.open (popup blocker / Electron / webview
+                        // trả null hoặc chặn tab mới), và không navigate tab hiện tại.
+                        const anchor = document.createElement('a');
+                        anchor.href = openUrl;
+                        anchor.target = '_blank';
+                        anchor.rel = 'noopener noreferrer';
+                        document.body.appendChild(anchor);
+                        anchor.click();
+                        anchor.remove();
                     }}
                     sx={HEADER_BTN_SX}
                 >

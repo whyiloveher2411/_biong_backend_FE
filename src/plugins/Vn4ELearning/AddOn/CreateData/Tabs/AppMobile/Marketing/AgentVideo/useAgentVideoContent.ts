@@ -208,6 +208,7 @@ import {
     type CaptionAlignOverride,
     type TtsPhoneticDictEntry,
     type SocialAccountItem,
+    type SocialPublishBlock,
     type AgentVideoBeatAudioState,
     type AgentVideoSfxSummary,
     saveAgentBeatAudio,
@@ -974,6 +975,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [thumbnail, setThumbnail] = React.useState<unknown>(null);
     const [postEligible, setPostEligible] = React.useState(false);
     const [socialPosted, setSocialPosted] = React.useState(false);
+    const [socialPublish, setSocialPublish] = React.useState<SocialPublishBlock | null>(null);
     const [socialAccounts, setSocialAccounts] = React.useState<SocialAccountItem[]>([]);
     const [socialDescription, setSocialDescription] = React.useState('');
     const [savedSocialDescription, setSavedSocialDescription] = React.useState('');
@@ -1752,6 +1754,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         setThumbnail(res?.thumbnail ?? null);
         setPostEligible(Boolean(res?.post_eligible));
         setSocialPosted(Boolean(res?.social_posted));
+        if (res?.social_publish !== undefined) {
+            setSocialPublish(res.social_publish ?? null);
+        }
         const nextSocialDescription = String(res?.social_description || '');
         const nextSocialHashtags = String(res?.social_hashtags || '');
         // Capture saved cũ trước khi ghi ref — updater setState có thể chạy sau khi ref đổi.
@@ -10594,6 +10599,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         thumbnail,
         postEligible,
         socialPosted,
+        socialPublish,
         socialAccounts,
         socialDescription,
         setSocialDescription,
