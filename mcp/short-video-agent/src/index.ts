@@ -244,7 +244,6 @@ server.tool(
         cast_id: z.string().optional(),
         expected_module_hash: z.string().optional(),
         expected_spec_hash: z.string().optional(),
-        user_skin: z.string().optional().describe('character_design: lời user khi user yêu cầu màu da khác cho nhân vật chính. Video mới (từ 17/11/2026 22:00): nhân vật chính mặc định da đen #1E1612 (colors.skin), thiếu user_skin mà da sáng thì bị từ chối (code main_character_skin).'),
         design: z.object({
           template: z.literal('mai_v1').optional(),
           selections: z.record(z.string()).optional(),
