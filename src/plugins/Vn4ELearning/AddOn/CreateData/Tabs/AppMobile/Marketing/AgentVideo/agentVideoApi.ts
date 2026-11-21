@@ -1257,8 +1257,12 @@ export type ImportHtmlBgmSegment = {
     preview_url?: string;
     duration_sec: number;
     provider?: string;
-    /** Volume riêng từng bài (0.05–1.5, mặc định 0.3). */
+    /**
+     * Volume riêng từng bài (0.05–1.5). Video whiteboard/video-html: chỉnh tương đối quanh mức chuẩn
+     * (1.0 = BGM thấp hơn giọng 8 dB) khi `volume_ref === 'voice'`; workflow khác: hệ số thô.
+     */
     volume?: number;
+    volume_ref?: 'voice';
 };
 
 export type ImportHtmlMarketingPostImage = {
@@ -2285,7 +2289,7 @@ export function fullAutoStepToggleKeyForStep(stepKey: string): FullAutoStepToggl
 }
 
 export const FULL_AUTO_PIPELINE_STEP_LABELS: Record<FullAutoPipelineStepKey, string> = {
-    whiteboard_render: 'Render video từng beat',
+    whiteboard_render: 'Render video',
     script_create: 'Tạo script',
     script_improve: 'Cải thiện script',
     script_improve_qa: 'Đánh giá script',
@@ -2304,7 +2308,7 @@ export const FULL_AUTO_PIPELINE_STEP_LABELS: Record<FullAutoPipelineStepKey, str
     beat_refine_html: 'Refine HTML beat',
     bgm: 'BGM',
     render: 'Render',
-    whiteboard_mux: 'Final video',
+    whiteboard_mux: 'Render video (ghép final)',
     upload: 'Upload store',
     thumbnail_idea: 'Thumbnail idea',
     thumbnail_fill: 'Thumbnail HTML',

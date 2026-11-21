@@ -10,8 +10,8 @@ export const EXTENDED_PIPELINE_STEP_LABELS: Record<string, string> = {
     ...FULL_AUTO_PIPELINE_STEP_LABELS,
     beat_image_fill: 'Ảnh beat',
     beat_video_animate: 'Animate ảnh',
-    whiteboard_render: 'Render video từng beat',
-    whiteboard_mux: 'Final video',
+    whiteboard_render: 'Render video',
+    whiteboard_mux: 'Render video (ghép final)',
 };
 
 /** Chỉ thuộc Motion HTML — whiteboard auto-skip, ẩn khỏi UI. */
@@ -48,20 +48,25 @@ export const FULL_AUTO_PIPELINE_THUMBNAIL_STEPS = [
 
 /**
  * Bước thực thi BE ẩn khỏi danh sách UI để không lặp dòng render.
- * whiteboard_render dùng slot `render` (label đổi) + nút Run nhóm Render;
- * whiteboard_mux («Final video») là bước riêng — Run độc lập KHÔNG render lại beat.
+ * Từ 21/11/2026 dòng `render` («Render video») gộp cả whiteboard_render (render beat) và
+ * whiteboard_mux (ghép final): Run chạy cả hai; nút «Ghép lại» trong dòng chỉ chạy whiteboard_mux
+ * (đổi BGM/SFX/karaoke không phải render lại beat).
  */
 const FULL_AUTO_PIPELINE_UI_HIDDEN_EXTRA_STEPS = [
     'whiteboard_render',
+    'whiteboard_mux',
     'done',
 ] as const;
+
+/** Bước BE hiển thị trong dòng «Render video». */
+export const FULL_AUTO_PIPELINE_RENDER_ROW_STEPS = ['render', 'whiteboard_render', 'whiteboard_mux'] as const;
 
 const WHITEBOARD_PIPELINE_STEP_LABELS: Record<string, string> = {
     beat_image_fill: 'Ảnh beat',
     beat_video_animate: 'Animate ảnh',
-    render: 'Render video từng beat',
-    whiteboard_render: 'Render video từng beat',
-    whiteboard_mux: 'Final video',
+    render: 'Render video',
+    whiteboard_render: 'Render video',
+    whiteboard_mux: 'Render video (ghép final)',
 };
 
 /**
@@ -180,8 +185,9 @@ export function getVisibleFullAutoPipelineStepIndex(
     beatAudioMode = false,
     hasBeatHtmlPrompt = false,
 ): number {
+    const rowStep = (FULL_AUTO_PIPELINE_RENDER_ROW_STEPS as readonly string[]).includes(step) ? 'render' : step;
     const idx = getVisibleFullAutoPipelineStepOrder(agentVisualMode, beatAudioMode, hasBeatHtmlPrompt)
-        .indexOf(step as FullAutoPipelineStepKey);
+        .indexOf(rowStep as FullAutoPipelineStepKey);
     return idx >= 0 ? idx + 1 : 0;
 }
 

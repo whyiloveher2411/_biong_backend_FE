@@ -105,6 +105,48 @@ export function resolvePipelineActionStep(key:FullAutoPipelineStepKey,mode?:stri
     return key==='render'&&isAgentWhiteboardMode(mode)?'whiteboard_render':key;
 }
 
+/**
+ * Dòng «Render video» (whiteboard/video_2s/HTML) gộp render beat + ghép final (21/11/2026):
+ * render beat chưa xong → trạng thái render beat; xong rồi → trạng thái ghép final.
+ */
+export function resolvePipelineRowStatus(
+    actionKey: FullAutoPipelineStepKey,
+    steps?: Record<string, { status?: string } | undefined> | null,
+): string {
+    const own = String(steps?.[actionKey]?.status || 'pending');
+    if (actionKey !== 'whiteboard_render' || own !== 'done') {
+        return own;
+    }
+    const mux = String(steps?.whiteboard_mux?.status || 'pending');
+    return mux === 'skipped' ? own : mux;
+}
+
+/** Bước BE đang chạy có thuộc dòng này không (render beat và ghép final cùng một dòng). */
+export function isPipelineRowCurrent(actionKey: FullAutoPipelineStepKey, currentStep?: string | null): boolean {
+    const cur = String(currentStep || '');
+    return actionKey === cur || (actionKey === 'whiteboard_render' && cur === 'whiteboard_mux');
+}
+
+/** Nút «Ghép lại»: chỉ chạy lại bước ghép final, không render lại beat. */
+function PipelineRemuxButton({ restartableSet, disabled, loading, onRun }: {
+    restartableSet?: Set<FullAutoPipelineStepKey> | null;
+    disabled?: boolean;
+    loading?: boolean;
+    onRun: (step: FullAutoPipelineStepKey) => void;
+}) {
+    return (
+        <PipelineRenderRunButton
+            size="compact"
+            label="Ghép lại"
+            testId="pipeline-run-single-remux"
+            title="Chỉ ghép lại video final từ các beat đã render (sau khi đổi BGM / SFX / karaoke / HUD) — không render lại beat"
+            disabled={Boolean(disabled) || !restartableSet?.has('whiteboard_mux')}
+            loading={loading}
+            onClick={() => onRun('whiteboard_mux')}
+        />
+    );
+}
+
 /** Các bước được phép restart (API restartable_steps hoặc fallback theo tiến độ). */
 export function resolveRestartableSet(
     restartable?: string[] | null,
@@ -558,10 +600,9 @@ export function PipelineGroupedMenuItems({
         const key = stepKey as FullAutoPipelineStepKey;
         const actionKey = resolvePipelineActionStep(key, agentVisualMode);
         const enabled = restartableSet.has(actionKey);
-        const stepInfo = steps?.[actionKey];
-        const status = String(stepInfo?.status || 'pending');
+        const status = resolvePipelineRowStatus(actionKey, steps);
         const statusLabel = resolveStepStatusLabel(key, status, loopView);
-        const isCurrent = actionKey === currentStep && String(pipelineStatus || '').toLowerCase() === 'running';
+        const isCurrent = isPipelineRowCurrent(actionKey, currentStep) && String(pipelineStatus || '').toLowerCase() === 'running';
         const canRunSingle = Boolean(
             onRunSingleStep
             && enabled
@@ -662,6 +703,14 @@ export function PipelineGroupedMenuItems({
                             onClick={() => {
                                 onRunSingleStep(actionKey);
                             }}
+                        />
+                    ) : null}
+                    {onRunSingleStep && actionKey === 'whiteboard_render' ? (
+                        <PipelineRemuxButton
+                            restartableSet={restartableSet}
+                            disabled={disabled || runSingleStepDisabled}
+                            loading={runningSingleStep && currentStep === 'whiteboard_mux'}
+                            onRun={onRunSingleStep}
                         />
                     ) : null}
                     {key === 'beat_division' && onManualBeatDivision ? (
@@ -901,8 +950,8 @@ export function PipelineGroupedStepList({
     const renderDarkStep = (stepKey: string, inLoop = false) => {
         const key = stepKey as FullAutoPipelineStepKey;
         const actionKey = resolvePipelineActionStep(key, agentVisualMode);
-        const status = String(steps?.[actionKey]?.status || 'pending');
-        const isCurrent = actionKey === currentStep;
+        const status = resolvePipelineRowStatus(actionKey, steps);
+        const isCurrent = isPipelineRowCurrent(actionKey, currentStep);
         const statusLabel = resolveStepStatusLabel(key, status, loopView);
         const rowToggleKey = !inLoop && !isScriptImproveQaLoopStep(key)
             ? fullAutoStepToggleKeyForStep(key)
@@ -1166,8 +1215,8 @@ export function PipelineGroupedWorkflowListV3({
     ) => {
         const key = stepKey as FullAutoPipelineStepKey;
         const actionKey = resolvePipelineActionStep(key, agentVisualMode);
-        const status = String(steps?.[actionKey]?.status || 'pending');
-        const isCurrent = actionKey === currentStep
+        const status = resolvePipelineRowStatus(actionKey, steps);
+        const isCurrent = isPipelineRowCurrent(actionKey, currentStep)
             && String(pipelineStatus || '').trim().toLowerCase() === 'running';
         const statusLabel = resolveStepStatusLabel(key, status, loopView);
         const canRestart = Boolean(
@@ -1267,6 +1316,14 @@ export function PipelineGroupedWorkflowListV3({
                             disabled={!canRunSingle}
                             loading={runningSingleStep && isCurrent}
                             onClick={() => onRunSingleStep(actionKey)}
+                        />
+                    ) : null}
+                    {onRunSingleStep && actionKey === 'whiteboard_render' ? (
+                        <PipelineRemuxButton
+                            restartableSet={restartableSet}
+                            disabled={runSingleStepDisabled}
+                            loading={runningSingleStep && currentStep === 'whiteboard_mux'}
+                            onRun={onRunSingleStep}
                         />
                     ) : null}
                     {key === 'beat_division' && onManualBeatDivision ? (

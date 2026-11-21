@@ -141,6 +141,8 @@ function normalizeManifest(projectDir, raw, totalVideoSec, crossfadeSec) {
       fileDurationSec,
       title: seg.title ?? "",
       volume: Number(seg.volume) > 0 ? Math.min(1.5, Number(seg.volume)) : 0,
+      // Mixer video-html: 'voice' = volume tương đối quanh mức chuẩn (giọng −8 dB).
+      volumeRef: seg.volumeRef === "voice" ? "voice" : "",
     };
   });
 
