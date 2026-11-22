@@ -7,8 +7,9 @@ import {
     pixelFxPreviewDocument, pixelFxWorkerDocument, readThumb, textFingerprint, threeRuntimeSource, writeThumb,
 } from 'helpers/visualLibrary';
 import SupportingCastLibrary from './SupportingCastLibrary';
+import MotionLibrary from './MotionLibrary';
 
-type Kind = 'dress' | 'cast' | 'pixelfx' | 'material';
+type Kind = 'dress' | 'cast' | 'motion' | 'pixelfx' | 'material';
 type Card = {kind: Kind; id: string; name: string; group: string; thumb: string; dark?: boolean; search: string; dress?: DressItem; effect?: PixelFxEffect; material?: LibraryMaterial};
 
 type ThumbKind = 'dress' | 'pixelfx';
@@ -19,6 +20,7 @@ const isThumbKind = (k: Kind): k is ThumbKind => k === 'dress' || k === 'pixelfx
 const TABS: Array<{kind: Kind; label: string; hint: string}> = [
     {kind: 'dress', label: 'Đồ vật 3D', hint: 'Bộ đồ vật dựng sẵn THREE.SVDress cho bối cảnh và beat: nội thất, bếp, điện tử, đèn, kiến trúc, đồ mềm, đồ ăn, dụng cụ, đường phố, xe, cây cỏ. Chất liệu (vân gỗ, vải dệt, kim loại, đá, da, cao su…) sinh bằng code, không tải file. Vật ngoài danh sách do agent tự dựng trong từng bối cảnh.'},
     {kind: 'cast', label: 'Nhân vật phụ', hint: 'Mọi hình người không phải nhân vật chính (người qua đường, đồng nghiệp, công nhân, giúp việc…) lấy từ danh sách này bằng mã phu_<nhóm>_<số>, dựng bằng Character Designer như nhân vật chính. Mỗi người trên hình một mã; beat không được đổi ngoại hình. Không có vai phù hợp thì thêm nhân vật phụ mới.'},
+    {kind: 'motion', label: 'Động tác', hint: 'Kho động tác Mixamo (SVMocap) cho mọi nhân vật Character Designer, nhân vật chính lẫn nhân vật phụ. Beat gọi clip bằng mã (dòng MOTION: của visual). Động tác chưa có thì tải từ Mixamo rồi nhập; đã tải một lần thì dùng lại mãi. Chỉ tự làm khi Mixamo không có.'},
     {kind: 'pixelfx', label: 'Hiệu ứng pixel', hint: 'Hiệu ứng pixel art THREE.SVPixelFx trên thẻ 2D luôn quay về máy quay: dùng cho bối cảnh sống (lửa, nước, chim, bướm) và hành động trong beat.'},
     {kind: 'material', label: 'Vật liệu', hint: 'Gói texture PBR ambientCG (CC0) đã tải về máy chủ cho bề mặt bối cảnh. Gói mới được tải thêm khi một bối cảnh cần loại bề mặt chưa có.'},
 ];
@@ -213,11 +215,11 @@ export default function VisualLibraryDrawer({open, onClose}: {open: boolean; onC
         ? DRESS_ITEMS.map((item) => ({kind: 'dress', id: item.id, name: item.name, group: item.group, thumb: thumbCache.dress[item.id] || '', dress: item, search: `${item.name} ${item.group} ${item.call} ${item.source ? ANIMAL_SOURCE_LABEL[item.source].label : ''}`.toLowerCase()}))
         : tab === 'pixelfx'
             ? (data?.pixelfx?.effects || []).map((effect) => ({kind: 'pixelfx', id: effect.id, name: effect.name, group: effect.category, thumb: thumbCache.pixelfx[effect.id] || '', dark: true, effect, search: `${effect.id} ${effect.name} ${effect.desc || ''} ${(effect.tags || []).join(' ')}`.toLowerCase()}))
-            : tab === 'cast' ? [] : (data?.materials || []).map((material) => ({kind: 'material', id: material.key, name: material.assetId, group: material.category, thumb: material.thumb, material, search: `${material.assetId} ${material.category}`.toLowerCase()}));
+            : tab === 'cast' || tab === 'motion' ? [] : (data?.materials || []).map((material) => ({kind: 'material', id: material.key, name: material.assetId, group: material.category, thumb: material.thumb, material, search: `${material.assetId} ${material.category}`.toLowerCase()}));
     const groups = Array.from(new Set(cards.map((card) => card.group)));
     const visible = cards.filter((card) => (group === 'all' || card.group === group) && card.search.includes(query.trim().toLowerCase()));
     const info = TABS.find((item) => item.kind === tab);
-    const loading = tab !== 'dress' && tab !== 'cast' && !data && !error;
+    const loading = tab !== 'dress' && tab !== 'cast' && tab !== 'motion' && !data && !error;
 
     return <DrawerCustom open={open} onClose={onClose} title="Thư viện hình ảnh" width={1100} activeOnClose>
         <Stack spacing={1.5}>
@@ -225,10 +227,10 @@ export default function VisualLibraryDrawer({open, onClose}: {open: boolean; onC
             {error && <Alert severity="error" onClose={() => setError('')}>{error}</Alert>}
             <Tabs value={tab} onChange={(_, value: Kind) => { setTab(value); setGroup('all'); setQuery(''); }} aria-label="Loại thư viện hình ảnh">
                 {TABS.map((item) => <Tab key={item.kind} value={item.kind} sx={{textTransform: 'none', fontWeight: 600}}
-                    label={`${item.label} (${item.kind === 'dress' ? DRESS_ITEMS.length : item.kind === 'cast' ? (castCount ?? '…') : item.kind === 'pixelfx' ? (data?.pixelfx?.effects.length ?? '…') : (data?.materials?.length ?? '…')})`}/>)}
+                    label={`${item.label} (${item.kind === 'dress' ? DRESS_ITEMS.length : item.kind === 'cast' ? (castCount ?? '…') : item.kind === 'motion' ? ((data as {mocap?: {clips: unknown[]}} | null)?.mocap?.clips.length ?? '…') : item.kind === 'pixelfx' ? (data?.pixelfx?.effects.length ?? '…') : (data?.materials?.length ?? '…')})`}/>)}
             </Tabs>
             <Typography variant="caption" sx={{color: 'text.secondary'}}>{info?.hint}</Typography>
-            {tab === 'cast' ? <SupportingCastLibrary open={open} runtime={runtime} onCount={setCastCount}/> : <>
+            {tab === 'cast' ? <SupportingCastLibrary open={open} runtime={runtime} onCount={setCastCount}/> : tab === 'motion' ? <MotionLibrary open={open} runtime={runtime} data={data}/> : <>
             <Stack direction={{xs: 'column', sm: 'row'}} spacing={1} alignItems={{sm: 'center'}}>
                 <TextField size="small" label="Tìm trong thư viện" value={query} onChange={(e) => setQuery(e.target.value)} sx={{flex: 1}}/>
                 <TextField select size="small" label="Nhóm" value={group} onChange={(e) => setGroup(e.target.value)} sx={{minWidth: 200}}>

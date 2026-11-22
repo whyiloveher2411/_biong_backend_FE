@@ -90,3 +90,32 @@ export function supportingCastPreviewDocument(runtime: string, factory: string, 
   })(start);
 })();`], '#E9EDF2');
 }
+
+/** Một động tác của kho Mixamo (public/sv-mocap/index.json). */
+export type MotionClip = {id: string; name: string; source: 'mixamo' | 'xbot' | 'custom'; mixamo?: string; origin?: string; tags?: string[]; loop: boolean; duration: number;
+    frames: number; speed?: number[]; file?: string; added_at?: string; searched?: string[]; reason?: string};
+
+/** Phát một clip SVMocap lên nhân vật phụ (lặp; clip một lần thì phát lại sau 0,8 s), kéo để xoay. */
+export function motionPreviewDocument(runtime: string, factory: string, mocapRuntime: string, clipJson: string,
+    c: Pick<SupportingCharacter, 'design' | 'scale'>, head: string): string {
+    return page([GUARD, runtime, factory, mocapRuntime, STAGE, BUILD, `
+(function () {
+  var S = svStage(window.innerWidth || 852, window.innerHeight || 420, true), T = S.T;
+  var clip = ${clipJson.replace(/</g, '\\u003c')}; SVMocap.add(clip);
+  var a = svBuildExtra(T, ${JSON.stringify(c.design).replace(/</g, '\\u003c')}, ${Number(c.scale) || 1}, ${JSON.stringify(head)});
+  SVMocap.apply(a, clip.id, 0, {emotion: 'neutral'}); S.scene.add(a.root); S.view(a.root);
+  var d = SVMocap.duration(clip.id), cycle = clip.loop ? 1e9 : d + 0.8, start = performance.now(), last = start;
+  (function frame(now) {
+    var t = (now - start) / 1000, u = t % cycle;
+    SVMocap.apply(a, clip.id, clip.loop ? t : Math.min(u, d), {emotion: 'neutral'});
+    S.render((now - last) / 1000); last = now; requestAnimationFrame(frame);
+  })(start);
+})();`], '#E9EDF2');
+}
+
+/** Nhãn nguồn của một động tác: chỉ clip tải từ mixamo.com mới ghi "Mixamo". */
+export const MOTION_SOURCE: Record<MotionClip['source'], {label: string; color: 'success' | 'info' | 'warning'; hint: string}> = {
+    mixamo: {label: 'Mixamo', color: 'success', hint: 'Tải từ mixamo.com.'},
+    xbot: {label: 'Xbot (three.js)', color: 'info', hint: 'Lấy từ Xbot.glb của ví dụ three.js, không có trên Mixamo với tên này.'},
+    custom: {label: 'Tự làm', color: 'warning', hint: 'Tự làm vì Mixamo không có.'},
+};
