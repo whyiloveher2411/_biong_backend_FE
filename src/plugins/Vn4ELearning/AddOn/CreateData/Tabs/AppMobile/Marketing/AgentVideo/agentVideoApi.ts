@@ -1886,6 +1886,8 @@ export type AgentVideoContentResponse = {
     local_final_mp4_url?: string;
     local_final_mp4_size_bytes?: number;
     local_final_mp4_modified_at?: string;
+    /** Biến thể Short 9:16 đã làm (URL public); '' khi chưa có. */
+    short_variant_video_url?: string;
     agent_video_summary?: {
         estimated_duration_sec?: number | null;
         cta_mode?: string;

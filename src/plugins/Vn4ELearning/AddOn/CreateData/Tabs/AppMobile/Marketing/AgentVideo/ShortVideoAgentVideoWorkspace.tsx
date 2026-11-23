@@ -5,7 +5,6 @@ import React from 'react';
 import { Box, Typography } from '@mui/material';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import FactCheckIcon from '@mui/icons-material/FactCheck';
-import CollectionsOutlinedIcon from '@mui/icons-material/CollectionsOutlined';
 import ManageAccountsOutlinedIcon from '@mui/icons-material/ManageAccountsOutlined';
 import ViewInArOutlinedIcon from '@mui/icons-material/ViewInArOutlined';
 import DrawerCustom from 'components/molecules/DrawerCustom';
@@ -14,7 +13,6 @@ import { isKeyboardEditableTarget } from 'helpers/shortVideoEditorKeyboard';
 import ShortVideoAgentLeftPanel from './ShortVideoAgentLeftPanel';
 import ShortVideoAgentWorkflowPanel from './ShortVideoAgentWorkflowPanel';
 import ShortVideoAgentVideoTimeline from './ShortVideoAgentVideoTimeline';
-import ShortVideoResourceManageDrawer from '../ShortVideoResourceManageDrawer';
 import ShortVideoModel3dManageDrawer from '../ShortVideoModel3dManageDrawer';
 import AccountsManageDrawer from './AccountsManageDrawer';
 import ShortVideoAgentBeatRegionEditor from './ShortVideoAgentBeatRegionEditor';
@@ -193,7 +191,6 @@ function ShortVideoAgentVideoSession({
 
     const [leftPanelOpen, setLeftPanelOpen] = React.useState(false);
     const [leftPanelTab, setLeftPanelTab] = React.useState<ShortVideoAgentLeftTab>(initialTab);
-    const [resourceDrawerOpen, setResourceDrawerOpen] = React.useState(false);
     const [model3dDrawerOpen, setModel3dDrawerOpen] = React.useState(false);
     const [accountsDrawerOpen, setAccountsDrawerOpen] = React.useState(false);
     const [rightPanelOpen, setRightPanelOpen] = React.useState(false);
@@ -600,6 +597,28 @@ function ShortVideoAgentVideoSession({
         </Box>
     );
 
+    /** Mở video ở tab mới (cache-bust). <a>.click() ổn định hơn window.open (popup blocker / Electron / webview). */
+    const openVideoInNewTab = (rawUrl: string) => {
+        const raw = String(rawUrl || '').trim();
+        if (!raw) return;
+        let openUrl = raw;
+        try {
+            const u = new URL(raw, window.location.origin);
+            u.searchParams.set('v', String(Date.now()));
+            openUrl = u.toString();
+        } catch {
+            const sep = raw.includes('?') ? '&' : '?';
+            openUrl = `${raw}${sep}v=${Date.now()}`;
+        }
+        const anchor = document.createElement('a');
+        anchor.href = openUrl;
+        anchor.target = '_blank';
+        anchor.rel = 'noopener noreferrer';
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+    };
+
     const headerAction = (
         <Box
             sx={{
@@ -611,17 +630,6 @@ function ShortVideoAgentVideoSession({
                 flexShrink: 0,
             }}
         >
-            <Button
-                size="small"
-                variant="contained"
-                color="primary"
-                startIcon={<CollectionsOutlinedIcon />}
-                disabled={shortVideoId <= 0}
-                onClick={() => setResourceDrawerOpen(true)}
-                sx={HEADER_BTN_SX}
-            >
-                Quản lý Resource
-            </Button>
             <Button
                 size="small"
                 variant="contained"
@@ -654,32 +662,27 @@ function ShortVideoAgentVideoSession({
                         event.preventDefault();
                         event.stopPropagation();
                         // Tab mới: ưu tiên CDN public (ổn định). Local chỉ khi chưa có agent_video_url.
-                        const raw = String(
-                            state.agentVideoUrl || state.localFinalMp4OpenUrl || finalPreviewVideoUrl || '',
-                        ).trim();
-                        if (!raw) return;
-                        let openUrl = raw;
-                        try {
-                            const u = new URL(raw, window.location.origin);
-                            u.searchParams.set('v', String(Date.now()));
-                            openUrl = u.toString();
-                        } catch {
-                            const sep = raw.includes('?') ? '&' : '?';
-                            openUrl = `${raw}${sep}v=${Date.now()}`;
-                        }
-                        // <a>.click() ổn định hơn window.open (popup blocker / Electron / webview
-                        // trả null hoặc chặn tab mới), và không navigate tab hiện tại.
-                        const anchor = document.createElement('a');
-                        anchor.href = openUrl;
-                        anchor.target = '_blank';
-                        anchor.rel = 'noopener noreferrer';
-                        document.body.appendChild(anchor);
-                        anchor.click();
-                        anchor.remove();
+                        openVideoInNewTab(state.agentVideoUrl || state.localFinalMp4OpenUrl || finalPreviewVideoUrl || '');
                     }}
                     sx={HEADER_BTN_SX}
                 >
                     Mở video
+                </Button>
+            ) : null}
+            {state.shortVariantVideoUrl ? (
+                <Button
+                    size="small"
+                    variant="contained"
+                    color="warning"
+                    startIcon={<OpenInNewIcon />}
+                    onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        openVideoInNewTab(state.shortVariantVideoUrl);
+                    }}
+                    sx={HEADER_BTN_SX}
+                >
+                    Mở video ngắn
                 </Button>
             ) : null}
         </Box>
@@ -1207,12 +1210,6 @@ function ShortVideoAgentVideoSession({
             >
                 {beatQaPanel}
             </DrawerCustom>
-            <ShortVideoResourceManageDrawer
-                open={resourceDrawerOpen}
-                onClose={() => setResourceDrawerOpen(false)}
-                shortVideoId={shortVideoId}
-                shortVideoTitle={state.title || `Short video #${shortVideoId}`}
-            />
             <ShortVideoModel3dManageDrawer
                 open={model3dDrawerOpen}
                 onClose={() => setModel3dDrawerOpen(false)}

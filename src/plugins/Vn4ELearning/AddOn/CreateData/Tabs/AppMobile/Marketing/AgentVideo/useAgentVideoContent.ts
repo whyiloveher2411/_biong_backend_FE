@@ -901,6 +901,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [localFinalMp4Url, setLocalFinalMp4Url] = React.useState('');
     const [localFinalMp4SizeBytes, setLocalFinalMp4SizeBytes] = React.useState(0);
     const [localFinalMp4ModifiedAt, setLocalFinalMp4ModifiedAt] = React.useState('');
+    const [shortVariantVideoUrl, setShortVariantVideoUrl] = React.useState('');
     const [uploadingLocalAgentVideo, setUploadingLocalAgentVideo] = React.useState(false);
     const [agentTtsJobId, setAgentTtsJobId] = React.useState<number | null>(null);
     const [agentTtsStatus, setAgentTtsStatus] = React.useState('');
@@ -1647,6 +1648,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         setLocalFinalMp4Url(String(res?.local_final_mp4_url || '').trim());
         setLocalFinalMp4SizeBytes(Math.max(0, Number(res?.local_final_mp4_size_bytes || 0)));
         setLocalFinalMp4ModifiedAt(String(res?.local_final_mp4_modified_at || '').trim());
+        setShortVariantVideoUrl(String(res?.short_variant_video_url || '').trim());
         setAgentTtsJobId(res?.agent_tts_job_id ?? null);
         setAgentTtsStatus(String(res?.agent_tts_status || '').trim());
         setTtsChain(Array.isArray(res?.tts_chain) ? res.tts_chain : []);
@@ -10539,6 +10541,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         localFinalMp4OpenUrl,
         localFinalMp4SizeBytes,
         localFinalMp4ModifiedAt,
+        shortVariantVideoUrl,
         uploadingLocalAgentVideo,
         handleUploadLocalAgentVideo,
         agentTtsJobId,
