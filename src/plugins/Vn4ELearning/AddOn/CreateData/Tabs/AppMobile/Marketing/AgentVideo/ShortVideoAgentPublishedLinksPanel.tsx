@@ -24,6 +24,7 @@ type Props = {
 /** Thứ tự + nhãn hiển thị; nền tảng lạ vẫn hiện theo key. */
 const PLATFORM_LABELS: Record<string, string> = {
     youtube: 'YouTube',
+    youtube_shorts: 'YouTube Shorts',
     facebook: 'Facebook',
     instagram: 'Instagram',
     threads: 'Threads',
