@@ -9,8 +9,9 @@ import {
 import SupportingCastLibrary from './SupportingCastLibrary';
 import MotionLibrary from './MotionLibrary';
 import BuildingLibrary, {BuildingLibraryData} from './BuildingLibrary';
+import PolyforkLibrary, {PolyforkLibraryData} from './PolyforkLibrary';
 
-type Kind = 'dress' | 'building' | 'cast' | 'motion' | 'pixelfx' | 'material';
+type Kind = 'dress' | 'building' | 'polyfork' | 'cast' | 'motion' | 'pixelfx' | 'material';
 type Card = {kind: Kind; id: string; name: string; group: string; thumb: string; dark?: boolean; search: string; dress?: DressItem; effect?: PixelFxEffect; material?: LibraryMaterial};
 
 type ThumbKind = 'dress' | 'pixelfx';
@@ -21,6 +22,7 @@ const isThumbKind = (k: Kind): k is ThumbKind => k === 'dress' || k === 'pixelfx
 const TABS: Array<{kind: Kind; label: string; hint: string}> = [
     {kind: 'dress', label: 'Đồ vật 3D', hint: 'Bộ đồ vật dựng sẵn THREE.SVDress cho bối cảnh và beat: nội thất, bếp, điện tử, đèn, kiến trúc, đồ mềm, đồ ăn, dụng cụ, đường phố, xe, cây cỏ. Chất liệu (vân gỗ, vải dệt, kim loại, đá, da, cao su…) sinh bằng code, không tải file. Vật ngoài danh sách do agent tự dựng trong từng bối cảnh.'},
     {kind: 'building', label: 'Nhà (từ ảnh)', hint: 'Nhà dựng sẵn từ ảnh tham chiếu: ghép bằng khối thật, bề mặt từng khối cắt từ ảnh. Bối cảnh ngoài trời chọn nhà ở đây bằng mã nha_<nhóm>_<số> qua THREE.SVBuildings.create, không dựng lại nhà cho từng video. Thêm nhà bằng scripts/beat-html/building-library.mjs.'},
+    {kind: 'polyfork', label: 'Đồ vật Polyfork', hint: 'Đồ đường phố, xe cộ và mặt đất lát (hè, viền đường có cống, mặt đường kẻ vạch, lối đi, hàng rào) tải từ polyfork.dev, gọi bằng mã pf_… qua THREE.SVPolyfork.create. Mặc định đổi sang vật liệu D.mat có vân cho hợp nhà SVBuildings và cây SVDress. Thêm món bằng scripts/beat-html/polyfork.mjs search … rồi add <id>.'},
     {kind: 'cast', label: 'Nhân vật phụ', hint: 'Mọi hình người không phải nhân vật chính (người qua đường, đồng nghiệp, công nhân, giúp việc…) lấy từ danh sách này bằng mã phu_<nhóm>_<số>, dựng bằng Character Designer như nhân vật chính. Mỗi người trên hình một mã; beat không được đổi ngoại hình. Không có vai phù hợp thì thêm nhân vật phụ mới.'},
     {kind: 'motion', label: 'Động tác', hint: 'Kho động tác Mixamo (SVMocap) cho mọi nhân vật Character Designer, nhân vật chính lẫn nhân vật phụ. Beat gọi clip bằng mã (dòng MOTION: của visual). Động tác chưa có thì tải từ Mixamo rồi nhập; đã tải một lần thì dùng lại mãi. Chỉ tự làm khi Mixamo không có.'},
     {kind: 'pixelfx', label: 'Hiệu ứng pixel', hint: 'Hiệu ứng pixel art THREE.SVPixelFx trên thẻ 2D luôn quay về máy quay: dùng cho bối cảnh sống (lửa, nước, chim, bướm) và hành động trong beat.'},
@@ -229,10 +231,10 @@ export default function VisualLibraryDrawer({open, onClose}: {open: boolean; onC
             {error && <Alert severity="error" onClose={() => setError('')}>{error}</Alert>}
             <Tabs value={tab} onChange={(_, value: Kind) => { setTab(value); setGroup('all'); setQuery(''); }} aria-label="Loại thư viện hình ảnh">
                 {TABS.map((item) => <Tab key={item.kind} value={item.kind} sx={{textTransform: 'none', fontWeight: 600}}
-                    label={`${item.label} (${item.kind === 'dress' ? DRESS_ITEMS.length : item.kind === 'building' ? ((data as {buildings?: BuildingLibraryData} | null)?.buildings?.items.length ?? '…') : item.kind === 'cast' ? (castCount ?? '…') : item.kind === 'motion' ? ((data as {mocap?: {clips: unknown[]}} | null)?.mocap?.clips.length ?? '…') : item.kind === 'pixelfx' ? (data?.pixelfx?.effects.length ?? '…') : (data?.materials?.length ?? '…')})`}/>)}
+                    label={`${item.label} (${item.kind === 'dress' ? DRESS_ITEMS.length : item.kind === 'building' ? ((data as {buildings?: BuildingLibraryData} | null)?.buildings?.items.length ?? '…') : item.kind === 'polyfork' ? ((data as {polyfork?: PolyforkLibraryData} | null)?.polyfork?.items.length ?? '…') : item.kind === 'cast' ? (castCount ?? '…') : item.kind === 'motion' ? ((data as {mocap?: {clips: unknown[]}} | null)?.mocap?.clips.length ?? '…') : item.kind === 'pixelfx' ? (data?.pixelfx?.effects.length ?? '…') : (data?.materials?.length ?? '…')})`}/>)}
             </Tabs>
             <Typography variant="caption" sx={{color: 'text.secondary'}}>{info?.hint}</Typography>
-            {tab === 'building' ? <BuildingLibrary data={(data as {buildings?: BuildingLibraryData} | null)?.buildings}/> : tab === 'cast' ? <SupportingCastLibrary open={open} runtime={runtime} onCount={setCastCount}/> : tab === 'motion' ? <MotionLibrary open={open} runtime={runtime} data={data}/> : <>
+            {tab === 'building' ? <BuildingLibrary data={(data as {buildings?: BuildingLibraryData} | null)?.buildings}/> : tab === 'polyfork' ? <PolyforkLibrary data={(data as {polyfork?: PolyforkLibraryData} | null)?.polyfork}/> : tab === 'cast' ? <SupportingCastLibrary open={open} runtime={runtime} onCount={setCastCount}/> : tab === 'motion' ? <MotionLibrary open={open} runtime={runtime} data={data}/> : <>
             <Stack direction={{xs: 'column', sm: 'row'}} spacing={1} alignItems={{sm: 'center'}}>
                 <TextField size="small" label="Tìm trong thư viện" value={query} onChange={(e) => setQuery(e.target.value)} sx={{flex: 1}}/>
                 <TextField select size="small" label="Nhóm" value={group} onChange={(e) => setGroup(e.target.value)} sx={{minWidth: 200}}>

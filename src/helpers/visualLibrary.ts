@@ -433,6 +433,18 @@ export function materialPreviewDocument(runtime: string, materialRuntime: string
 }
 
 /** Nhà từ thư viện ảnh (THREE.SVBuildings): `pack` là mã nguồn gói của đúng mã đó. Kéo để xoay, lăn chuột để phóng. */
+/** Trang xem 3D một đồ vật Polyfork (THREE.SVPolyfork): gói + knob, restyle bật/tắt. */
+export function polyforkPreviewDocument(runtime: string, pack: string, code: string, options: Record<string, unknown> = {}): string {
+    return page([GUARD, runtime, pack, STAGE, `
+(function () {
+  var S = svStage(window.innerWidth || 852, window.innerHeight || 420, true), T = S.T;
+  var item = T.SVPolyfork.create(${JSON.stringify(code)}, ${JSON.stringify(options)});
+  S.scene.add(item); S.view(item, true);
+  var last = performance.now();
+  (function frame(now) { S.render((now - last) / 1000); last = now; requestAnimationFrame(frame); })(last);
+})();`], '#E9EDF2');
+}
+
 export function buildingPreviewDocument(runtime: string, pack: string, code: string, options: {tint?: string; mirror?: boolean} = {}): string {
     return page([GUARD, runtime, pack, STAGE, `
 (function () {
