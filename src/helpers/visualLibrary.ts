@@ -5,7 +5,7 @@ import {GUARD, STAGE, page} from './visualLibraryStage';
 export type PixelFxEffect = {id: string; category: string; name: string; desc?: string; tags?: string[]; size: [number, number]; origin?: [number, number]; metres?: [number, number]; duration: number; loop: boolean; simulated?: boolean; screen?: boolean; actor?: boolean; impact?: number};
 export type PixelFxCategory = {id: string; name: string; blurb?: string};
 export type LibraryMaterial = {key: string; assetId: string; category: string; provider: string; source: string; license: string; dimensions?: {width?: number; height?: number} | null; maps: string[]; width: number; height: number; bytes: number; thumb: string; file: string};
-export type VisualLibraryData = {success: boolean; message?: string; pixelfx?: {unit: number; source: string; categories: PixelFxCategory[]; effects: PixelFxEffect[]}; materials?: LibraryMaterial[]};
+export type VisualLibraryData = {success: boolean; message?: string; pixelfx?: {unit: number; source: string; categories: PixelFxCategory[]; effects: PixelFxEffect[]}; materials?: LibraryMaterial[]; photo?: {skies: unknown[]; surfaces: unknown[]}};
 /** Nguồn của con vật: 'repo' = procedural-animals (upstream), 'upgraded' = phái sinh tự nâng cấp từ một loài upstream (cần duyệt), 'classic' = builder cũ. */
 export type AnimalSource = 'repo' | 'upgraded' | 'classic';
 export const ANIMAL_SOURCE_LABEL: Record<AnimalSource, {label: string; color: 'success' | 'warning' | 'default'; hint: string}> = {
@@ -433,6 +433,53 @@ export function materialPreviewDocument(runtime: string, materialRuntime: string
 }
 
 /** Nhà từ thư viện ảnh (THREE.SVBuildings): `pack` là mã nguồn gói của đúng mã đó. Kéo để xoay, lăn chuột để phóng. */
+/** Bầu trời ảnh thật (THREE.SVSky): máy quay đứng ở tầm mắt nhìn ra chân trời, tự quay chậm (kéo để xoay, lăn để ngẩng/cúi);
+ * vài khối mẫu cho thấy mặt trời, bóng đổ và phản chiếu lấy theo ảnh trời. */
+export function photoSkyPreviewDocument(runtime: string, pack: string, code: string): string {
+    return page([GUARD, runtime, pack, `
+(function () {
+  var T = THREE, W = window.innerWidth || 852, H = window.innerHeight || 420, R = new T.WebGLRenderer({antialias: true});
+  R.setPixelRatio(Math.min(2, window.devicePixelRatio || 1)); R.setSize(W, H); R.shadowMap.enabled = true; R.shadowMap.type = T.PCFSoftShadowMap; R.toneMapping = T.ACESFilmicToneMapping;
+  document.body.appendChild(R.domElement);
+  var scene = new T.Scene(), camera = new T.PerspectiveCamera(55, W / H, 0.05, 500);
+  var sun = new T.DirectionalLight('#ffffff', 3); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0004;
+  var c = sun.shadow.camera; c.left = c.bottom = -12; c.right = c.top = 12; c.near = 0.1; c.far = 80; scene.add(sun, sun.target);
+  scene.add(new T.HemisphereLight('#cfe0f5', '#5d6650', 0.25));
+  var ground = new T.Mesh(new T.CircleGeometry(60, 64), new T.MeshStandardMaterial({color: '#7d8a6a', roughness: 1})); ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+  var add = function (geo, mat, x, y, z) { var m = new T.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = m.receiveShadow = true; scene.add(m); return m; };
+  add(new T.SphereGeometry(0.6, 48, 32), new T.MeshStandardMaterial({color: '#f2f2f2', roughness: 0.35}), -1.2, 0.6, -5);
+  add(new T.SphereGeometry(0.5, 48, 32), new T.MeshStandardMaterial({color: '#ffffff', roughness: 0.04, metalness: 1}), 0.4, 0.5, -4.2);
+  add(new T.BoxGeometry(0.9, 1.6, 0.9), new T.MeshStandardMaterial({color: '#c9a27a', roughness: 0.8}), 1.6, 0.8, -5.6);
+  var sky = T.SVSky.apply(scene, R, ${JSON.stringify(code)}, {sun: sun, sunAt: [0.6, 1, 1], distance: 30});
+  var yaw = 0, pitch = 0.12, spin = true, down = null, el = R.domElement; el.style.cursor = 'grab';
+  el.addEventListener('pointerdown', function (e) { down = [e.clientX, e.clientY]; spin = false; el.setPointerCapture(e.pointerId); });
+  el.addEventListener('pointermove', function (e) { if (!down) return; yaw -= (e.clientX - down[0]) * 0.006; pitch = Math.max(-0.3, Math.min(1.3, pitch + (e.clientY - down[1]) * 0.005)); down = [e.clientX, e.clientY]; });
+  el.addEventListener('pointerup', function () { down = null; });
+  el.addEventListener('wheel', function (e) { e.preventDefault(); pitch = Math.max(-0.3, Math.min(1.3, pitch + (e.deltaY > 0 ? -0.05 : 0.05))); }, {passive: false});
+  window.addEventListener('resize', function () { var w = window.innerWidth || 852, h = window.innerHeight || 420; R.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix(); });
+  var last = performance.now();
+  (function frame(now) {
+    if (spin) yaw += Math.min(0.1, (now - last) / 1000) * 0.12; last = now;
+    camera.position.set(0, 1.5, 0); camera.lookAt(-Math.sin(yaw) * Math.cos(pitch), 1.5 + Math.sin(pitch), -Math.cos(yaw) * Math.cos(pitch));
+    R.render(scene, camera); requestAnimationFrame(frame);
+  })(last);
+})();`], '#9FB2C6');
+}
+
+/** Bề mặt ảnh quét (THREE.SVSurfaces) trên một mảng sân 6 × 6 m, khối 1 m và bậc thềm (UV theo toạ độ thế giới). */
+export function photoSurfacePreviewDocument(runtime: string, pack: string, code: string): string {
+    return page([GUARD, runtime, pack, STAGE, `
+(function () {
+  var S = svStage(window.innerWidth || 852, window.innerHeight || 420, true), T = S.T, root = new T.Group(), code = ${JSON.stringify(code)};
+  root.add(T.SVSurfaces.plane(code, {width: 6, depth: 6}));
+  var cube = new T.Mesh(new T.BoxGeometry(1, 1, 1), T.SVSurfaces.mat(code)); cube.position.set(-1.2, 0.5, -0.8); root.add(cube);
+  var step = new T.Mesh(new T.BoxGeometry(2.4, 0.18, 0.8), T.SVSurfaces.mat(code)); step.position.set(1, 0.09, 1.2); root.add(step);
+  S.scene.add(root); S.view(root, false);
+  var last = performance.now();
+  (function frame(now) { S.render((now - last) / 1000); last = now; requestAnimationFrame(frame); })(last);
+})();`], '#E9EDF2');
+}
+
 /** Trang xem 3D một đồ vật Polyfork (THREE.SVPolyfork): gói + knob, restyle bật/tắt. */
 export function polyforkPreviewDocument(runtime: string, pack: string, code: string, options: Record<string, unknown> = {}): string {
     return page([GUARD, runtime, pack, STAGE, `
