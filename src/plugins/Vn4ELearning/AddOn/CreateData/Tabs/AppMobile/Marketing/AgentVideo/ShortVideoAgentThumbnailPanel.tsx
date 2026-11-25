@@ -15,14 +15,17 @@ import ShortVideoAgentThumbnailImagePreview from './ShortVideoAgentThumbnailImag
 import ShortVideoAgentThumbnailIdeaPanel from './ShortVideoAgentThumbnailIdeaPanel';
 import ShortVideoAgentThumbnailQaPanel from './ShortVideoAgentThumbnailQaPanel';
 import { WorkflowSection } from './workflowPanelSection';
+import ShortVideoAgentThumbnailStylePicker from './ShortVideoAgentThumbnailStylePicker';
 
 type AgentVideoState = ReturnType<typeof useAgentVideoContent>;
 
 type Props = {
     state: AgentVideoState;
+    /** false (video 2s): chỉ chọn phong cách thumbnail YouTube, không có ảnh bìa HTML của clip. */
+    showHtmlCover?: boolean;
 };
 
-export default function ShortVideoAgentThumbnailPanel({ state }: Props) {
+export default function ShortVideoAgentThumbnailPanel({ state, showHtmlCover = true }: Props) {
     const fillStatus = String(state.geminiThumbnailFillStatus || 'none');
     const hasIdea = Boolean(String(state.thumbnailBlock?.idea?.headline || '').trim());
     const hasHtml = Boolean(String(state.thumbnailHtml || '').trim());
@@ -40,104 +43,110 @@ export default function ShortVideoAgentThumbnailPanel({ state }: Props) {
             }}
         >
             <Stack spacing={2}>
-                <Box>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-                        Thumbnail
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                        HTML cover theo tỉ lệ clip ({state.agentClipAspect === '16:9' ? '1920×1080' : '1080×1920'}) → chụp ảnh cho short video.
-                    </Typography>
-                </Box>
+                <ShortVideoAgentThumbnailStylePicker shortVideoId={Number(state.shortVideoId || 0)} />
 
-                {String(state.thumbnailBlock?.qa_status || '') === 'approved' ? (
-                    <Alert severity="success" sx={{ py: 0.5 }}>
-                        Thumbnail đã được đánh dấu ổn — pipeline sẽ bỏ qua bước generate ở lần chạy sau.
-                    </Alert>
-                ) : null}
+                {showHtmlCover ? (
+                    <>
+                        <Box sx={{ borderTop: 1, borderColor: 'divider', pt: 2 }}>
+                            <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                                Ảnh bìa HTML của clip
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                                HTML cover theo tỉ lệ clip ({state.agentClipAspect === '16:9' ? '1920×1080' : '1080×1920'}) → chụp ảnh cho short video.
+                            </Typography>
+                        </Box>
 
-                <ShortVideoAgentThumbnailIdeaPanel
-                    idea={state.thumbnailBlock?.idea}
-                    geminiIdeaStatus={state.geminiThumbnailIdeaStatus}
-                    geminiIdeaError={state.thumbnailGeminiIdeaError}
-                    enqueueing={state.enqueueingThumbnailIdea}
-                    onRegenerateIdea={() => state.handleEnqueueThumbnailIdea(true)}
-                />
-
-                <WorkflowSection title="Thao tác">
-                    <Stack spacing={1}>
-                        <LoadingButton
-                            variant="contained"
-                            size="small"
-                            startIcon={<AutoFixHighIcon />}
-                            loading={fillBusy}
-                            disabled={thumbnailBusy || (!hasIdea && !hasHtml)}
-                            onClick={() => { void state.handleEnqueueThumbnailFill(true); }}
-                        >
-                            Fill AI (Gemini headless)
-                        </LoadingButton>
-                        {fillStatusBusy ? (
-                            <Chip
-                                size="small"
-                                color="info"
-                                label="Đang sinh HTML thumbnail…"
-                            />
-                        ) : null}
-                        {fillStatus === 'failed' ? (
-                            <Alert severity="error" sx={{ py: 0.5 }}>
-                                {state.thumbnailGeminiFillError || 'Fill thumbnail thất bại'}
+                        {String(state.thumbnailBlock?.qa_status || '') === 'approved' ? (
+                            <Alert severity="success" sx={{ py: 0.5 }}>
+                                Thumbnail đã được đánh dấu ổn — pipeline sẽ bỏ qua bước generate ở lần chạy sau.
                             </Alert>
                         ) : null}
-                    </Stack>
-                </WorkflowSection>
 
-                <WorkflowSection title="Preview HTML (t = 0)">
-                    <ShortVideoAgentThumbnailHtmlPreview
-                        html={state.thumbnailHtml}
-                        revision={state.thumbnailBlock?.updated_at || ''}
-                        clipAspect={state.agentClipAspect}
-                    />
-                </WorkflowSection>
-
-                <Stack spacing={1}>
-                    <LoadingButton
-                        variant="outlined"
-                        size="small"
-                        startIcon={<PhotoCameraOutlinedIcon />}
-                        loading={captureBusy}
-                        disabled={
-                            thumbnailBusy
-                            || !String(state.thumbnailHtml || '').trim()
-                        }
-                        onClick={() => { void state.handleCaptureThumbnail(true); }}
-                    >
-                        Generate image
-                    </LoadingButton>
-                    {captureBusy ? (
-                        <Chip
-                            size="small"
-                            color="info"
-                            label="Đang chụp ảnh thumbnail…"
+                        <ShortVideoAgentThumbnailIdeaPanel
+                            idea={state.thumbnailBlock?.idea}
+                            geminiIdeaStatus={state.geminiThumbnailIdeaStatus}
+                            geminiIdeaError={state.thumbnailGeminiIdeaError}
+                            enqueueing={state.enqueueingThumbnailIdea}
+                            onRegenerateIdea={() => state.handleEnqueueThumbnailIdea(true)}
                         />
-                    ) : null}
-                </Stack>
 
-                <ShortVideoAgentThumbnailQaPanel
-                    thumbnailBlock={state.thumbnailBlock}
-                    hasHtml={hasHtml}
-                    saving={state.savingThumbnailQa}
-                    regenerating={fillBusy}
-                    onSaveThumbnailQa={state.handleSaveThumbnailQa}
-                    onRegenerateThumbnail={state.handleRegenerateThumbnailFromQa}
-                />
+                        <WorkflowSection title="Thao tác">
+                            <Stack spacing={1}>
+                                <LoadingButton
+                                    variant="contained"
+                                    size="small"
+                                    startIcon={<AutoFixHighIcon />}
+                                    loading={fillBusy}
+                                    disabled={thumbnailBusy || (!hasIdea && !hasHtml)}
+                                    onClick={() => { void state.handleEnqueueThumbnailFill(true); }}
+                                >
+                                    Fill AI (Gemini headless)
+                                </LoadingButton>
+                                {fillStatusBusy ? (
+                                    <Chip
+                                        size="small"
+                                        color="info"
+                                        label="Đang sinh HTML thumbnail…"
+                                    />
+                                ) : null}
+                                {fillStatus === 'failed' ? (
+                                    <Alert severity="error" sx={{ py: 0.5 }}>
+                                        {state.thumbnailGeminiFillError || 'Fill thumbnail thất bại'}
+                                    </Alert>
+                                ) : null}
+                            </Stack>
+                        </WorkflowSection>
 
-                <WorkflowSection title="Ảnh thumbnail">
-                    <ShortVideoAgentThumbnailImagePreview
-                        imageUrl={state.thumbnailImageUrl}
-                        shortVideoId={state.shortVideoId}
-                        clipAspect={state.agentClipAspect}
-                        onDownloadError={(message) => state.showMessage(message, 'error')}
-                    />
-                </WorkflowSection>
+                        <WorkflowSection title="Preview HTML (t = 0)">
+                            <ShortVideoAgentThumbnailHtmlPreview
+                                html={state.thumbnailHtml}
+                                revision={state.thumbnailBlock?.updated_at || ''}
+                                clipAspect={state.agentClipAspect}
+                            />
+                        </WorkflowSection>
+
+                        <Stack spacing={1}>
+                            <LoadingButton
+                                variant="outlined"
+                                size="small"
+                                startIcon={<PhotoCameraOutlinedIcon />}
+                                loading={captureBusy}
+                                disabled={
+                                    thumbnailBusy
+                                    || !String(state.thumbnailHtml || '').trim()
+                                }
+                                onClick={() => { void state.handleCaptureThumbnail(true); }}
+                            >
+                                Generate image
+                            </LoadingButton>
+                            {captureBusy ? (
+                                <Chip
+                                    size="small"
+                                    color="info"
+                                    label="Đang chụp ảnh thumbnail…"
+                                />
+                            ) : null}
+                        </Stack>
+
+                        <ShortVideoAgentThumbnailQaPanel
+                            thumbnailBlock={state.thumbnailBlock}
+                            hasHtml={hasHtml}
+                            saving={state.savingThumbnailQa}
+                            regenerating={fillBusy}
+                            onSaveThumbnailQa={state.handleSaveThumbnailQa}
+                            onRegenerateThumbnail={state.handleRegenerateThumbnailFromQa}
+                        />
+
+                        <WorkflowSection title="Ảnh thumbnail">
+                            <ShortVideoAgentThumbnailImagePreview
+                                imageUrl={state.thumbnailImageUrl}
+                                shortVideoId={state.shortVideoId}
+                                clipAspect={state.agentClipAspect}
+                                onDownloadError={(message) => state.showMessage(message, 'error')}
+                            />
+                        </WorkflowSection>
+                    </>
+                ) : null}
             </Stack>
         </Box>
     );

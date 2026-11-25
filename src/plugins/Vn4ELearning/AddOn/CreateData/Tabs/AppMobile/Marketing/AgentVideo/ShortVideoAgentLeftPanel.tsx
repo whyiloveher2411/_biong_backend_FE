@@ -9,6 +9,7 @@ import ShortVideoAgentThumbnailPanel from './ShortVideoAgentThumbnailPanel';
 import ShortVideoAgentFacebookSocialCopyPanel from './ShortVideoAgentFacebookSocialCopyPanel';
 import ShortVideoAgentYoutubePanel from './ShortVideoAgentYoutubePanel';
 import ShortVideoAgentPublishedLinksPanel from './ShortVideoAgentPublishedLinksPanel';
+import ShortVideoAgentPostRecordSection from './ShortVideoAgentPostRecordSection';
 import MarketingFacebookPreviewPanel from '../MarketingFacebookPreviewPanel';
 import { isAgentVideo2sMode } from './agentVideoVisualMode';
 import type { useAgentVideoContent } from './useAgentVideoContent';
@@ -25,8 +26,8 @@ const LEFT_TABS: { key: LeftTabKey; label: string }[] = [
     { key: 'published', label: 'Đã đăng' },
 ];
 
-/** Video 2s chỉ dùng Script & TTS + YouTube + Đã đăng — ẩn các tab khác. */
-const VIDEO_2S_TAB_KEYS: LeftTabKey[] = ['script', 'youtube', 'published'];
+/** Video 2s chỉ dùng Script & TTS + các tab đăng video (Thumbnail, Facebook, YouTube, Đã đăng) — ẩn Content và Render. */
+const VIDEO_2S_TAB_KEYS: LeftTabKey[] = ['script', 'thumbnail', 'facebook', 'youtube', 'published'];
 
 type AgentVideoState = ReturnType<typeof useAgentVideoContent>;
 
@@ -118,20 +119,28 @@ export default function ShortVideoAgentLeftPanel({
                     <ShortVideoAgentChatbotHtmlPanel state={state} active={activeKey === 'render'} />
                 ) : null}
                 {activeKey === 'thumbnail' ? (
-                    <ShortVideoAgentThumbnailPanel state={state} />
+                    <ShortVideoAgentThumbnailPanel state={state} showHtmlCover={!isVideo2s} />
                 ) : null}
                 {activeKey === 'facebook' ? (
-                    state.marketingPostId > 0 ? (
-                        <MarketingFacebookPreviewPanel
-                            postId={state.marketingPostId}
-                            fallbackThumbnail={state.thumbnail}
-                            enabled={facebookEnabled}
-                            onSaved={onSaved}
-                            compact
-                        />
-                    ) : (
-                        <ShortVideoAgentFacebookSocialCopyPanel state={state} />
-                    )
+                    <Box sx={{ height: '100%', overflow: 'auto' }}>
+                        <Box sx={{ px: 2, pt: 2 }}>
+                            <ShortVideoAgentPostRecordSection
+                                socialPublish={state.socialPublish}
+                                platforms={['facebook']}
+                            />
+                        </Box>
+                        {isVideo2s ? null : state.marketingPostId > 0 ? (
+                            <MarketingFacebookPreviewPanel
+                                postId={state.marketingPostId}
+                                fallbackThumbnail={state.thumbnail}
+                                enabled={facebookEnabled}
+                                onSaved={onSaved}
+                                compact
+                            />
+                        ) : (
+                            <ShortVideoAgentFacebookSocialCopyPanel state={state} />
+                        )}
+                    </Box>
                 ) : null}
                 {activeKey === 'youtube' ? (
                     <ShortVideoAgentYoutubePanel state={state} />

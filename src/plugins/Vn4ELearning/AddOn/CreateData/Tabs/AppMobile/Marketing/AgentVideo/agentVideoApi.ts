@@ -2004,7 +2004,39 @@ export type SocialPublishLink = {
     posted_at?: string;
 };
 
+/** Bản đăng đầy đủ của một nền tảng (scripts/social-publish/save-post.php). */
+export type SocialPublishPost = {
+    status?: 'draft' | 'published' | string;
+    title?: string;
+    description?: string;
+    tags?: string[];
+    hashtags?: string[];
+    first_comment?: string;
+    thumbnail_url?: string;
+    thumbnail_style?: string;
+    playlist?: string;
+    language?: string;
+    category?: string;
+    visibility?: string;
+    scheduled_at?: string;
+    made_for_kids?: boolean;
+    altered_content?: boolean;
+    account?: string;
+    video_file?: string;
+    video_url?: string;
+    duration_sec?: number;
+    kind?: string;
+    related_video?: string;
+    end_text?: string;
+    url?: string;
+    post_id?: string;
+    note?: string;
+    published_at?: string;
+    updated_at?: string;
+};
+
 export type SocialPublishBlock = {
+    posts?: Record<string, SocialPublishPost>;
     links?: Record<string, SocialPublishLink>;
     updated_at?: string;
 };

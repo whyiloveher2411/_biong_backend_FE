@@ -49,6 +49,7 @@ import {
 } from 'helpers/marketingWorkflowPrompts';
 import { WorkflowSection } from './workflowPanelSection';
 import ShortVideoAgentYoutubeTitleList from './ShortVideoAgentYoutubeTitleList';
+import ShortVideoAgentPostRecordSection from './ShortVideoAgentPostRecordSection';
 import ShortVideoAgentYoutubeThumbnailList from './ShortVideoAgentYoutubeThumbnailList';
 import ShortVideoAgentYoutubeThumbnailResourcePicker, {
     parseThumbnailResourceIds,
@@ -1107,6 +1108,12 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
                         Prompt dùng tiêu đề gốc của video để sinh mô tả + chapter + tags + ảnh thu nhỏ. Copy prompt gửi lên chatbot rồi dán kết quả để lưu và phân tích — hoặc bấm “Mở DeepSeek” để mở browser kèm overlay, gửi prompt và lưu nội dung ngay trên overlay.
                     </Typography>
                 </Box>
+
+                <ShortVideoAgentPostRecordSection
+                    socialPublish={state.socialPublish}
+                    platforms={['youtube', 'youtube_shorts']}
+                    savedImages={Object.values(thumbnailImageUrls)}
+                />
 
                 {!shortVideoId ? (
                     <Alert severity="info" sx={{ py: 0.5 }}>
