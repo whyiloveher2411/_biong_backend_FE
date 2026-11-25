@@ -604,8 +604,10 @@ export default function MarketingWorkflowDrawer({
     const renderEngine: 'blender' | 'threejs' = (effectiveChoiceValues['render-engine']
         || workflowOutputs['__render-engine-resolved'] || 'threejs') === 'blender' ? 'blender' : 'threejs';
 
-    /** Dạng video của video-html: story (kể chuyện, mặc định) | showcase (bảng xếp hạng/so sánh một beat, camera tour). */
-    const videoFormat: 'story' | 'showcase' = effectiveChoiceValues['video-format'] === 'showcase' ? 'showcase' : 'story';
+    /** Dạng video của video-html: story (kể chuyện, mặc định) | showcase (bảng xếp hạng/so sánh một beat, camera tour) | explainer (giải thích đồ vật/cơ chế). */
+    const videoFormat: 'story' | 'showcase' | 'explainer' = (['showcase', 'explainer'] as const).find(
+        (format) => format === effectiveChoiceValues['video-format'],
+    ) || 'story';
 
     /** Chế độ voice của video-html: full (mặc định) | mixed | none. */
     const voiceMode: 'full' | 'mixed' | 'none' = (['mixed', 'none'] as const).find(
@@ -1600,12 +1602,18 @@ export default function MarketingWorkflowDrawer({
                                         sx={{'& .MuiToggleButton-root': {textTransform: 'none', fontWeight: 600, px: 1.5, py: 0.5}}}>
                                         <ToggleButton value="story">Kể chuyện (mặc định)</ToggleButton>
                                         <ToggleButton value="showcase">Bảng xếp hạng / so sánh</ToggleButton>
+                                        <ToggleButton value="explainer">Giải thích đồ vật / cơ chế</ToggleButton>
                                     </ToggleButtonGroup>
                                 </Stack>
                             )}
                             {renderEngine === 'threejs' && videoFormat === 'showcase' && (
                                 <Typography variant="caption" sx={{display: 'block', mt: 0.75, color: 'text.secondary'}}>
                                     Showcase: một beat dài chứa cả thế giới (nền toà nhà, bục, vật thể, cờ/logo, nhãn), camera tour lia qua từng vùng để đọc bảng. Thường chọn Không voice; style atlas bị tắt; thời lượng beat = thời lượng brief.
+                                </Typography>
+                            )}
+                            {renderEngine === 'threejs' && videoFormat === 'explainer' && (
+                                <Typography variant="caption" sx={{display: 'block', mt: 0.75, color: 'text.secondary'}}>
+                                    Explainer: toàn lời kể, đồ vật là chủ thể (studio sạch, vỏ trong suốt, hạt khí, mức lỏng, nhãn chỉ bộ phận), hình giải thích gần như liên tục; nhân vật chỉ khi có hành động. Style atlas bị tắt; review kịch bản bằng người nghe lạnh + kiểm chứng kiến thức.
                                 </Typography>
                             )}
                             {videoFormat === 'story' && (
