@@ -2,7 +2,7 @@ export const SHORT_VIDEO_AGENT_VIDEO_URL_PARAM = 'short_video_agent_id';
 export const SHORT_VIDEO_AGENT_TAB_URL_PARAM = 'short_video_agent_tab';
 
 /** `chatbot` / `resources` giữ để tương thích URL cũ — map vào tab Render. */
-export type ShortVideoAgentLeftTab = 'content' | 'script' | 'chatbot' | 'resources' | 'render' | 'facebook' | 'youtube' | 'published';
+export type ShortVideoAgentLeftTab = 'content' | 'script' | 'chatbot' | 'resources' | 'render' | 'facebook' | 'youtube' | 'published' | 'insights';
 
 export function parseShortVideoAgentIdFromSearch(search: string): number | null {
     const normalized = search.startsWith('?') ? search.slice(1) : search;
@@ -31,6 +31,9 @@ export function parseShortVideoAgentTabFromSearch(search: string): ShortVideoAge
     }
     if (raw === 'published') {
         return 'published';
+    }
+    if (raw === 'insights') {
+        return 'insights';
     }
     if (raw === 'render' || raw === 'resources' || raw === 'chatbot') {
         return 'render';
@@ -65,6 +68,8 @@ export function setShortVideoAgentTabInSearchParams(
         next.set(SHORT_VIDEO_AGENT_TAB_URL_PARAM, 'youtube');
     } else if (tab === 'published') {
         next.set(SHORT_VIDEO_AGENT_TAB_URL_PARAM, 'published');
+    } else if (tab === 'insights') {
+        next.set(SHORT_VIDEO_AGENT_TAB_URL_PARAM, 'insights');
     } else if (tab === 'render' || tab === 'resources' || tab === 'chatbot') {
         next.set(SHORT_VIDEO_AGENT_TAB_URL_PARAM, 'render');
     } else {
@@ -84,6 +89,7 @@ export function openShortVideoAgentInSearchParams(
         || tab === 'facebook'
         || tab === 'youtube'
         || tab === 'published'
+        || tab === 'insights'
         || tab === 'chatbot'
         || tab === 'resources'
         || tab === 'render';

@@ -10,11 +10,12 @@ import ShortVideoAgentFacebookSocialCopyPanel from './ShortVideoAgentFacebookSoc
 import ShortVideoAgentYoutubePanel from './ShortVideoAgentYoutubePanel';
 import ShortVideoAgentPublishedLinksPanel from './ShortVideoAgentPublishedLinksPanel';
 import ShortVideoAgentPostRecordSection from './ShortVideoAgentPostRecordSection';
+import ShortVideoAgentInsightsPanel from './ShortVideoAgentInsightsPanel';
 import MarketingFacebookPreviewPanel from '../MarketingFacebookPreviewPanel';
 import { isAgentVideo2sMode } from './agentVideoVisualMode';
 import type { useAgentVideoContent } from './useAgentVideoContent';
 
-type LeftTabKey = 'content' | 'script' | 'render' | 'thumbnail' | 'facebook' | 'youtube' | 'published';
+type LeftTabKey = 'content' | 'script' | 'render' | 'thumbnail' | 'facebook' | 'youtube' | 'published' | 'insights';
 
 const LEFT_TABS: { key: LeftTabKey; label: string }[] = [
     { key: 'content', label: 'Content' },
@@ -24,10 +25,11 @@ const LEFT_TABS: { key: LeftTabKey; label: string }[] = [
     { key: 'facebook', label: 'Facebook' },
     { key: 'youtube', label: 'YouTube' },
     { key: 'published', label: 'Đã đăng' },
+    { key: 'insights', label: 'Số liệu' },
 ];
 
-/** Video 2s chỉ dùng Script & TTS + các tab đăng video (Thumbnail, Facebook, YouTube, Đã đăng) — ẩn Content và Render. */
-const VIDEO_2S_TAB_KEYS: LeftTabKey[] = ['script', 'thumbnail', 'facebook', 'youtube', 'published'];
+/** Video 2s chỉ dùng Script & TTS + các tab đăng video (Thumbnail, Facebook, YouTube, Đã đăng, Số liệu) — ẩn Content và Render. */
+const VIDEO_2S_TAB_KEYS: LeftTabKey[] = ['script', 'thumbnail', 'facebook', 'youtube', 'published', 'insights'];
 
 type AgentVideoState = ReturnType<typeof useAgentVideoContent>;
 
@@ -49,6 +51,9 @@ function resolveInitialTabKey(initialTab?: ShortVideoAgentLeftTab): LeftTabKey {
     }
     if (initialTab === 'published') {
         return 'published';
+    }
+    if (initialTab === 'insights') {
+        return 'insights';
     }
     if (initialTab === 'resources' || initialTab === 'chatbot' || initialTab === 'render') {
         return 'render';
@@ -147,6 +152,9 @@ export default function ShortVideoAgentLeftPanel({
                 ) : null}
                 {activeKey === 'published' ? (
                     <ShortVideoAgentPublishedLinksPanel state={state} />
+                ) : null}
+                {activeKey === 'insights' ? (
+                    <ShortVideoAgentInsightsPanel state={state} />
                 ) : null}
             </Box>
         </Box>

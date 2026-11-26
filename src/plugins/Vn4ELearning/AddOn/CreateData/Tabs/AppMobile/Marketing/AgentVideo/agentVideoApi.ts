@@ -2501,7 +2501,7 @@ function shortVideoBody(shortVideoId: number, extra: Record<string, unknown> = {
     };
 }
 
-async function postJson(path: string, body: Record<string, unknown>): Promise<JsonResponse> {
+export async function postJson(path: string, body: Record<string, unknown>): Promise<JsonResponse> {
     const token = getAccessToken() ?? '';
     const response = await fetch(
         convertToURL(getAdminApiPrefix(), path),

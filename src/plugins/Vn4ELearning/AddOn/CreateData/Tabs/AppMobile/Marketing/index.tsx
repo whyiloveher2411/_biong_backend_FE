@@ -62,6 +62,7 @@ import MarketingShortVideoAvatarDrawer from './MarketingShortVideoAvatarDrawer';
 import MarketingGetScriptDrawer from './MarketingGetScriptDrawer';
 import MarketingCheckMailDrawer from './MarketingCheckMailDrawer';
 import MarketingCompetitorChannelDrawer from './MarketingCompetitorChannelDrawer';
+import MarketingChannelInsightsDrawer from './ChannelInsights/MarketingChannelInsightsDrawer';
 import MarketingImageToWhiteboardDrawer from './MarketingImageToWhiteboardDrawer';
 import WhiteboardTransitionManagerDrawer from './WhiteboardTransitionManagerDrawer';
 import AudioScriptStyleManagerDrawer from './AudioScriptStyleManagerDrawer';
@@ -489,6 +490,7 @@ export default function Marketing({ data }: { data: CreatePostTypeData }) {
     const [openCategoriesDrawer, setOpenCategoriesDrawer] = useState(false);
     const [openNewsPushConfigDrawer, setOpenNewsPushConfigDrawer] = useState(false);
     const [openGithubTrendingDrawer, setOpenGithubTrendingDrawer] = useState(false);
+    const [openChannelInsights, setOpenChannelInsights] = useState(false);
     const [openCharacterLibrary, setOpenCharacterLibrary] = useState(false);
     const [openSeriesCast, setOpenSeriesCast] = useState(false);
     const [openAvatarDrawer, setOpenAvatarDrawer] = useState(false);
@@ -915,6 +917,7 @@ export default function Marketing({ data }: { data: CreatePostTypeData }) {
                                 </Button>
                                 <Button size="small" variant="outlined" onClick={()=>setOpenCharacterLibrary(true)} sx={{textTransform:'none',flexShrink:0}}>Nhân vật 3D & tủ đồ</Button>
                                 <Button size="small" variant="outlined" onClick={()=>setOpenSeriesCast(true)} sx={{textTransform:'none',flexShrink:0}}>Dàn nhân vật cố định</Button>
+                                <Button size="small" variant="outlined" onClick={()=>setOpenChannelInsights(true)} sx={{textTransform:'none',flexShrink:0}}>Số liệu kênh</Button>
                                 <Button
                                     size="small"
                                     variant="outlined"
@@ -1252,6 +1255,11 @@ export default function Marketing({ data }: { data: CreatePostTypeData }) {
             <MarketingCompetitorChannelDrawer
                 open={openCompetitorChannelDrawer}
                 onClose={() => setOpenCompetitorChannelDrawer(false)}
+            />
+
+            <MarketingChannelInsightsDrawer
+                open={openChannelInsights}
+                onClose={() => setOpenChannelInsights(false)}
             />
 
             <MarketingImageToWhiteboardDrawer
