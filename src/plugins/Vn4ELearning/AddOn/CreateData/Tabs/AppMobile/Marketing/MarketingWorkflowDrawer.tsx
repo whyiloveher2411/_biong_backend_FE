@@ -689,6 +689,10 @@ export default function MarketingWorkflowDrawer({
     const inkLine: 'detail' | 'thick' | 'none' = INK_LINES.find((v) => v === effectiveChoiceValues['ink-line'])
         || INK_LINES.find((v) => v === workflowOutputs['__ink-line-resolved']) || 'detail';
     const inkLineLegacy = !effectiveChoiceValues['ink-line'] && workflowOutputs['__ink-line-source'] === 'legacy';
+    /** Look cả video (`video-look`, retro 151 R9, 27/11/2026): default (quy tắc hiện tại) | cinematic (điện ảnh, chỉ khi chọn). */
+    const VIDEO_LOOKS = ['default', 'cinematic'] as const;
+    const videoLook: 'default' | 'cinematic' = VIDEO_LOOKS.find((v) => v === effectiveChoiceValues['video-look'])
+        || VIDEO_LOOKS.find((v) => v === workflowOutputs['__video-look-resolved']) || 'default';
     const castStyle = !atlasStyle && castStyles[castStyleChoice] ? castStyleChoice : '';
 
     /** Chọn nhóm prompt (Business/History…) → lưu vào workflow outputs, refresh vẫn giữ. */
@@ -1808,6 +1812,27 @@ export default function MarketingWorkflowDrawer({
                                         : inkLine === 'detail' ? 'Áp dụng cho mọi style nhân vật: viền bao 2 px quanh mọi vật và nhân vật + nét chi tiết 1,1 px ở cạnh, mép, chỗ tiếp xúc; tán lá dùng màu lá sẫm. '
                                             : inkLine === 'thick' ? 'Viền dày 6,5 px, chỉ đường bao từng vật và nhân vật. ' : 'Không vẽ viền (chỉ khi chọn; mặc định luôn có viền). '}
                                     Đổi giữa chừng cần dựng lại HTML các beat.
+                                </Typography>
+                            )}
+                            {renderEngine === 'threejs' && !atlasStyle && videoFormat !== 'showcase' && (
+                                <Stack direction={{xs: 'column', sm: 'row'}} alignItems={{xs: 'flex-start', sm: 'center'}} gap={1} sx={{mt: 1}}>
+                                    <Typography variant="subtitle2" sx={{minWidth: 96}}>Look video</Typography>
+                                    <ToggleButtonGroup exclusive size="small" color="primary"
+                                        value={videoLook}
+                                        onChange={(_, value) => { if (value) void handleSelectChoice('video-look', value); }}
+                                        disabled={Boolean(savingChoice)} aria-label="Look video"
+                                        sx={{'& .MuiToggleButton-root': {textTransform: 'none', fontWeight: 600, px: 1.5, py: 0.5}}}>
+                                        <ToggleButton value="default">Mặc định</ToggleButton>
+                                        <ToggleButton value="cinematic">Điện ảnh</ToggleButton>
+                                    </ToggleButtonGroup>
+                                </Stack>
+                            )}
+                            {renderEngine === 'threejs' && !atlasStyle && videoFormat !== 'showcase' && (
+                                <Typography variant="caption" sx={{display: 'block', mt: 0.75, color: 'text.secondary'}}>
+                                    {videoLook === 'cinematic'
+                                        ? 'Điện ảnh: ánh sáng low-key có nguồn sáng thật, 1–3 hero shot dài có cú máy tiết lộ, nét nông, grain/LUT/haze, look-dev ánh sáng mỗi bối cảnh, hero prop chi tiết cho shot cận. Nên chọn nhân vật Designer + Không viền. '
+                                        : 'Mặc định: ánh sáng sáng high-key, shot ngắn 0,8–2 s (giữ chân tốt trên Shorts). '}
+                                    Chọn trước khi viết visual; đổi giữa chừng cần viết lại visual và HTML các beat.
                                 </Typography>
                             )}
                             {renderEngine === 'threejs' && videoFormat === 'story' && atlasStyle && (
