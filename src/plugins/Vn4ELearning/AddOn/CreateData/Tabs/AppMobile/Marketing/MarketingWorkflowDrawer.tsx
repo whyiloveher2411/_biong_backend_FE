@@ -614,6 +614,9 @@ export default function MarketingWorkflowDrawer({
         || (workflowOutputs['__explainer-arc-resolved'] === 'anatomy' ? 'anatomy' : 'build_up');
     const explainerLook: 'toon' | 'real' = (['toon', 'real'] as const).find((look) => look === effectiveChoiceValues['explainer-look'])
         || (workflowOutputs['__explainer-look-resolved'] === 'real' ? 'real' : (workflowOutputs['__explainer-look-resolved'] === 'toon' ? 'toon' : (explainerArc === 'anatomy' ? 'real' : 'toon')));
+    /** Nguồn dựng dần (27/11/2026, sau video 156): object (chỉ dựng dần đồ vật, mặc định) | history (từ nguyên thuỷ qua lịch sử). */
+    const explainerOrigin: 'object' | 'history' = (['object', 'history'] as const).find((origin) => origin === effectiveChoiceValues['explainer-origin'])
+        || (workflowOutputs['__explainer-origin-resolved'] === 'history' ? 'history' : 'object');
 
     /** Chế độ voice của video-html: full (mặc định) | mixed | none. */
     const voiceMode: 'full' | 'mixed' | 'none' = (['mixed', 'none'] as const).find(
@@ -1635,6 +1638,19 @@ export default function MarketingWorkflowDrawer({
                                             <ToggleButton value="anatomy">Giải phẫu đồ vật có sẵn</ToggleButton>
                                         </ToggleButtonGroup>
                                     </Stack>
+                                    {explainerArc === 'build_up' && (
+                                        <Stack direction={{xs: 'column', sm: 'row'}} alignItems={{xs: 'flex-start', sm: 'center'}} gap={1} sx={{mt: 1}}>
+                                            <Typography variant="subtitle2" sx={{minWidth: 96}}>Dựng từ</Typography>
+                                            <ToggleButtonGroup exclusive size="small" color="primary"
+                                                value={explainerOrigin}
+                                                onChange={(_, value) => { if (value) void handleSelectChoice('explainer-origin', value); }}
+                                                disabled={Boolean(savingChoice)} aria-label="Nguồn dựng dần"
+                                                sx={{'& .MuiToggleButton-root': {textTransform: 'none', fontWeight: 600, px: 1.5, py: 0.5}}}>
+                                                <ToggleButton value="object">Chỉ dựng dần đồ vật (mặc định)</ToggleButton>
+                                                <ToggleButton value="history">Từ nguyên thuỷ qua lịch sử</ToggleButton>
+                                            </ToggleButtonGroup>
+                                        </Stack>
+                                    )}
                                     <Stack direction={{xs: 'column', sm: 'row'}} alignItems={{xs: 'flex-start', sm: 'center'}} gap={1} sx={{mt: 1}}>
                                         <Typography variant="subtitle2" sx={{minWidth: 96}}>Look</Typography>
                                         <ToggleButtonGroup exclusive size="small" color="primary"
