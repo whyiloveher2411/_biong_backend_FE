@@ -67,6 +67,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--keep-temp", action="store_true")
     # Font cho câu caption (voice-mode mixed/none) — mặc định dùng --font.
     parser.add_argument("--caption-font", default="")
+    # Kiểu chữ: strip = dải karaoke cả câu (mặc định); pop = 1–3 từ to, hiện dần theo giọng, tên bộ phận / số đổi màu
+    # (explainer dựng dần, 27/11/2026). --keywords: JSON list cụm từ luôn tô màu (ngoài cụm sau "đó chính là" và số).
+    parser.add_argument("--style", choices=["strip", "pop"], default="strip")
+    parser.add_argument("--keywords", default="")
     return parser.parse_args()
 
 
@@ -287,6 +291,128 @@ def blocks_from_beats(beats: list[dict]) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
+# Pop captions (style=pop): 1–3 words at a time, revealed with the voice, keywords coloured
+# ---------------------------------------------------------------------------
+
+POP_MAX_WORDS = 3
+POP_MAX_CHARS = 16
+POP_GAP_BREAK = 0.3
+POP_HOLD = 0.6
+POP_FILL = (255, 255, 255, 255)
+POP_KEY = (64, 170, 255, 255)
+POP_STROKE = (16, 20, 28, 255)
+POP_TRAIL_PUNCT = ",.;:…"
+# Cụm mở tên bộ phận: từ sau cụm này tới dấu câu (tối đa 5 từ) được tô màu.
+POP_NAME_TRIGGERS = [
+    ["đó", "chính", "là"], ["đây", "chính", "là"], ["chính", "là"], ["đó", "là"], ["gọi", "là"],
+    ["that's", "the"], ["that", "is", "the"], ["this", "is", "the"], ["it's", "called"], ["called"], ["that's"],
+]
+
+
+def keyword_flags(tokens: list[str], extra: list[str]) -> list[bool]:
+    norm = [normalize_token(t) for t in tokens]
+    raw = [str(t).lower() for t in tokens]
+    flags = [bool(re.search(r"\d", t)) for t in tokens]
+    i = 0
+    while i < len(tokens):
+        hit = None
+        for trig in POP_NAME_TRIGGERS:
+            n = len(trig)
+            if [normalize_token(x) for x in raw[i:i + n]] == [normalize_token(x) for x in trig]:
+                hit = n
+                break
+        if hit:
+            j = i + hit
+            k = 0
+            while j < len(tokens) and k < 5:
+                flags[j] = True
+                k += 1
+                if tokens[j][-1:] in ".!?,;:…":
+                    break
+                j += 1
+            i = j + 1
+            continue
+        i += 1
+    for phrase in extra:
+        words = [normalize_token(w) for w in str(phrase).split() if normalize_token(w)]
+        if not words:
+            continue
+        for start in range(0, len(norm) - len(words) + 1):
+            if norm[start:start + len(words)] == words:
+                for j in range(start, start + len(words)):
+                    flags[j] = True
+    return flags
+
+
+def pop_blocks(blocks: list[dict], extra_keywords: list[str]) -> list[dict]:
+    out: list[dict] = []
+    for block in blocks:
+        if block.get("style") == "caption" or not block.get("tokens"):
+            out.append(block)
+            continue
+        toks = block["tokens"]
+        flags = keyword_flags([t["text"] for t in toks], extra_keywords)
+        abs_t = [(block["start"] + t["relStart"], block["start"] + t["relEnd"], t["text"], flags[i]) for i, t in enumerate(toks)]
+        groups: list[list[tuple]] = []
+        cur: list[tuple] = []
+        for i, tok in enumerate(abs_t):
+            if cur:
+                prev = cur[-1]
+                chars = sum(len(x[2]) for x in cur) + len(tok[2])
+                if len(cur) >= POP_MAX_WORDS or chars > POP_MAX_CHARS or prev[2][-1:] in ".!?,;:…" or tok[0] - prev[1] >= POP_GAP_BREAK:
+                    groups.append(cur)
+                    cur = []
+            cur.append(tok)
+        if cur:
+            groups.append(cur)
+        block_end = block["start"] + block["dur"]
+        for gi, group in enumerate(groups):
+            g_start = group[0][0]
+            nxt = groups[gi + 1][0][0] if gi + 1 < len(groups) else block_end
+            g_end = max(g_start + 0.05, min(nxt, max(group[-1][1], group[-1][0]) + POP_HOLD, block_end))
+            tokens = []
+            for wi, (ws, we, text, kw) in enumerate(group):
+                shown = text.rstrip(POP_TRAIL_PUNCT) or text
+                rel_s = 0.0 if wi == 0 else max(0.0, ws - g_start)
+                tokens.append({"text": shown, "relStart": rel_s, "relEnd": max(rel_s, min(g_end - g_start, we - g_start)), "kw": kw})
+            out.append({"start": g_start, "end": g_end, "dur": g_end - g_start, "tokens": tokens, "style": "pop"})
+    return out
+
+
+def render_pop_state(path, block, layout, active, args, font, band_h):
+    """Pop caption: words appear one by one (all after the last one), white with a thick dark edge, keywords coloured."""
+    img = Image.new("RGBA", (args.width, band_h), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    size = getattr(font, "size", args.font_size)
+    line_height = int(round(size * 1.15))
+    space = draw.textlength(" ", font=font)
+    stroke = max(3, size // 9)
+    # Only the words already spoken are drawn, and each line is centred on what is visible (no left-hanging half line).
+    cursor = 0
+    shown_lines = []
+    for line in layout["lines"]:
+        vis = []
+        for token in line:
+            if active < 0 or cursor <= active:
+                vis.append(token)
+            cursor += 1
+        if vis:
+            shown_lines.append(vis)
+    block_h = line_height * len(layout["lines"])
+    top = max(0, (band_h - block_h) // 2)
+    for li, line in enumerate(shown_lines):
+        width = sum(draw.textlength(t["text"], font=font) for t in line) + space * (len(line) - 1)
+        x = (args.width - width) / 2
+        y = top + li * line_height
+        for token in line:
+            fill = POP_KEY if token.get("kw") else POP_FILL
+            draw.text((x + 2, y + 5), token["text"], font=font, fill=(0, 0, 0, 120), stroke_width=stroke, stroke_fill=(0, 0, 0, 120))
+            draw.text((x, y), token["text"], font=font, fill=fill, stroke_width=stroke, stroke_fill=POP_STROKE)
+            x += draw.textlength(token["text"], font=font) + space
+    img.save(path, "PNG")
+
+
+# ---------------------------------------------------------------------------
 # Layout / render
 # ---------------------------------------------------------------------------
 
@@ -321,7 +447,7 @@ def compute_layouts(draw, blocks, font, args, caption_font=None):
     for block in blocks:
         bfont = font_for(block, font, caption_font)
         space = draw.textlength(" ", font=bfont)
-        gap = 0 if block.get("style") == "caption" else WORD_GAP
+        gap = 0 if block.get("style") in ("caption", "pop") else WORD_GAP
         lines = wrap_lines(draw, block["tokens"], bfont, max_line_width, gap)
         max_lines = max(max_lines, len(lines))
         widths = []
@@ -378,6 +504,9 @@ def render_state(path, block, layout, active, args, font, band_h, empty=False, c
         return
     if block.get("style") == "caption":
         render_caption_state(path, layout, args, font_for(block, font, caption_font), band_h)
+        return
+    if block.get("style") == "pop":
+        render_pop_state(path, block, layout, active, args, font, band_h)
         return
     draw = ImageDraw.Draw(img)
     line_height = int(round(args.font_size * LINE_HEIGHT_RATIO))
@@ -470,6 +599,17 @@ def main() -> int:
             print(json.dumps({"success": False, "message": "beats rỗng/không có content"}))
             return 2
         duration = max(b["end"] for b in blocks)
+
+    if args.style == "pop":
+        extra = []
+        if args.keywords:
+            try:
+                loaded = load_json(os.path.abspath(args.keywords)) if os.path.isfile(args.keywords) else json.loads(args.keywords)
+                extra = [str(x) for x in (loaded or []) if str(x).strip()]
+            except Exception:  # pragma: no cover
+                extra = []
+        blocks = pop_blocks(blocks, extra)
+        args.max_line_width = int(args.width * 0.86)
 
     temp_dir = tempfile.mkdtemp(prefix="karaoke-strip-")
     empty_png = os.path.join(temp_dir, "empty.png")

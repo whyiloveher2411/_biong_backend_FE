@@ -609,6 +609,12 @@ export default function MarketingWorkflowDrawer({
         (format) => format === effectiveChoiceValues['video-format'],
     ) || 'story';
 
+    /** Khung kịch bản explainer (27/11/2026): build_up (dựng dần, mặc định) | anatomy (giải phẫu đồ vật có sẵn); look toon | real. */
+    const explainerArc: 'build_up' | 'anatomy' = (['build_up', 'anatomy'] as const).find((arc) => arc === effectiveChoiceValues['explainer-arc'])
+        || (workflowOutputs['__explainer-arc-resolved'] === 'anatomy' ? 'anatomy' : 'build_up');
+    const explainerLook: 'toon' | 'real' = (['toon', 'real'] as const).find((look) => look === effectiveChoiceValues['explainer-look'])
+        || (workflowOutputs['__explainer-look-resolved'] === 'real' ? 'real' : (workflowOutputs['__explainer-look-resolved'] === 'toon' ? 'toon' : (explainerArc === 'anatomy' ? 'real' : 'toon')));
+
     /** Chế độ voice của video-html: full (mặc định) | mixed | none. */
     const voiceMode: 'full' | 'mixed' | 'none' = (['mixed', 'none'] as const).find(
         (mode) => mode === effectiveChoiceValues['voice-mode'],
@@ -1613,9 +1619,35 @@ export default function MarketingWorkflowDrawer({
                                 </Typography>
                             )}
                             {renderEngine === 'threejs' && videoFormat === 'explainer' && (
-                                <Typography variant="caption" sx={{display: 'block', mt: 0.75, color: 'text.secondary'}}>
-                                    Explainer: toàn lời kể, đồ vật là chủ thể (studio sạch, vỏ trong suốt, hạt khí, mức lỏng, nhãn chỉ bộ phận), hình giải thích gần như liên tục; nhân vật chỉ khi có hành động. Style atlas bị tắt; review kịch bản bằng người nghe lạnh + kiểm chứng kiến thức.
-                                </Typography>
+                                <>
+                                    <Stack direction={{xs: 'column', sm: 'row'}} alignItems={{xs: 'flex-start', sm: 'center'}} gap={1} sx={{mt: 1}}>
+                                        <Typography variant="subtitle2" sx={{minWidth: 96}}>Khung kịch bản</Typography>
+                                        <ToggleButtonGroup exclusive size="small" color="primary"
+                                            value={explainerArc}
+                                            onChange={(_, value) => { if (value) void handleSelectChoice('explainer-arc', value); }}
+                                            disabled={Boolean(savingChoice)} aria-label="Khung kịch bản explainer"
+                                            sx={{'& .MuiToggleButton-root': {textTransform: 'none', fontWeight: 600, px: 1.5, py: 0.5}}}>
+                                            <ToggleButton value="build_up">Dựng dần (mặc định)</ToggleButton>
+                                            <ToggleButton value="anatomy">Giải phẫu đồ vật có sẵn</ToggleButton>
+                                        </ToggleButtonGroup>
+                                    </Stack>
+                                    <Stack direction={{xs: 'column', sm: 'row'}} alignItems={{xs: 'flex-start', sm: 'center'}} gap={1} sx={{mt: 1}}>
+                                        <Typography variant="subtitle2" sx={{minWidth: 96}}>Look</Typography>
+                                        <ToggleButtonGroup exclusive size="small" color="primary"
+                                            value={explainerLook}
+                                            onChange={(_, value) => { if (value) void handleSelectChoice('explainer-look', value); }}
+                                            disabled={Boolean(savingChoice)} aria-label="Look explainer"
+                                            sx={{'& .MuiToggleButton-root': {textTransform: 'none', fontWeight: 600, px: 1.5, py: 0.5}}}>
+                                            <ToggleButton value="toon">Hoạt hình phẳng có viền</ToggleButton>
+                                            <ToggleButton value="real">Chân thực (PBR)</ToggleButton>
+                                        </ToggleButtonGroup>
+                                    </Stack>
+                                    <Typography variant="caption" sx={{display: 'block', mt: 0.75, color: 'text.secondary'}}>
+                                        {explainerArc === 'build_up'
+                                            ? 'Dựng dần: mở bằng bản thô nhất ("nếu bạn… là bạn đã có…"), mỗi vòng "nhưng [sự cố] → vì vậy bạn [thêm một bộ phận] → đó chính là [tên]"; một mô hình lớn dần qua các beat ở một công trường chung; chữ lời kể hiện 1–3 từ to ở phía trên khung, tên bộ phận đổi màu. Toàn lời kể, style atlas tắt; review kịch bản bằng người nghe lạnh + kiểm chứng kiến thức.'
+                                            : 'Giải phẫu: hook câu hỏi → cơ chế từng lớp của đồ vật hoàn chỉnh (studio sạch, vỏ trong suốt, hạt khí, mức lỏng, nhãn chỉ bộ phận) → hiểu lầm → việc cần làm; karaoke ở đáy. Style atlas tắt; review kịch bản bằng người nghe lạnh + kiểm chứng kiến thức.'}
+                                    </Typography>
+                                </>
                             )}
                             {videoFormat === 'story' && (
                                 <Stack direction={{xs: 'column', sm: 'row'}} alignItems={{xs: 'flex-start', sm: 'center'}} gap={1} sx={{mt: 1}}>
