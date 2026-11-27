@@ -678,9 +678,10 @@ export default function MarketingWorkflowDrawer({
         : CAST_STYLE_FALLBACK);
     const [castPreviewOpen, setCastPreviewOpen] = React.useState(false);
     const castStyleChoice = String(effectiveChoiceValues['character-style'] || workflowOutputs['__character-style-resolved'] || '');
-    /** Kiểu viền ink-toon (`ink-line`): detail (mảnh + chi tiết, mặc định video mới) | thick (viền dày cũ). */
-    const inkLine: 'detail' | 'thick' = (['detail', 'thick'] as const).find((v) => v === effectiveChoiceValues['ink-line'])
-        || (['detail', 'thick'] as const).find((v) => v === workflowOutputs['__ink-line-resolved']) || 'detail';
+    /** Kiểu viền của video (`ink-line`, mọi style nhân vật từ 27/11/2026): detail (mảnh + chi tiết, mặc định) | thick (viền dày) | none (không viền, chỉ khi chọn). */
+    const INK_LINES = ['detail', 'thick', 'none'] as const;
+    const inkLine: 'detail' | 'thick' | 'none' = INK_LINES.find((v) => v === effectiveChoiceValues['ink-line'])
+        || INK_LINES.find((v) => v === workflowOutputs['__ink-line-resolved']) || 'detail';
     const inkLineLegacy = !effectiveChoiceValues['ink-line'] && workflowOutputs['__ink-line-source'] === 'legacy';
     const castStyle = !atlasStyle && castStyles[castStyleChoice] ? castStyleChoice : '';
 
@@ -1754,7 +1755,7 @@ export default function MarketingWorkflowDrawer({
                                 </Typography>
                             )}
                             <CastDesignPreviewDialog open={castPreviewOpen} onClose={() => setCastPreviewOpen(false)} shortVideoId={Number(shortVideoId || 0)} />
-                            {renderEngine === 'threejs' && videoFormat === 'story' && !atlasStyle && castStyle === 'ink-toon' && (
+                            {renderEngine === 'threejs' && !atlasStyle && (
                                 <Stack direction={{xs: 'column', sm: 'row'}} alignItems={{xs: 'flex-start', sm: 'center'}} gap={1} sx={{mt: 1}}>
                                     <Typography variant="subtitle2" sx={{minWidth: 96}}>Kiểu viền</Typography>
                                     <ToggleButtonGroup exclusive size="small" color="primary"
@@ -1764,14 +1765,16 @@ export default function MarketingWorkflowDrawer({
                                         sx={{'& .MuiToggleButton-root': {textTransform: 'none', fontWeight: 600, px: 1.5, py: 0.5}}}>
                                         <ToggleButton value="detail">Viền mảnh + chi tiết (mặc định)</ToggleButton>
                                         <ToggleButton value="thick">Viền dày</ToggleButton>
+                                        <ToggleButton value="none">Không viền</ToggleButton>
                                     </ToggleButtonGroup>
                                 </Stack>
                             )}
-                            {renderEngine === 'threejs' && videoFormat === 'story' && !atlasStyle && castStyle === 'ink-toon' && (
+                            {renderEngine === 'threejs' && !atlasStyle && (
                                 <Typography variant="caption" sx={{display: 'block', mt: 0.75, color: 'text.secondary'}}>
                                     {inkLineLegacy
-                                        ? 'Video cũ chưa chọn: giữ viền dày 6,5 px. '
-                                        : inkLine === 'detail' ? 'Viền bao 2 px + nét chi tiết 1,1 px ở cạnh, mép, chỗ tiếp xúc; tán lá dùng màu lá sẫm. ' : 'Viền dày 6,5 px, chỉ đường bao từng vật. '}
+                                        ? (castStyle === 'ink-toon' ? 'Video cũ chưa chọn: giữ viền dày 6,5 px. ' : 'Video tạo trước 27/11/2026 chưa chọn: không viền (như lúc dựng). ')
+                                        : inkLine === 'detail' ? 'Áp dụng cho mọi style nhân vật: viền bao 2 px quanh mọi vật và nhân vật + nét chi tiết 1,1 px ở cạnh, mép, chỗ tiếp xúc; tán lá dùng màu lá sẫm. '
+                                            : inkLine === 'thick' ? 'Viền dày 6,5 px, chỉ đường bao từng vật và nhân vật. ' : 'Không vẽ viền (chỉ khi chọn; mặc định luôn có viền). '}
                                     Đổi giữa chừng cần dựng lại HTML các beat.
                                 </Typography>
                             )}
