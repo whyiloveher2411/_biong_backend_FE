@@ -222,7 +222,6 @@ export default function CharacterDesignDialog({shortVideoId,asset,busy,onClose,o
                         </Stack>}
                         {(slot==='brows'||slot==='eyes'||slot==='nose'||slot==='hair'||slot==='top'||slot==='bottom')&&<Stack direction={{xs:'column',md:'row'}} gap={3} sx={{px:1,mb:2,flexWrap:slot==='nose'?'wrap':'nowrap'}}>
                             {(slot==='hair'?[
-                                {key:'hairStrands',label:'Độ tơi sợi tóc',id:'hair-strands-label',min:0,max:1,step:.01,value:.7,left:'Khối trơn',right:'Nhiều sợi'},
                                 {key:'hairWind',label:'Độ bay của tóc khi có gió',id:'hair-wind-label',min:0,max:1.5,step:.01,value:.5,left:'Đứng yên',right:'Bay nhiều'},
                             ]:slot==='top'||slot==='bottom'?[
                                 {key:'clothWrinkle',label:'Nếp nhăn vải (áo và quần)',id:'cloth-wrinkle-label',min:0,max:1,step:.01,value:.6,left:'Phẳng',right:'Nhiều nếp'},
