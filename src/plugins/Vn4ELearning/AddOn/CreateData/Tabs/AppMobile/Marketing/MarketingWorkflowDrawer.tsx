@@ -604,8 +604,9 @@ export default function MarketingWorkflowDrawer({
     const renderEngine: 'blender' | 'threejs' = (effectiveChoiceValues['render-engine']
         || workflowOutputs['__render-engine-resolved'] || 'threejs') === 'blender' ? 'blender' : 'threejs';
 
-    /** Dạng video của video-html: story (kể chuyện, mặc định) | showcase (bảng xếp hạng/so sánh một beat, camera tour) | explainer (giải thích đồ vật/cơ chế). */
-    const videoFormat: 'story' | 'showcase' | 'explainer' = (['showcase', 'explainer'] as const).find(
+    /** Dạng video của video-html: story (kể chuyện, mặc định) | showcase (bảng xếp hạng/so sánh một beat, camera tour) | explainer (giải thích đồ vật/cơ chế)
+     *  | watch_talk (xem & bàn luận, 29/11/2026: nhân vật xem media thật trên tivi/biển quảng cáo/máy chiếu rồi tranh luận). */
+    const videoFormat: 'story' | 'showcase' | 'explainer' | 'watch_talk' = (['showcase', 'explainer', 'watch_talk'] as const).find(
         (format) => format === effectiveChoiceValues['video-format'],
     ) || 'story';
 
@@ -630,7 +631,9 @@ export default function MarketingWorkflowDrawer({
      */
     const narrativeStyle: 'narration' | 'mixed' | 'dialogue-heavy' | 'dialogue' = videoFormat === 'story'
         ? ((['narration', 'dialogue-heavy', 'dialogue'] as const).find((style) => style === effectiveChoiceValues['narrative-style']) || 'mixed')
-        : 'mixed';
+        : videoFormat === 'watch_talk'   // xem & bàn luận: nhân vật gánh video (kể ít + thoại nhiều mặc định, hoặc toàn thoại)
+            ? (effectiveChoiceValues['narrative-style'] === 'dialogue' ? 'dialogue' : 'dialogue-heavy')
+            : 'mixed';
 
     /**
      * Mức biểu cảm của lời thoại nhân vật (`dialogue-emotion`): low | medium | high. Chỉ khi kịch bản có thoại (khác narration).
@@ -1617,12 +1620,19 @@ export default function MarketingWorkflowDrawer({
                                         <ToggleButton value="story">Kể chuyện (mặc định)</ToggleButton>
                                         <ToggleButton value="showcase">Bảng xếp hạng / so sánh</ToggleButton>
                                         <ToggleButton value="explainer">Giải thích đồ vật / cơ chế</ToggleButton>
+                                        <ToggleButton value="watch_talk">Xem & bàn luận</ToggleButton>
                                     </ToggleButtonGroup>
                                 </Stack>
                             )}
                             {renderEngine === 'threejs' && videoFormat === 'showcase' && (
                                 <Typography variant="caption" sx={{display: 'block', mt: 0.75, color: 'text.secondary'}}>
                                     Showcase: một beat dài chứa cả thế giới (nền toà nhà, bục, vật thể, cờ/logo, nhãn), camera tour lia qua từng vùng để đọc bảng. Thường chọn Không voice; style atlas bị tắt; thời lượng beat = thời lượng brief.
+                                </Typography>
+                            )}
+                            {renderEngine === 'threejs' && videoFormat === 'watch_talk' && (
+                                <Typography variant="caption" sx={{display: 'block', mt: 0.75, color: 'text.secondary'}}>
+                                    Xem & bàn luận: 2–3 nhân vật xem một nội dung có thật (trend, review, tin công nghệ…) trên tivi, biển quảng cáo, máy chiếu hoặc điện thoại, bấm dừng rồi tranh luận; lời thoại là chính, đổi chỗ và có hành động phụ đời thực (bấm remote, uống nước, đứng dậy chỉ màn hình).
+                                    {' '}Ảnh/clip chiếu trên màn hình nạp vào thư viện media kèm nguồn + giấy phép (media-library.mjs), có dòng ghi nguồn trên màn hình; không dùng tiếng gốc của clip. Vẫn chọn bối cảnh, nhân vật, style nhân vật như video kể chuyện.
                                 </Typography>
                             )}
                             {renderEngine === 'threejs' && videoFormat === 'explainer' && (
@@ -1669,7 +1679,7 @@ export default function MarketingWorkflowDrawer({
                                     </Typography>
                                 </>
                             )}
-                            {videoFormat === 'story' && (
+                            {(videoFormat === 'story' || videoFormat === 'watch_talk') && (
                                 <Stack direction={{xs: 'column', sm: 'row'}} alignItems={{xs: 'flex-start', sm: 'center'}} gap={1} sx={{mt: 1}}>
                                     <Typography variant="subtitle2" sx={{minWidth: 96}}>Lời thoại</Typography>
                                     <ToggleButtonGroup exclusive size="small" color="primary"
@@ -1677,14 +1687,14 @@ export default function MarketingWorkflowDrawer({
                                         onChange={(_, value) => { if (value) void handleSelectChoice('narrative-style', value); }}
                                         disabled={Boolean(savingChoice)} aria-label="Lời thoại"
                                         sx={{'& .MuiToggleButton-root': {textTransform: 'none', fontWeight: 600, px: 1.5, py: 0.5}}}>
-                                        <ToggleButton value="narration">Toàn lời kể</ToggleButton>
-                                        <ToggleButton value="mixed">Kể nhiều + thoại (mặc định)</ToggleButton>
-                                        <ToggleButton value="dialogue-heavy">Kể ít + thoại nhiều</ToggleButton>
+                                        <ToggleButton value="narration" disabled={videoFormat === 'watch_talk'}>Toàn lời kể</ToggleButton>
+                                        <ToggleButton value="mixed" disabled={videoFormat === 'watch_talk'}>{videoFormat === 'watch_talk' ? 'Kể nhiều + thoại' : 'Kể nhiều + thoại (mặc định)'}</ToggleButton>
+                                        <ToggleButton value="dialogue-heavy">{videoFormat === 'watch_talk' ? 'Kể ít + thoại nhiều (mặc định)' : 'Kể ít + thoại nhiều'}</ToggleButton>
                                         <ToggleButton value="dialogue" disabled={voiceMode === 'mixed'}>Toàn thoại</ToggleButton>
                                     </ToggleButtonGroup>
                                 </Stack>
                             )}
-                            {videoFormat === 'story' && narrativeStyle !== 'mixed' && (
+                            {(videoFormat === 'story' || videoFormat === 'watch_talk') && narrativeStyle !== 'mixed' && (
                                 <Typography variant="caption" sx={{display: 'block', mt: 0.75, color: 'text.secondary'}}>
                                     {narrativeStyle === 'narration'
                                         ? 'Toàn lời kể: một giọng dẫn truyện kể cả video, nhân vật chỉ diễn (không mở miệng nói, không bong bóng thoại).'
@@ -1694,7 +1704,7 @@ export default function MarketingWorkflowDrawer({
                                     {' '}Chọn trước khi viết kịch bản; kịch bản sai kiểu lời sẽ bị từ chối khi lưu.
                                 </Typography>
                             )}
-                            {videoFormat === 'story' && narrativeStyle !== 'narration' && (
+                            {(videoFormat === 'story' || videoFormat === 'watch_talk') && narrativeStyle !== 'narration' && (
                                 <Stack direction={{xs: 'column', sm: 'row'}} alignItems={{xs: 'flex-start', sm: 'center'}} gap={1} sx={{mt: 1}}>
                                     <Typography variant="subtitle2" sx={{minWidth: 96}}>Biểu cảm thoại</Typography>
                                     <ToggleButtonGroup exclusive size="small" color="primary"
@@ -1708,7 +1718,7 @@ export default function MarketingWorkflowDrawer({
                                     </ToggleButtonGroup>
                                 </Stack>
                             )}
-                            {videoFormat === 'story' && narrativeStyle !== 'narration' && (
+                            {(videoFormat === 'story' || videoFormat === 'watch_talk') && narrativeStyle !== 'narration' && (
                                 <Typography variant="caption" sx={{display: 'block', mt: 0.75, color: 'text.secondary'}}>
                                     {dialogueEmotionLegacy
                                         ? 'Video cũ chưa chọn mức biểu cảm: giữ cách viết thoại cũ cho tới khi chọn.'
@@ -1783,7 +1793,7 @@ export default function MarketingWorkflowDrawer({
                                         onChange={(id) => { void handleSelectChoice('atlas-style', id); }} />
                                 </Stack>
                             )}
-                            {renderEngine === 'threejs' && videoFormat === 'story' && !atlasStyle && (
+                            {renderEngine === 'threejs' && (videoFormat === 'story' || videoFormat === 'watch_talk') && !atlasStyle && (
                                 <Stack direction={{xs: 'column', sm: 'row'}} alignItems="flex-start" gap={1} sx={{mt: 1}}>
                                     <Typography variant="subtitle2" sx={{minWidth: 96, pt: {sm: 0.5}}}>Style nhân vật</Typography>
                                     <AtlasStylePicker variant="cast" value={castStyle} options={castStyles}
@@ -1791,14 +1801,14 @@ export default function MarketingWorkflowDrawer({
                                         onChange={(id) => { void handleSelectChoice('character-style', id); }} />
                                 </Stack>
                             )}
-                            {renderEngine === 'threejs' && videoFormat === 'story' && !atlasStyle && Number(shortVideoId || 0) > 0 && (
+                            {renderEngine === 'threejs' && (videoFormat === 'story' || videoFormat === 'watch_talk') && !atlasStyle && Number(shortVideoId || 0) > 0 && (
                                 <Box sx={{mt: 1, pl: {sm: 'calc(96px + 8px)'}}}>
                                     <Button size="small" variant="outlined" sx={{textTransform: 'none'}} onClick={() => setCastPreviewOpen(true)}>
                                         Xem trước dàn nhân vật
                                     </Button>
                                 </Box>
                             )}
-                            {renderEngine === 'threejs' && videoFormat === 'story' && !atlasStyle && castStyle && (
+                            {renderEngine === 'threejs' && (videoFormat === 'story' || videoFormat === 'watch_talk') && !atlasStyle && castStyle && (
                                 <Typography variant="caption" sx={{display: 'block', mt: 0.75, color: 'text.secondary'}}>
                                     {castStyle === 'stick-head'
                                         ? 'Đầu tròn: giữ nguyên nhân vật thiết kế bằng Character Designer (dáng, quần áo, giày, tay, màu); chỉ đầu thành quả cầu màu da với mắt, mũi, miệng vẽ (da tối dùng nét sáng, da sáng dùng nét đen). Tóc, mũ, kính, râu không hiện. Cảm xúc phóng đại qua mắt và miệng. CMS tự đổi đầu khi ghép beat, kể cả beat đã dựng.'
